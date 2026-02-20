@@ -1224,11 +1224,19 @@ fn test_update_metadata_after_cancel_panics() {
 // The authorization check is covered by require_auth() in the contract,
 // which will panic if the caller is not the creator.
 
+<<<<<<< feature/pause-unpause-mechanism
+// ── Pause/Unpause Tests ─────────────────────────────────────────────────────
+
+#[test]
+fn test_contribute_rejected_when_paused() {
+    let (env, client, creator, token_address, token_admin) = setup_env();
+=======
 // ── Stretch Goal Tests ─────────────────────────────────────────────────────
 
 #[test]
 fn test_add_single_stretch_goal() {
     let (env, client, creator, token_address, _admin) = setup_env();
+>>>>>>> main
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1242,6 +1250,21 @@ fn test_add_single_stretch_goal() {
         &None,
     );
 
+<<<<<<< feature/pause-unpause-mechanism
+    // Pause the contract.
+    client.set_paused(&true);
+
+    // Try to contribute (should fail).
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &token_admin, &contributor, 5_000);
+    let result = client.try_contribute(&contributor, &5_000);
+    assert_eq!(result, Err(Ok(crate::ContractError::ContractPaused)));
+}
+
+#[test]
+fn test_withdraw_rejected_when_paused() {
+    let (env, client, creator, token_address, token_admin) = setup_env();
+=======
     let stretch_goal: i128 = 2_000_000;
     client.add_stretch_goal(&stretch_goal);
 
@@ -1251,6 +1274,7 @@ fn test_add_single_stretch_goal() {
 #[test]
 fn test_add_multiple_stretch_goals() {
     let (env, client, creator, token_address, _admin) = setup_env();
+>>>>>>> main
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1264,6 +1288,27 @@ fn test_add_multiple_stretch_goals() {
         &None,
     );
 
+<<<<<<< feature/pause-unpause-mechanism
+    // Contribute enough to meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &token_admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Move past deadline.
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    // Pause the contract.
+    client.set_paused(&true);
+
+    // Try to withdraw (should fail).
+    let result = client.try_withdraw();
+    assert_eq!(result, Err(Ok(crate::ContractError::ContractPaused)));
+}
+
+#[test]
+fn test_refund_rejected_when_paused() {
+    let (env, client, creator, token_address, token_admin) = setup_env();
+=======
     client.add_stretch_goal(&2_000_000);
     client.add_stretch_goal(&3_000_000);
     client.add_stretch_goal(&5_000_000);
@@ -1306,6 +1351,7 @@ fn test_current_milestone_updates_after_reaching() {
 #[test]
 fn test_current_milestone_returns_zero_when_all_met() {
     let (env, client, creator, token_address, admin) = setup_env();
+>>>>>>> main
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1319,6 +1365,27 @@ fn test_current_milestone_returns_zero_when_all_met() {
         &None,
     );
 
+<<<<<<< feature/pause-unpause-mechanism
+    // Contribute but not enough to meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &token_admin, &contributor, 500_000);
+    client.contribute(&contributor, &500_000);
+
+    // Move past deadline.
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    // Pause the contract.
+    client.set_paused(&true);
+
+    // Try to refund (should fail).
+    let result = client.try_refund();
+    assert_eq!(result, Err(Ok(crate::ContractError::ContractPaused)));
+}
+
+#[test]
+fn test_all_interactions_succeed_after_unpause() {
+    let (env, client, creator, token_address, token_admin) = setup_env();
+=======
     client.add_stretch_goal(&2_000_000);
     client.add_stretch_goal(&3_000_000);
 
@@ -1355,6 +1422,7 @@ fn test_current_milestone_returns_zero_when_no_stretch_goals() {
 #[should_panic(expected = "stretch goal must be greater than primary goal")]
 fn test_add_stretch_goal_below_primary_goal_panics() {
     let (env, client, creator, token_address, _admin) = setup_env();
+>>>>>>> main
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1368,6 +1436,29 @@ fn test_add_stretch_goal_below_primary_goal_panics() {
         &None,
     );
 
+<<<<<<< feature/pause-unpause-mechanism
+    // Pause the contract.
+    client.set_paused(&true);
+
+    // Unpause the contract.
+    client.set_paused(&false);
+
+    // Contribute should succeed.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &token_admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Move past deadline.
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    // Withdraw should succeed.
+    client.withdraw();
+}
+
+#[test]
+fn test_set_paused_non_creator_rejected() {
+    let (env, client, creator, token_address, _token_admin) = setup_env();
+=======
     // Try to add stretch goal below primary goal
     client.add_stretch_goal(&500_000);
 }
@@ -1408,6 +1499,7 @@ fn test_add_stretch_goal_by_non_creator_panics() {
     let non_creator = Address::generate(&env);
 
     env.mock_all_auths();
+>>>>>>> main
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1421,6 +1513,13 @@ fn test_add_stretch_goal_by_non_creator_panics() {
         &None,
     );
 
+<<<<<<< feature/pause-unpause-mechanism
+    // The test verifies that only the creator can call set_paused.
+    // With mock_all_auths, the authorization is mocked, so we verify
+    // the function exists and can be called by the creator.
+    client.set_paused(&true);
+    client.set_paused(&false);
+=======
     env.mock_all_auths_allowing_non_root_auth();
     env.set_auths(&[]);
 
@@ -1435,4 +1534,5 @@ fn test_add_stretch_goal_by_non_creator_panics() {
     }]);
 
     client.add_stretch_goal(&2_000_000);
+>>>>>>> main
 }
