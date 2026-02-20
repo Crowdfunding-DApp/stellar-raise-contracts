@@ -8,8 +8,8 @@ Stellar Raise lets anyone create a crowdfunding campaign on-chain. Contributors 
 
 ### Key Features
 
-| Feature | Description |
-| :--- | :--- |
+| Feature        | Description                                        |
+| :------------- | :------------------------------------------------- |
 | **Initialize** | Create a campaign with a goal, deadline, and token |
 | **Contribute** | Pledge tokens before the deadline                  |
 | **Withdraw**   | Creator claims funds after a successful campaign   |
@@ -85,17 +85,20 @@ Once deployed, the contract can be upgraded to a new WASM implementation without
 ### Upgrade Procedure
 
 1. **Build the new WASM binary:**
+
    ```bash
    cargo build --release --target wasm32-unknown-unknown
    ```
 
 2. **Upload the new WASM to the network:**
+
    ```bash
    stellar contract install \
      --wasm target/wasm32-unknown-unknown/release/crowdfund.wasm \
      --network testnet \
      --source <YOUR_SECRET_KEY>
    ```
+
    This returns the WASM hash (SHA-256).
 
 3. **Invoke the upgrade function:**
@@ -118,6 +121,114 @@ Once deployed, the contract can be upgraded to a new WASM implementation without
 
 ## Deployment (Testnet)
 
+### Prerequisites
+
+1. **Install Stellar CLI**:
+
+   ```bash
+   cargo install stellar-cli
+   ```
+
+2. **Configure your account**:
+
+   ```bash
+   stellar keys add <ALIAS>
+   # Or use an existing secret key
+   stellar keys add <ALIAS> --secret-key <YOUR_SECRET_KEY>
+   ```
+
+3. **Add testnet configuration**:
+   ```bash
+   stellar network add testnet --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015"
+   ```
+
+### Using the Deployment Script
+
+The `scripts/deploy.sh` script automates the deployment process:
+
+```bash
+./scripts/deploy.sh <CREATOR> <TOKEN> <GOAL> <DEADLINE> <MIN_CONTRIBUTION> [PLATFORM_CONFIG]
+```
+
+**Arguments:**
+
+| Argument           | Description                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| `CREATOR`          | Public key of the campaign creator                               |
+| `TOKEN`            | Token contract address (e.g., USDC on testnet)                   |
+| `GOAL`             | Funding goal in token's smallest unit                            |
+| `DEADLINE`         | Campaign deadline as a UNIX timestamp                            |
+| `MIN_CONTRIBUTION` | Minimum contribution amount                                      |
+| `PLATFORM_CONFIG`  | Optional: platform config as `address:fee_bps` or `none` to skip |
+
+**Examples:**
+
+```bash
+# Get current timestamp for deadline (e.g., 30 days from now)
+DEADLINE=$(date -d "+30 days" +%s)
+
+# Deploy with no platform config
+./scripts/deploy.sh \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  GDLXY5EUKZKIJEFYJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  5000000000 \
+  $DEADLINE \
+  1000000 \
+  none
+
+# Deploy with platform config (5% fee)
+./scripts/deploy.sh \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  GDLXY5EUKZKIJEFYJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  5000000000 \
+  $DEADLINE \
+  1000000 \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q:500
+```
+
+### Using the Interaction Script
+
+After deployment, use `scripts/interact.sh` for common actions:
+
+```bash
+./scripts/interact.sh <CONTRACT_ID> <ACTION> [ARGS...]
+```
+
+**Actions:**
+
+| Action       | Description                                            | Arguments              |
+| ------------ | ------------------------------------------------------ | ---------------------- |
+| `contribute` | Contribute tokens to the campaign                      | `CONTRIBUTOR` `AMOUNT` |
+| `withdraw`   | Creator withdraws funds (after deadline, goal met)     | `CREATOR`              |
+| `refund`     | Refund all contributors (after deadline, goal not met) | `CALLER`               |
+
+**Examples:**
+
+```bash
+# Contribute to the campaign
+./scripts/interact.sh \
+  CDLYMY5EUKZKIJEFYJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  contribute \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  1000000
+
+# Withdraw funds (creator only, after deadline and goal met)
+./scripts/interact.sh \
+  CDLYMY5EUKZKIJEFYJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  withdraw \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q
+
+# Request refund (after deadline and goal not met)
+./scripts/interact.sh \
+  CDLYMY5EUKZKIJEFYJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q \
+  refund \
+  GDIY63C4EHX2PF6UXJ5K7A7K7Y3LZ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q
+```
+
+### Manual Deployment
+
+If you prefer to deploy manually:
+
 ```bash
 # Build the optimized WASM
 cargo build --release --target wasm32-unknown-unknown
@@ -128,7 +239,7 @@ stellar contract deploy \
   --network testnet \
   --source <YOUR_SECRET_KEY>
 
-# Initialize the campaign
+# Initialize the campaign (with platform config as null)
 stellar contract invoke \
   --id <CONTRACT_ID> \
   --network testnet \
@@ -138,7 +249,8 @@ stellar contract invoke \
   --token <TOKEN> \
   --goal <GOAL> \
   --deadline <DEADLINE> \
-  --min_contribution <MIN_CONTRIBUTION>
+  --min_contribution <MIN_CONTRIBUTION> \
+  --platform_config null
 ```
 
 ## Changelog
