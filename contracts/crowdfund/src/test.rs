@@ -1,6 +1,6 @@
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient};
@@ -71,7 +71,7 @@ fn test_initialize() {
 
 #[test]
 fn test_version() {
-    let (env, client, _creator, _token_address, _admin) = setup_env();
+    let (_env, client, _creator, _token_address, _admin) = setup_env();
 
     // Test that version() returns the expected version number
     assert_eq!(client.version(), 1);
@@ -101,9 +101,12 @@ fn test_double_initialize_panics() {
         &min_contribution,
         &None,
     );
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::AlreadyInitialized);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::AlreadyInitialized
+    );
 }
 
 #[test]
@@ -183,9 +186,12 @@ fn test_contribute_after_deadline_panics() {
     mint_to(&env, &token_address, &admin, &contributor, 500_000);
 
     let result = client.try_contribute(&contributor, &500_000);
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignEnded);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::CampaignEnded
+    );
 }
 
 #[test]
@@ -244,9 +250,12 @@ fn test_withdraw_before_deadline_panics() {
     client.contribute(&contributor, &1_000_000);
 
     let result = client.try_withdraw();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignStillActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::CampaignStillActive
+    );
 }
 
 #[test]
@@ -273,9 +282,12 @@ fn test_withdraw_goal_not_reached_panics() {
     env.ledger().set_timestamp(deadline + 1);
 
     let result = client.try_withdraw();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalNotReached);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::GoalNotReached
+    );
 }
 
 #[test]
@@ -337,9 +349,12 @@ fn test_refund_when_goal_reached_panics() {
     env.ledger().set_timestamp(deadline + 1);
 
     let result = client.try_refund();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalReached);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::GoalReached
+    );
 }
 
 // ── Bug Condition Exploration Test ─────────────────────────────────────────
@@ -367,12 +382,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let (env, client, creator, token_address, _admin) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        
+
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        let result = client.try_initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+        let result =
+            client.try_initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::AlreadyInitialized);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::AlreadyInitialized
+        );
     }
 
     // Test 2: Late contribution
@@ -381,13 +400,13 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 100;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         env.ledger().set_timestamp(deadline + 1);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         let result = client.try_contribute(&contributor, &500_000);
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignEnded);
     }
@@ -398,15 +417,18 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
         client.contribute(&contributor, &1_000_000);
-        
+
         let result = client.try_withdraw();
-        
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignStillActive);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::CampaignStillActive
+        );
     }
 
     // Test 4: Withdrawal without goal
@@ -415,14 +437,14 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         client.contribute(&contributor, &500_000);
-        
+
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_withdraw();
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::GoalNotReached);
     }
@@ -433,15 +455,18 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         client.contribute(&contributor, &500_000);
-        
+
         let result = client.try_refund();
-        
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignStillActive);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::CampaignStillActive
+        );
     }
 
     // Test 6: Refund after success
@@ -450,14 +475,14 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
         client.contribute(&contributor, &1_000_000);
-        
+
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_refund();
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::GoalReached);
     }
@@ -466,24 +491,6 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 // ── Preservation Property Tests ────────────────────────────────────────────
 
 use proptest::prelude::*;
-
-/// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6**
-///
-/// **Property 2: Preservation** - Successful Execution Paths
-///
-/// This test verifies that all successful execution paths work correctly
-/// on the UNFIXED code. These behaviors MUST be preserved after the fix.
-///
-/// **IMPORTANT**: This test is EXPECTED TO PASS on unfixed code.
-/// When it passes, it confirms the baseline behavior to preserve.
-///
-/// The test covers all successful operations:
-/// 1. First initialization with valid parameters stores creator, token, goal, deadline, and initializes total_raised to 0
-/// 2. Valid contributions before deadline transfer tokens, update balances, and track contributors
-/// 3. Successful withdrawal by creator after deadline when goal met transfers funds and resets total_raised
-/// 4. Successful refund after deadline when goal not met refunds all contributors
-/// 5. View functions (total_raised, goal, deadline, contribution) return correct values
-/// 6. Multiple contributors are tracked correctly with individual and aggregate totals
 
 proptest! {
     #[test]
@@ -1223,6 +1230,106 @@ fn test_update_metadata_after_cancel_panics() {
 // Note: The non-creator test would require complex mock setup.
 // The authorization check is covered by require_auth() in the contract,
 // which will panic if the caller is not the creator.
+
+// ── Deadline Update Tests ──────────────────────────────────────────────────
+
+#[test]
+fn test_update_deadline_extends_campaign() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Verify initial deadline
+    assert_eq!(client.deadline(), deadline);
+
+    // Extend the deadline
+    let new_deadline = deadline + 7200; // 2 more hours
+    client.update_deadline(&new_deadline);
+
+    // Verify the deadline was updated
+    assert_eq!(client.deadline(), new_deadline);
+}
+
+#[test]
+#[should_panic(expected = "new deadline must be after current deadline")]
+fn test_update_deadline_rejects_shortening() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Try to shorten the deadline (should panic)
+    let shorter_deadline = deadline - 1800; // 30 minutes earlier
+    client.update_deadline(&shorter_deadline);
+}
+
+#[test]
+#[should_panic(expected = "new deadline must be after current deadline")]
+fn test_update_deadline_rejects_equal_deadline() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Try to set deadline to the same value (should panic)
+    client.update_deadline(&deadline);
+}
+
+#[test]
+#[should_panic(expected = "campaign is not active")]
+fn test_update_deadline_when_not_active_panics() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Move past deadline and refund
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Refund to change status from Active to Refunded
+    let _ = client.try_refund();
+
+    // Try to update deadline on a non-Active campaign (should panic)
+    let new_deadline = deadline + 7200;
+    client.update_deadline(&new_deadline);
+}
 
 // ── Stretch Goal Tests ─────────────────────────────────────────────────────
 

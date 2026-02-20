@@ -170,7 +170,9 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::MinContribution, &min_contribution);
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
-        env.storage().instance().set(&DataKey::Status, &Status::Active);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &Status::Active);
 
         let empty_contributors: Vec<Address> = Vec::new(&env);
         env.storage()
@@ -308,13 +310,13 @@ impl CrowdfundContract {
         token_client.transfer(&env.current_contract_address(), &creator, &creator_payout);
 
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
-        env.storage().instance().set(&DataKey::Status, &Status::Successful);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &Status::Successful);
 
         // Emit withdrawal event
-        env.events().publish(
-            ("campaign", "withdrawn"),
-            (creator.clone(), total),
-        );
+        env.events()
+            .publish(("campaign", "withdrawn"), (creator.clone(), total));
 
         Ok(())
     }
@@ -356,9 +358,7 @@ impl CrowdfundContract {
                 .unwrap_or(0);
             if amount > 0 {
                 token_client.transfer(&env.current_contract_address(), &contributor, &amount);
-                env.storage()
-                    .persistent()
-                    .set(&contribution_key, &0i128);
+                env.storage().persistent().set(&contribution_key, &0i128);
                 env.storage()
                     .persistent()
                     .extend_ttl(&contribution_key, 100, 100);
@@ -402,9 +402,7 @@ impl CrowdfundContract {
                 .unwrap_or(0);
             if amount > 0 {
                 token_client.transfer(&env.current_contract_address(), &contributor, &amount);
-                env.storage()
-                    .persistent()
-                    .set(&contribution_key, &0i128);
+                env.storage().persistent().set(&contribution_key, &0i128);
                 env.storage()
                     .persistent()
                     .extend_ttl(&contribution_key, 100, 100);
@@ -443,7 +441,13 @@ impl CrowdfundContract {
     /// * `title`       – Optional new title (None to keep existing).
     /// * `description` – Optional new description (None to keep existing).
     /// * `socials`    – Optional new social links (None to keep existing).
-    pub fn update_metadata(env: Env, creator: Address, title: Option<String>, description: Option<String>, socials: Option<String>) {
+    pub fn update_metadata(
+        env: Env,
+        creator: Address,
+        title: Option<String>,
+        description: Option<String>,
+        socials: Option<String>,
+    ) {
         // Check campaign is active.
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
@@ -468,18 +472,68 @@ impl CrowdfundContract {
 
         // Update description if provided.
         if let Some(new_description) = description {
-            env.storage().instance().set(&DataKey::Description, &new_description);
+            env.storage()
+                .instance()
+                .set(&DataKey::Description, &new_description);
             updated_fields.push_back(Symbol::new(&env, "description"));
         }
 
         // Update social links if provided.
         if let Some(new_socials) = socials {
-            env.storage().instance().set(&DataKey::SocialLinks, &new_socials);
+            env.storage()
+                .instance()
+                .set(&DataKey::SocialLinks, &new_socials);
             updated_fields.push_back(Symbol::new(&env, "socials"));
         }
 
         // Emit metadata_updated event with the list of updated field names.
-        env.events().publish((Symbol::new(&env, "campaign"), Symbol::new(&env, "metadata_updated")), updated_fields);
+        env.events().publish(
+            (
+                Symbol::new(&env, "campaign"),
+                Symbol::new(&env, "metadata_updated"),
+            ),
+            updated_fields,
+        );
+    }
+
+    /// Update the campaign deadline — only callable by the creator while the
+    /// campaign is still Active.
+    ///
+    /// # Arguments
+    /// * `new_deadline` – The new deadline as a ledger timestamp (must be greater than current deadline).
+    ///
+    /// # Panics
+    /// * If the campaign is not Active.
+    /// * If new_deadline is less than or equal to the current deadline.
+    pub fn update_deadline(env: Env, new_deadline: u64) {
+        // Check campaign is active.
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            panic!("campaign is not active");
+        }
+
+        // Require creator authentication.
+        let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        creator.require_auth();
+
+        // Get the current deadline.
+        let current_deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
+
+        // Ensure new_deadline is greater than current_deadline (only extensions allowed).
+        if new_deadline <= current_deadline {
+            panic!("new deadline must be after current deadline");
+        }
+
+        // Update the deadline.
+        env.storage()
+            .instance()
+            .set(&DataKey::Deadline, &new_deadline);
+
+        // Emit deadline_updated event with old and new deadline values.
+        env.events().publish(
+            ("campaign", "deadline_updated"),
+            (current_deadline, new_deadline),
+        );
     }
 
     // ── View helpers ────────────────────────────────────────────────────
