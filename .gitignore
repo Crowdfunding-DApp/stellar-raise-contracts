@@ -13,3 +13,6 @@ Thumbs.db
 
 # Soroban
 *.d
+
+# Tests_snapshots
+contracts/crowdfund/test_snapshots/
