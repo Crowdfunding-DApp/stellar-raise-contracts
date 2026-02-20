@@ -16,6 +16,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint commit messages
+        uses: wagoid/commitlint-github-action@v5
+        with:
+          configFile: .commitlintrc.json
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -40,6 +47,9 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+      - name: Generate Rustdoc
+        run: cargo doc --no-deps --workspace
 
       - name: Build WASM (release)
         run: cargo build --release --target wasm32-unknown-unknown
