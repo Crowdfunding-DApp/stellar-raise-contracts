@@ -1,16 +1,18 @@
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/// Set up a fresh environment with a deployed crowdfund contract and a token.
+/// Set up a fresh environment with a deployed crowdfund contract and two tokens.
 fn setup_env() -> (
     Env,
     CrowdfundContractClient<'static>,
+    Address,
+    Address,
     Address,
     Address,
     Address,
@@ -22,19 +24,26 @@ fn setup_env() -> (
     let contract_id = env.register(CrowdfundContract, ());
     let client = CrowdfundContractClient::new(&env, &contract_id);
 
-    // Create a token for contributions.
+    // Create first token for contributions (USDC).
     let token_admin = Address::generate(&env);
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract_id.address();
     let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+
+    // Create second token for contributions (XLM).
+    let token_admin_2 = Address::generate(&env);
+    let token_contract_id_2 = env.register_stellar_asset_contract_v2(token_admin_2.clone());
+    let token_address_2 = token_contract_id_2.address();
+    let token_admin_client_2 = token::StellarAssetClient::new(&env, &token_address_2);
 
     // Campaign creator.
     let creator = Address::generate(&env);
 
     // Mint tokens to the creator so the contract has something to work with.
     token_admin_client.mint(&creator, &10_000_000);
+    token_admin_client_2.mint(&creator, &10_000_000);
 
-    (env, client, creator, token_address, token_admin.clone())
+    (env, client, creator, token_address, token_address_2, token_admin.clone(), token_admin_2.clone())
 }
 
 /// Helper to mint tokens to an arbitrary contributor.
@@ -48,15 +57,16 @@ fn mint_to(env: &Env, token_address: &Address, admin: &Address, to: &Address, am
 
 #[test]
 fn test_initialize() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600; // 1 hour from now
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
 
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -67,11 +77,17 @@ fn test_initialize() {
     assert_eq!(client.deadline(), deadline);
     assert_eq!(client.min_contribution(), min_contribution);
     assert_eq!(client.total_raised(), 0);
+    
+    // Verify allowed tokens are stored
+    let stored_tokens = client.allowed_tokens();
+    assert_eq!(stored_tokens.len(), 2);
+    assert!(stored_tokens.contains(&token_address));
+    assert!(stored_tokens.contains(&token_address_2));
 }
 
 #[test]
 fn test_version() {
-    let (env, client, _creator, _token_address, _admin) = setup_env();
+    let (_env, client, _creator, _token_address, _token_address_2, _admin, _admin_2) = setup_env();
 
     // Test that version() returns the expected version number
     assert_eq!(client.version(), 1);
@@ -79,15 +95,16 @@ fn test_version() {
 
 #[test]
 fn test_double_initialize_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
 
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -95,7 +112,7 @@ fn test_double_initialize_panics() {
     );
     let result = client.try_initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -108,14 +125,16 @@ fn test_double_initialize_panics() {
 
 #[test]
 fn test_contribute() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -125,22 +144,24 @@ fn test_contribute() {
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 500_000);
 
-    client.contribute(&contributor, &500_000);
+    client.contribute(&contributor, &token_address, &500_000);
 
     assert_eq!(client.total_raised(), 500_000);
-    assert_eq!(client.contribution(&contributor), 500_000);
+    assert_eq!(client.contribution(&contributor, &token_address), 500_000);
 }
 
 #[test]
 fn test_multiple_contributions() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -152,24 +173,26 @@ fn test_multiple_contributions() {
     mint_to(&env, &token_address, &admin, &alice, 600_000);
     mint_to(&env, &token_address, &admin, &bob, 400_000);
 
-    client.contribute(&alice, &600_000);
-    client.contribute(&bob, &400_000);
+    client.contribute(&alice, &token_address, &600_000);
+    client.contribute(&bob, &token_address, &400_000);
 
     assert_eq!(client.total_raised(), 1_000_000);
-    assert_eq!(client.contribution(&alice), 600_000);
-    assert_eq!(client.contribution(&bob), 400_000);
+    assert_eq!(client.contribution(&alice, &token_address), 600_000);
+    assert_eq!(client.contribution(&bob, &token_address), 400_000);
 }
 
 #[test]
 fn test_contribute_after_deadline_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 100;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -182,7 +205,7 @@ fn test_contribute_after_deadline_panics() {
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 500_000);
 
-    let result = client.try_contribute(&contributor, &500_000);
+    let result = client.try_contribute(&contributor, &token_address, &500_000);
     
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignEnded);
@@ -190,14 +213,16 @@ fn test_contribute_after_deadline_panics() {
 
 #[test]
 fn test_withdraw_after_goal_met() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -206,7 +231,7 @@ fn test_withdraw_after_goal_met() {
 
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-    client.contribute(&contributor, &1_000_000);
+    client.contribute(&contributor, &token_address, &1_000_000);
 
     assert_eq!(client.total_raised(), goal);
 
@@ -225,14 +250,16 @@ fn test_withdraw_after_goal_met() {
 
 #[test]
 fn test_withdraw_before_deadline_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -241,7 +268,7 @@ fn test_withdraw_before_deadline_panics() {
 
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-    client.contribute(&contributor, &1_000_000);
+    client.contribute(&contributor, &token_address, &1_000_000);
 
     let result = client.try_withdraw();
     
@@ -251,14 +278,16 @@ fn test_withdraw_before_deadline_panics() {
 
 #[test]
 fn test_withdraw_goal_not_reached_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -267,7 +296,7 @@ fn test_withdraw_goal_not_reached_panics() {
 
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 500_000);
-    client.contribute(&contributor, &500_000);
+    client.contribute(&contributor, &token_address, &500_000);
 
     // Move past deadline, but goal not met.
     env.ledger().set_timestamp(deadline + 1);
@@ -280,14 +309,16 @@ fn test_withdraw_goal_not_reached_panics() {
 
 #[test]
 fn test_refund_when_goal_not_met() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -299,8 +330,8 @@ fn test_refund_when_goal_not_met() {
     mint_to(&env, &token_address, &admin, &alice, 300_000);
     mint_to(&env, &token_address, &admin, &bob, 200_000);
 
-    client.contribute(&alice, &300_000);
-    client.contribute(&bob, &200_000);
+    client.contribute(&alice, &token_address, &300_000);
+    client.contribute(&bob, &token_address, &200_000);
 
     // Move past deadline — goal not met.
     env.ledger().set_timestamp(deadline + 1);
@@ -316,14 +347,16 @@ fn test_refund_when_goal_not_met() {
 
 #[test]
 fn test_refund_when_goal_reached_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -332,7 +365,7 @@ fn test_refund_when_goal_reached_panics() {
 
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-    client.contribute(&contributor, &1_000_000);
+    client.contribute(&contributor, &token_address, &1_000_000);
 
     env.ledger().set_timestamp(deadline + 1);
 
@@ -364,12 +397,13 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 1: Double initialization
     {
-        let (env, client, creator, token_address, _admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        let result = client.try_initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
+        let result = client.try_initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::AlreadyInitialized);
@@ -377,16 +411,18 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 2: Late contribution
     {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 100;
         let goal: i128 = 1_000_000;
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         env.ledger().set_timestamp(deadline + 1);
         
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
-        let result = client.try_contribute(&contributor, &500_000);
+        let result = client.try_contribute(&contributor, &token_address, &500_000);
         
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignEnded);
@@ -394,14 +430,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 3: Early withdrawal
     {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-        client.contribute(&contributor, &1_000_000);
+        client.contribute(&contributor, &token_address, &1_000_000);
         
         let result = client.try_withdraw();
         
@@ -411,14 +449,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 4: Withdrawal without goal
     {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
-        client.contribute(&contributor, &500_000);
+        client.contribute(&contributor, &token_address, &500_000);
         
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_withdraw();
@@ -429,14 +469,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 5: Early refund
     {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
-        client.contribute(&contributor, &500_000);
+        client.contribute(&contributor, &token_address, &500_000);
         
         let result = client.try_refund();
         
@@ -446,14 +488,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 
     // Test 6: Refund after success
     {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
         
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-        client.contribute(&contributor, &1_000_000);
+        client.contribute(&contributor, &token_address, &1_000_000);
         
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_refund();
@@ -491,11 +535,12 @@ proptest! {
         goal in 1_000i128..10_000_000i128,
         deadline_offset in 100u64..10_000u64,
     ) {
-        let (env, client, creator, token_address, _admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
         // Test 3.1: First initialization stores all values correctly
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         prop_assert_eq!(client.goal(), goal);
         prop_assert_eq!(client.deadline(), deadline);
@@ -508,19 +553,20 @@ proptest! {
         deadline_offset in 100u64..10_000u64,
         contribution_amount in 100_000i128..1_000_000i128,
     ) {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, contribution_amount);
 
         // Test 3.2: Valid contribution before deadline works correctly
-        client.contribute(&contributor, &contribution_amount);
+        client.contribute(&contributor, &token_address, &contribution_amount);
 
         prop_assert_eq!(client.total_raised(), contribution_amount);
-        prop_assert_eq!(client.contribution(&contributor), contribution_amount);
+        prop_assert_eq!(client.contribution(&contributor, &token_address), contribution_amount);
     }
 
     #[test]
@@ -528,14 +574,15 @@ proptest! {
         goal in 1_000_000i128..5_000_000i128,
         deadline_offset in 100u64..10_000u64,
     ) {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, goal);
-        client.contribute(&contributor, &goal);
+        client.contribute(&contributor, &token_address, &goal);
 
         // Move past deadline
         env.ledger().set_timestamp(deadline + 1);
@@ -556,17 +603,18 @@ proptest! {
         deadline_offset in 100u64..10_000u64,
         contribution_amount in 100_000i128..1_000_000i128,
     ) {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
         // Ensure contribution is less than goal
         let contribution = contribution_amount.min(goal - 1);
 
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, contribution);
-        client.contribute(&contributor, &contribution);
+        client.contribute(&contributor, &token_address, &contribution);
 
         // Move past deadline (goal not met)
         env.ledger().set_timestamp(deadline + 1);
@@ -585,20 +633,21 @@ proptest! {
         deadline_offset in 100u64..10_000u64,
         contribution_amount in 100_000i128..1_000_000i128,
     ) {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, contribution_amount);
-        client.contribute(&contributor, &contribution_amount);
+        client.contribute(&contributor, &token_address, &contribution_amount);
 
         // Test 3.5: View functions return correct values
         prop_assert_eq!(client.goal(), goal);
         prop_assert_eq!(client.deadline(), deadline);
         prop_assert_eq!(client.total_raised(), contribution_amount);
-        prop_assert_eq!(client.contribution(&contributor), contribution_amount);
+        prop_assert_eq!(client.contribution(&contributor, &token_address), contribution_amount);
     }
 
     #[test]
@@ -609,10 +658,11 @@ proptest! {
         amount2 in 100_000i128..1_000_000i128,
         amount3 in 100_000i128..1_000_000i128,
     ) {
-        let (env, client, creator, token_address, admin) = setup_env();
+        let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
         let deadline = env.ledger().timestamp() + deadline_offset;
 
-        client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+        let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+        client.initialize(&creator, &allowed_tokens, &goal, &deadline, &1_000, &None);
 
         let alice = Address::generate(&env);
         let bob = Address::generate(&env);
@@ -623,30 +673,32 @@ proptest! {
         mint_to(&env, &token_address, &admin, &charlie, amount3);
 
         // Test 3.6: Multiple contributors are tracked correctly
-        client.contribute(&alice, &amount1);
-        client.contribute(&bob, &amount2);
-        client.contribute(&charlie, &amount3);
+        client.contribute(&alice, &token_address, &amount1);
+        client.contribute(&bob, &token_address, &amount2);
+        client.contribute(&charlie, &token_address, &amount3);
 
         let expected_total = amount1 + amount2 + amount3;
 
         prop_assert_eq!(client.total_raised(), expected_total);
-        prop_assert_eq!(client.contribution(&alice), amount1);
-        prop_assert_eq!(client.contribution(&bob), amount2);
-        prop_assert_eq!(client.contribution(&charlie), amount3);
+        prop_assert_eq!(client.contribution(&alice, &token_address), amount1);
+        prop_assert_eq!(client.contribution(&bob, &token_address), amount2);
+        prop_assert_eq!(client.contribution(&charlie, &token_address), amount3);
     }
 }
 
 #[test]
 #[should_panic(expected = "campaign is not active")]
 fn test_double_withdraw_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -655,7 +707,7 @@ fn test_double_withdraw_panics() {
 
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-    client.contribute(&contributor, &1_000_000);
+    client.contribute(&contributor, &token_address, &1_000_000);
 
     env.ledger().set_timestamp(deadline + 1);
 
@@ -666,14 +718,16 @@ fn test_double_withdraw_panics() {
 #[test]
 #[should_panic(expected = "campaign is not active")]
 fn test_double_refund_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -682,7 +736,7 @@ fn test_double_refund_panics() {
 
     let alice = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &alice, 500_000);
-    client.contribute(&alice, &500_000);
+    client.contribute(&alice, &token_address, &500_000);
 
     env.ledger().set_timestamp(deadline + 1);
 
@@ -692,14 +746,16 @@ fn test_double_refund_panics() {
 
 #[test]
 fn test_cancel_with_no_contributions() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -713,14 +769,16 @@ fn test_cancel_with_no_contributions() {
 
 #[test]
 fn test_cancel_with_contributions() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -732,8 +790,8 @@ fn test_cancel_with_contributions() {
     mint_to(&env, &token_address, &admin, &alice, 300_000);
     mint_to(&env, &token_address, &admin, &bob, 200_000);
 
-    client.contribute(&alice, &300_000);
-    client.contribute(&bob, &200_000);
+    client.contribute(&alice, &token_address, &300_000);
+    client.contribute(&bob, &token_address, &200_000);
 
     client.cancel();
 
@@ -754,6 +812,10 @@ fn test_cancel_by_non_creator_panics() {
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract_id.address();
 
+    let token_admin_2 = Address::generate(&env);
+    let token_contract_id_2 = env.register_stellar_asset_contract_v2(token_admin_2.clone());
+    let token_address_2 = token_contract_id_2.address();
+
     let creator = Address::generate(&env);
     let non_creator = Address::generate(&env);
 
@@ -762,9 +824,11 @@ fn test_cancel_by_non_creator_panics() {
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -792,14 +856,16 @@ fn test_cancel_by_non_creator_panics() {
 #[test]
 #[should_panic(expected = "amount below minimum")]
 fn test_contribute_below_minimum_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 10_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -809,19 +875,21 @@ fn test_contribute_below_minimum_panics() {
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 5_000);
 
-    client.contribute(&contributor, &5_000); // should panic
+    client.contribute(&contributor, &token_address, &5_000); // should panic
 }
 
 #[test]
 fn test_contribute_exact_minimum() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 10_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -831,22 +899,24 @@ fn test_contribute_exact_minimum() {
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 10_000);
 
-    client.contribute(&contributor, &10_000);
+    client.contribute(&contributor, &token_address, &10_000);
 
     assert_eq!(client.total_raised(), 10_000);
-    assert_eq!(client.contribution(&contributor), 10_000);
+    assert_eq!(client.contribution(&contributor, &token_address), 10_000);
 }
 
 #[test]
 fn test_contribute_above_minimum() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 10_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -856,24 +926,204 @@ fn test_contribute_above_minimum() {
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 50_000);
 
-    client.contribute(&contributor, &50_000);
+    client.contribute(&contributor, &token_address, &50_000);
 
     assert_eq!(client.total_raised(), 50_000);
-    assert_eq!(client.contribution(&contributor), 50_000);
+    assert_eq!(client.contribution(&contributor, &token_address), 50_000);
+}
+
+// ── Multi-Token Specific Tests ────────────────────────────────────────────
+
+/// Test that contributions in two different tokens are tracked separately.
+#[test]
+fn test_multi_token_separate_tracking() {
+    let (env, client, creator, token_address, token_address_2, admin, admin_2) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+    client.initialize(
+        &creator,
+        &allowed_tokens,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 500_000);
+    mint_to(&env, &token_address_2, &admin_2, &contributor, 300_000);
+
+    // Contribute in both tokens
+    client.contribute(&contributor, &token_address, &500_000);
+    client.contribute(&contributor, &token_address_2, &300_000);
+
+    // Total should be sum of both
+    assert_eq!(client.total_raised(), 800_000);
+    
+    // Each token contribution should be tracked separately
+    assert_eq!(client.contribution(&contributor, &token_address), 500_000);
+    assert_eq!(client.contribution(&contributor, &token_address_2), 300_000);
+}
+
+/// Test that withdraw collects balances across all allowed tokens.
+#[test]
+fn test_multi_token_withdraw_collects_all() {
+    let (env, client, creator, token_address, token_address_2, admin, admin_2) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+    client.initialize(
+        &creator,
+        &allowed_tokens,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    
+    mint_to(&env, &token_address, &admin, &alice, 600_000);
+    mint_to(&env, &token_address_2, &admin_2, &bob, 500_000);
+
+    // Alice contributes in token 1, Bob contributes in token 2
+    client.contribute(&alice, &token_address, &600_000);
+    client.contribute(&bob, &token_address_2, &500_000);
+
+    assert_eq!(client.total_raised(), 1_100_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Withdraw should collect from both tokens
+    client.withdraw();
+
+    let token_client_1 = token::Client::new(&env, &token_address);
+    let token_client_2 = token::Client::new(&env, &token_address_2);
+
+    // Creator should have received funds from both tokens
+    assert_eq!(token_client_1.balance(&creator), 10_000_000 + 600_000);
+    assert_eq!(token_client_2.balance(&creator), 10_000_000 + 500_000);
+    assert_eq!(client.total_raised(), 0);
+}
+
+/// Test that refund returns correct per-token amounts to each contributor.
+#[test]
+fn test_multi_token_refund_per_token() {
+    let (env, client, creator, token_address, token_address_2, admin, admin_2) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 2_000_000;
+    let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
+    client.initialize(
+        &creator,
+        &allowed_tokens,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    
+    mint_to(&env, &token_address, &admin, &alice, 400_000);
+    mint_to(&env, &token_address_2, &admin_2, &bob, 300_000);
+
+    // Alice contributes in token 1, Bob contributes in token 2
+    // Total is 700_000, which is less than goal of 2_000_000
+    client.contribute(&alice, &token_address, &400_000);
+    client.contribute(&bob, &token_address_2, &300_000);
+
+    // Move past deadline — goal not met
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.refund();
+
+    let token_client_1 = token::Client::new(&env, &token_address);
+    let token_client_2 = token::Client::new(&env, &token_address_2);
+
+    // Each contributor should get their tokens back in the correct token
+    assert_eq!(token_client_1.balance(&alice), 400_000);
+    assert_eq!(token_client_2.balance(&bob), 300_000);
+    assert_eq!(client.total_raised(), 0);
+}
+
+/// Test that contribute rejects a token not in the allowed list.
+#[test]
+#[should_panic(expected = "token not in allowed list")]
+fn test_contribute_with_disallowed_token_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    // Create three tokens
+    let token_admin_1 = Address::generate(&env);
+    let token_contract_id_1 = env.register_stellar_asset_contract_v2(token_admin_1.clone());
+    let token_address_1 = token_contract_id_1.address();
+
+    let token_admin_2 = Address::generate(&env);
+    let token_contract_id_2 = env.register_stellar_asset_contract_v2(token_admin_2.clone());
+    let token_address_2 = token_contract_id_2.address();
+
+    let token_admin_3 = Address::generate(&env);
+    let token_contract_id_3 = env.register_stellar_asset_contract_v2(token_admin_3.clone());
+    let token_address_3 = token_contract_id_3.address();
+
+    let creator = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    // Mint tokens
+    let token_admin_client_1 = token::StellarAssetClient::new(&env, &token_address_1);
+    let token_admin_client_3 = token::StellarAssetClient::new(&env, &token_address_3);
+    token_admin_client_1.mint(&contributor, &500_000);
+    token_admin_client_3.mint(&contributor, &500_000);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    // Initialize with only token 1 and token 2 allowed
+    let allowed_tokens = soroban_sdk::vec![&env, token_address_1.clone(), token_address_2.clone()];
+    client.initialize(
+        &creator,
+        &allowed_tokens,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Try to contribute with token 3 (not in allowed list) — should panic
+    client.contribute(&contributor, &token_address_3, &500_000);
 }
 
 // ── Roadmap Tests ──────────────────────────────────────────────────────────
 
 #[test]
 fn test_add_single_roadmap_item() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -894,14 +1144,16 @@ fn test_add_single_roadmap_item() {
 
 #[test]
 fn test_add_multiple_roadmap_items_in_order() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -934,14 +1186,16 @@ fn test_add_multiple_roadmap_items_in_order() {
 #[test]
 #[should_panic(expected = "date must be in the future")]
 fn test_add_roadmap_item_with_past_date_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -960,14 +1214,16 @@ fn test_add_roadmap_item_with_past_date_panics() {
 #[test]
 #[should_panic(expected = "date must be in the future")]
 fn test_add_roadmap_item_with_current_date_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -983,14 +1239,16 @@ fn test_add_roadmap_item_with_current_date_panics() {
 #[test]
 #[should_panic(expected = "description cannot be empty")]
 fn test_add_roadmap_item_with_empty_description_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1015,6 +1273,10 @@ fn test_add_roadmap_item_by_non_creator_panics() {
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract_id.address();
 
+    let token_admin_2 = Address::generate(&env);
+    let token_contract_id_2 = env.register_stellar_asset_contract_v2(token_admin_2.clone());
+    let token_address_2 = token_contract_id_2.address();
+
     let creator = Address::generate(&env);
     let non_creator = Address::generate(&env);
 
@@ -1023,9 +1285,11 @@ fn test_add_roadmap_item_by_non_creator_panics() {
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1054,14 +1318,16 @@ fn test_add_roadmap_item_by_non_creator_panics() {
 
 #[test]
 fn test_roadmap_empty_after_initialization() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1076,14 +1342,16 @@ fn test_roadmap_empty_after_initialization() {
 
 #[test]
 fn test_update_title() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1099,14 +1367,16 @@ fn test_update_title() {
 
 #[test]
 fn test_update_description() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1120,14 +1390,16 @@ fn test_update_description() {
 
 #[test]
 fn test_update_socials() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1141,14 +1413,16 @@ fn test_update_socials() {
 
 #[test]
 fn test_partial_update() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1167,14 +1441,16 @@ fn test_partial_update() {
 #[test]
 #[should_panic(expected = "campaign is not active")]
 fn test_update_metadata_when_not_active_panics() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1184,7 +1460,7 @@ fn test_update_metadata_when_not_active_panics() {
     // Contribute to meet the goal.
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
-    client.contribute(&contributor, &1_000_000);
+    client.contribute(&contributor, &token_address, &1_000_000);
 
     // Move past deadline and withdraw (status becomes Successful).
     env.ledger().set_timestamp(deadline + 1);
@@ -1198,14 +1474,16 @@ fn test_update_metadata_when_not_active_panics() {
 #[test]
 #[should_panic(expected = "campaign is not active")]
 fn test_update_metadata_after_cancel_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1228,14 +1506,16 @@ fn test_update_metadata_after_cancel_panics() {
 
 #[test]
 fn test_add_single_stretch_goal() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1250,14 +1530,16 @@ fn test_add_single_stretch_goal() {
 
 #[test]
 fn test_add_multiple_stretch_goals() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1274,14 +1556,16 @@ fn test_add_multiple_stretch_goals() {
 
 #[test]
 fn test_current_milestone_updates_after_reaching() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1297,7 +1581,7 @@ fn test_current_milestone_updates_after_reaching() {
     // Contribute to reach first stretch goal
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 2_500_000);
-    client.contribute(&contributor, &2_500_000);
+    client.contribute(&contributor, &token_address, &2_500_000);
 
     // Now second stretch goal should be current
     assert_eq!(client.current_milestone(), 3_000_000);
@@ -1305,14 +1589,16 @@ fn test_current_milestone_updates_after_reaching() {
 
 #[test]
 fn test_current_milestone_returns_zero_when_all_met() {
-    let (env, client, creator, token_address, admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1325,7 +1611,7 @@ fn test_current_milestone_returns_zero_when_all_met() {
     // Contribute to exceed all stretch goals
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 4_000_000);
-    client.contribute(&contributor, &4_000_000);
+    client.contribute(&contributor, &token_address, &4_000_000);
 
     // All stretch goals met, should return 0
     assert_eq!(client.current_milestone(), 0);
@@ -1333,14 +1619,16 @@ fn test_current_milestone_returns_zero_when_all_met() {
 
 #[test]
 fn test_current_milestone_returns_zero_when_no_stretch_goals() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1354,14 +1642,16 @@ fn test_current_milestone_returns_zero_when_no_stretch_goals() {
 #[test]
 #[should_panic(expected = "stretch goal must be greater than primary goal")]
 fn test_add_stretch_goal_below_primary_goal_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1375,14 +1665,16 @@ fn test_add_stretch_goal_below_primary_goal_panics() {
 #[test]
 #[should_panic(expected = "stretch goal must be greater than primary goal")]
 fn test_add_stretch_goal_equal_to_primary_goal_panics() {
-    let (env, client, creator, token_address, _admin) = setup_env();
+    let (env, client, creator, token_address, token_address_2, _admin, _admin_2) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,
@@ -1404,6 +1696,10 @@ fn test_add_stretch_goal_by_non_creator_panics() {
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract_id.address();
 
+    let token_admin_2 = Address::generate(&env);
+    let token_contract_id_2 = env.register_stellar_asset_contract_v2(token_admin_2.clone());
+    let token_address_2 = token_contract_id_2.address();
+
     let creator = Address::generate(&env);
     let non_creator = Address::generate(&env);
 
@@ -1412,9 +1708,11 @@ fn test_add_stretch_goal_by_non_creator_panics() {
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
     let min_contribution: i128 = 1_000;
+    
+    let allowed_tokens = soroban_sdk::vec![&env, token_address.clone(), token_address_2.clone()];
     client.initialize(
         &creator,
-        &token_address,
+        &allowed_tokens,
         &goal,
         &deadline,
         &min_contribution,

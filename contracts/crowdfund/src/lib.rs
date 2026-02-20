@@ -71,16 +71,16 @@ pub struct CampaignStats {
 pub enum DataKey {
     /// The address of the campaign creator.
     Creator,
-    /// The token used for contributions (e.g. USDC).
-    Token,
+    /// List of allowed tokens for contributions (e.g. USDC, XLM).
+    AllowedTokens,
     /// The funding goal in the token's smallest unit.
     Goal,
     /// The deadline as a ledger timestamp.
     Deadline,
-    /// Total amount raised so far.
+    /// Total amount raised so far (across all tokens).
     TotalRaised,
-    /// Individual contribution by address.
-    Contribution(Address),
+    /// Individual contribution by (contributor, token) pair.
+    Contribution(Address, Address),
     /// List of all contributor addresses.
     Contributors,
     /// Campaign status (Active, Successful, Refunded).
@@ -130,7 +130,7 @@ impl CrowdfundContract {
     ///
     /// # Arguments
     /// * `creator`            – The campaign creator's address.
-    /// * `token`              – The token contract address used for contributions.
+    /// * `allowed_tokens`     – Vector of token contract addresses allowed for contributions.
     /// * `goal`               – The funding goal (in the token's smallest unit).
     /// * `deadline`           – The campaign deadline as a ledger timestamp.
     /// * `min_contribution`   – The minimum contribution amount.
@@ -138,11 +138,12 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If already initialized.
+    /// * If allowed_tokens is empty.
     /// * If platform fee exceeds 10,000 (100%).
     pub fn initialize(
         env: Env,
         creator: Address,
-        token: Address,
+        allowed_tokens: Vec<Address>,
         goal: i128,
         deadline: u64,
         min_contribution: i128,
@@ -155,6 +156,11 @@ impl CrowdfundContract {
 
         creator.require_auth();
 
+        // Validate that at least one token is provided.
+        if allowed_tokens.is_empty() {
+            panic!("at least one token must be allowed");
+        }
+
         // Validate platform fee if provided.
         if let Some(ref config) = platform_config {
             if config.fee_bps > 10_000 {
@@ -163,7 +169,7 @@ impl CrowdfundContract {
         }
 
         env.storage().instance().set(&DataKey::Creator, &creator);
-        env.storage().instance().set(&DataKey::Token, &token);
+        env.storage().instance().set(&DataKey::AllowedTokens, &allowed_tokens);
         env.storage().instance().set(&DataKey::Goal, &goal);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
@@ -188,8 +194,13 @@ impl CrowdfundContract {
     /// Contribute tokens to the campaign.
     ///
     /// The contributor must authorize the call. Contributions are rejected
-    /// after the deadline has passed.
-    pub fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError> {
+    /// after the deadline has passed or if the token is not in the allowed list.
+    ///
+    /// # Arguments
+    /// * `contributor` – The address making the contribution.
+    /// * `token`       – The token address being contributed.
+    /// * `amount`      – The amount to contribute.
+    pub fn contribute(env: Env, contributor: Address, token: Address, amount: i128) -> Result<(), ContractError> {
         contributor.require_auth();
 
         let min_contribution: i128 = env
@@ -206,14 +217,24 @@ impl CrowdfundContract {
             return Err(ContractError::CampaignEnded);
         }
 
-        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
+        // Validate that the token is in the allowed list.
+        let allowed_tokens: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllowedTokens)
+            .unwrap();
+        
+        if !allowed_tokens.contains(&token) {
+            panic!("token not in allowed list");
+        }
+
+        let token_client = token::Client::new(&env, &token);
 
         // Transfer tokens from the contributor to this contract.
         token_client.transfer(&contributor, &env.current_contract_address(), &amount);
 
-        // Update the contributor's running total.
-        let contribution_key = DataKey::Contribution(contributor.clone());
+        // Update the contributor's running total for this specific token.
+        let contribution_key = DataKey::Contribution(contributor.clone(), token.clone());
         let prev: i128 = env
             .storage()
             .persistent()
@@ -254,6 +275,7 @@ impl CrowdfundContract {
     /// Withdraw raised funds — only callable by the creator after the
     /// deadline, and only if the goal has been met.
     ///
+    /// Iterates over all allowed tokens and transfers balances to the creator.
     /// If a platform fee is configured, deducts the fee and transfers it to
     /// the platform address, then sends the remainder to the creator.
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
@@ -276,36 +298,47 @@ impl CrowdfundContract {
             return Err(ContractError::GoalNotReached);
         }
 
-        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
+        let allowed_tokens: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllowedTokens)
+            .unwrap();
 
         // Calculate and transfer platform fee if configured.
         let platform_config: Option<PlatformConfig> =
             env.storage().instance().get(&DataKey::PlatformConfig);
 
-        let creator_payout = if let Some(config) = platform_config {
-            // Calculate fee using checked arithmetic to prevent overflow.
-            let fee = total
-                .checked_mul(config.fee_bps as i128)
-                .expect("fee calculation overflow")
-                .checked_div(10_000)
-                .expect("fee division by zero");
+        // Iterate over all allowed tokens and transfer balances.
+        for token_address in allowed_tokens.iter() {
+            let token_client = token::Client::new(&env, &token_address);
+            let contract_balance = token_client.balance(&env.current_contract_address());
 
-            // Transfer fee to platform.
-            token_client.transfer(&env.current_contract_address(), &config.address, &fee);
+            if contract_balance > 0 {
+                let creator_payout = if let Some(ref config) = platform_config {
+                    // Calculate fee using checked arithmetic to prevent overflow.
+                    let fee = contract_balance
+                        .checked_mul(config.fee_bps as i128)
+                        .expect("fee calculation overflow")
+                        .checked_div(10_000)
+                        .expect("fee division by zero");
 
-            // Emit event with fee details.
-            env.events()
-                .publish(("campaign", "fee_transferred"), (&config.address, fee));
+                    // Transfer fee to platform.
+                    token_client.transfer(&env.current_contract_address(), &config.address, &fee);
 
-            // Calculate creator payout.
-            total.checked_sub(fee).expect("creator payout underflow")
-        } else {
-            total
-        };
+                    // Emit event with fee details.
+                    env.events()
+                        .publish(("campaign", "fee_transferred"), (&config.address, fee));
 
-        // Transfer remainder to creator.
-        token_client.transfer(&env.current_contract_address(), &creator, &creator_payout);
+                    // Calculate creator payout.
+                    contract_balance.checked_sub(fee).expect("creator payout underflow")
+                } else {
+                    contract_balance
+                };
+
+                // Transfer remainder to creator.
+                token_client.transfer(&env.current_contract_address(), &creator, &creator_payout);
+            }
+        }
 
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
         env.storage().instance().set(&DataKey::Status, &Status::Successful);
@@ -321,6 +354,8 @@ impl CrowdfundContract {
 
     /// Refund all contributors — callable by anyone after the deadline
     /// if the goal was **not** met.
+    ///
+    /// Iterates over all contributors and all allowed tokens to refund each balance.
     pub fn refund(env: Env) -> Result<(), ContractError> {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
@@ -338,8 +373,11 @@ impl CrowdfundContract {
             return Err(ContractError::GoalReached);
         }
 
-        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
+        let allowed_tokens: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllowedTokens)
+            .unwrap();
 
         let contributors: Vec<Address> = env
             .storage()
@@ -347,21 +385,26 @@ impl CrowdfundContract {
             .get(&DataKey::Contributors)
             .unwrap();
 
+        // Iterate over all contributors and all tokens to refund each balance.
         for contributor in contributors.iter() {
-            let contribution_key = DataKey::Contribution(contributor.clone());
-            let amount: i128 = env
-                .storage()
-                .persistent()
-                .get(&contribution_key)
-                .unwrap_or(0);
-            if amount > 0 {
-                token_client.transfer(&env.current_contract_address(), &contributor, &amount);
-                env.storage()
+            for token_address in allowed_tokens.iter() {
+                let contribution_key = DataKey::Contribution(contributor.clone(), token_address.clone());
+                let amount: i128 = env
+                    .storage()
                     .persistent()
-                    .set(&contribution_key, &0i128);
-                env.storage()
-                    .persistent()
-                    .extend_ttl(&contribution_key, 100, 100);
+                    .get(&contribution_key)
+                    .unwrap_or(0);
+                
+                if amount > 0 {
+                    let token_client = token::Client::new(&env, &token_address);
+                    token_client.transfer(&env.current_contract_address(), &contributor, &amount);
+                    env.storage()
+                        .persistent()
+                        .set(&contribution_key, &0i128);
+                    env.storage()
+                        .persistent()
+                        .extend_ttl(&contribution_key, 100, 100);
+                }
             }
         }
 
@@ -375,6 +418,8 @@ impl CrowdfundContract {
 
     /// Cancel the campaign and refund all contributors — callable only by
     /// the creator while the campaign is still Active.
+    ///
+    /// Iterates over all contributors and all allowed tokens to refund each balance.
     pub fn cancel(env: Env) {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
@@ -384,8 +429,11 @@ impl CrowdfundContract {
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
 
-        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
+        let allowed_tokens: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllowedTokens)
+            .unwrap();
 
         let contributors: Vec<Address> = env
             .storage()
@@ -393,21 +441,26 @@ impl CrowdfundContract {
             .get(&DataKey::Contributors)
             .unwrap();
 
+        // Iterate over all contributors and all tokens to refund each balance.
         for contributor in contributors.iter() {
-            let contribution_key = DataKey::Contribution(contributor.clone());
-            let amount: i128 = env
-                .storage()
-                .persistent()
-                .get(&contribution_key)
-                .unwrap_or(0);
-            if amount > 0 {
-                token_client.transfer(&env.current_contract_address(), &contributor, &amount);
-                env.storage()
+            for token_address in allowed_tokens.iter() {
+                let contribution_key = DataKey::Contribution(contributor.clone(), token_address.clone());
+                let amount: i128 = env
+                    .storage()
                     .persistent()
-                    .set(&contribution_key, &0i128);
-                env.storage()
-                    .persistent()
-                    .extend_ttl(&contribution_key, 100, 100);
+                    .get(&contribution_key)
+                    .unwrap_or(0);
+                
+                if amount > 0 {
+                    let token_client = token::Client::new(&env, &token_address);
+                    token_client.transfer(&env.current_contract_address(), &contributor, &amount);
+                    env.storage()
+                        .persistent()
+                        .set(&contribution_key, &0i128);
+                    env.storage()
+                        .persistent()
+                        .extend_ttl(&contribution_key, 100, 100);
+                }
             }
         }
 
@@ -593,9 +646,17 @@ impl CrowdfundContract {
         env.storage().instance().get(&DataKey::Deadline).unwrap()
     }
 
-    /// Returns the contribution of a specific address.
-    pub fn contribution(env: Env, contributor: Address) -> i128 {
-        let contribution_key = DataKey::Contribution(contributor);
+    /// Returns the list of allowed tokens for contributions.
+    pub fn allowed_tokens(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::AllowedTokens)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Returns the contribution of a specific address for a specific token.
+    pub fn contribution(env: Env, contributor: Address, token: Address) -> i128 {
+        let contribution_key = DataKey::Contribution(contributor, token);
         env.storage()
             .persistent()
             .get(&contribution_key)
@@ -620,7 +681,7 @@ impl CrowdfundContract {
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
         let contributors: Vec<Address> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Contributors)
             .unwrap();
 
@@ -641,14 +702,24 @@ impl CrowdfundContract {
         } else {
             let average = total_raised / contributor_count as i128;
             let mut largest = 0i128;
+            let allowed_tokens: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&DataKey::AllowedTokens)
+                .unwrap();
+            
             for contributor in contributors.iter() {
-                let amount: i128 = env
-                    .storage()
-                    .instance()
-                    .get(&DataKey::Contribution(contributor))
-                    .unwrap_or(0);
-                if amount > largest {
-                    largest = amount;
+                let mut contributor_total = 0i128;
+                for token in allowed_tokens.iter() {
+                    let amount: i128 = env
+                        .storage()
+                        .persistent()
+                        .get(&DataKey::Contribution(contributor.clone(), token.clone()))
+                        .unwrap_or(0);
+                    contributor_total += amount;
+                }
+                if contributor_total > largest {
+                    largest = contributor_total;
                 }
             }
             (average, largest)
