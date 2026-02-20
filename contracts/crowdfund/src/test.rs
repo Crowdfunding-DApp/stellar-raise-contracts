@@ -1,6 +1,6 @@
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env, Vec, String,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient};

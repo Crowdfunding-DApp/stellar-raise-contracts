@@ -533,6 +533,18 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "Milestones"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "MinContribution"
                             }
                           ]
