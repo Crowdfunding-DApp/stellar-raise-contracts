@@ -496,11 +496,9 @@ impl CrowdfundContract {
             .persistent()
             .get(&contribution_key)
             .unwrap_or(0);
-        
-        let new_contribution = prev
-            .checked_add(amount)
-            .ok_or(ContractError::Overflow)?;
-        
+
+        let new_contribution = prev.checked_add(amount).ok_or(ContractError::Overflow)?;
+
         env.storage()
             .persistent()
             .set(&contribution_key, &new_contribution);
@@ -510,11 +508,9 @@ impl CrowdfundContract {
 
         // Update the global total raised with overflow protection.
         let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
-        
-        let new_total = total
-            .checked_add(amount)
-            .ok_or(ContractError::Overflow)?;
-        
+
+        let new_total = total.checked_add(amount).ok_or(ContractError::Overflow)?;
+
         env.storage()
             .instance()
             .set(&DataKey::TotalRaised, &new_total);
