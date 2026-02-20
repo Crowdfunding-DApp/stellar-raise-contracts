@@ -163,6 +163,15 @@ impl CrowdfundContract {
 
         env.storage().instance().set(&DataKey::Creator, &creator);
         env.storage().instance().set(&DataKey::Token, &token);
+
+        /// Returns the list of all contributor addresses.
+        pub fn contributors(env: Env) -> Vec<Address> {
+            env.storage()
+                .instance()
+                .get(&DataKey::Contributors)
+                .unwrap_or(Vec::new(&env))
+        }
+
         env.storage().instance().set(&DataKey::Goal, &goal);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
