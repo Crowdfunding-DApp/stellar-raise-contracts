@@ -1,6 +1,6 @@
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient};
@@ -71,7 +71,7 @@ fn test_initialize() {
 
 #[test]
 fn test_version() {
-    let (env, client, _creator, _token_address, _admin) = setup_env();
+    let (_env, client, _creator, _token_address, _admin) = setup_env();
 
     // Test that version() returns the expected version number
     assert_eq!(client.version(), 1);
@@ -491,24 +491,6 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
 // ── Preservation Property Tests ────────────────────────────────────────────
 
 use proptest::prelude::*;
-
-/// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6**
-///
-/// **Property 2: Preservation** - Successful Execution Paths
-///
-/// This test verifies that all successful execution paths work correctly
-/// on the UNFIXED code. These behaviors MUST be preserved after the fix.
-///
-/// **IMPORTANT**: This test is EXPECTED TO PASS on unfixed code.
-/// When it passes, it confirms the baseline behavior to preserve.
-///
-/// The test covers all successful operations:
-/// 1. First initialization with valid parameters stores creator, token, goal, deadline, and initializes total_raised to 0
-/// 2. Valid contributions before deadline transfer tokens, update balances, and track contributors
-/// 3. Successful withdrawal by creator after deadline when goal met transfers funds and resets total_raised
-/// 4. Successful refund after deadline when goal not met refunds all contributors
-/// 5. View functions (total_raised, goal, deadline, contribution) return correct values
-/// 6. Multiple contributors are tracked correctly with individual and aggregate totals
 
 proptest! {
     #[test]
