@@ -1223,3 +1223,496 @@ fn test_update_metadata_after_cancel_panics() {
 // Note: The non-creator test would require complex mock setup.
 // The authorization check is covered by require_auth() in the contract,
 // which will panic if the caller is not the creator.
+
+// ── Pledge Mechanism Tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_pledge_records_without_transfer() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 500_000);
+
+    let token_client = token::Client::new(&env, &token_address);
+    let balance_before = token_client.balance(&pledger);
+
+    // Make a pledge
+    client.pledge(&pledger, &500_000);
+
+    // Verify pledge is recorded
+    assert_eq!(client.pledge_amount(&pledger), 500_000);
+    assert_eq!(client.total_pledged(), 500_000);
+
+    // Verify tokens were NOT transferred
+    assert_eq!(token_client.balance(&pledger), balance_before);
+    assert_eq!(client.total_raised(), 0);
+}
+
+#[test]
+fn test_multiple_pledges_from_same_pledger() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 800_000);
+
+    // Make multiple pledges
+    client.pledge(&pledger, &300_000);
+    client.pledge(&pledger, &500_000);
+
+    // Verify pledges accumulate
+    assert_eq!(client.pledge_amount(&pledger), 800_000);
+    assert_eq!(client.total_pledged(), 800_000);
+}
+
+#[test]
+fn test_multiple_pledgers() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let charlie = Address::generate(&env);
+
+    mint_to(&env, &token_address, &admin, &alice, 300_000);
+    mint_to(&env, &token_address, &admin, &bob, 400_000);
+    mint_to(&env, &token_address, &admin, &charlie, 300_000);
+
+    client.pledge(&alice, &300_000);
+    client.pledge(&bob, &400_000);
+    client.pledge(&charlie, &300_000);
+
+    assert_eq!(client.pledge_amount(&alice), 300_000);
+    assert_eq!(client.pledge_amount(&bob), 400_000);
+    assert_eq!(client.pledge_amount(&charlie), 300_000);
+    assert_eq!(client.total_pledged(), 1_000_000);
+}
+
+#[test]
+fn test_collect_pledges_when_goal_met() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    mint_to(&env, &token_address, &admin, &alice, 600_000);
+    mint_to(&env, &token_address, &admin, &bob, 400_000);
+
+    // Make pledges
+    client.pledge(&alice, &600_000);
+    client.pledge(&bob, &400_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    let token_client = token::Client::new(&env, &token_address);
+    let contract_balance_before = token_client.balance(&env.current_contract_address());
+
+    // Collect pledges
+    client.collect_pledges();
+
+    // Verify tokens were transferred to contract
+    assert_eq!(
+        token_client.balance(&env.current_contract_address()),
+        contract_balance_before + 1_000_000
+    );
+
+    // Verify pledges were cleared
+    assert_eq!(client.pledge_amount(&alice), 0);
+    assert_eq!(client.pledge_amount(&bob), 0);
+    assert_eq!(client.total_pledged(), 0);
+
+    // Verify total_raised was updated
+    assert_eq!(client.total_raised(), 1_000_000);
+}
+
+#[test]
+fn test_collect_pledges_with_mixed_contributions_and_pledges() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    let pledger = Address::generate(&env);
+
+    mint_to(&env, &token_address, &admin, &contributor, 600_000);
+    mint_to(&env, &token_address, &admin, &pledger, 400_000);
+
+    // Mix contributions and pledges
+    client.contribute(&contributor, &600_000);
+    client.pledge(&pledger, &400_000);
+
+    assert_eq!(client.total_raised(), 600_000);
+    assert_eq!(client.total_pledged(), 400_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Collect pledges
+    client.collect_pledges();
+
+    // Verify total_raised includes both
+    assert_eq!(client.total_raised(), 1_000_000);
+    assert_eq!(client.total_pledged(), 0);
+}
+
+#[test]
+fn test_collect_pledges_before_deadline_fails() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 1_000_000);
+
+    client.pledge(&pledger, &1_000_000);
+
+    // Try to collect before deadline
+    let result = client.try_collect_pledges();
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignStillActive);
+}
+
+#[test]
+fn test_collect_pledges_when_goal_not_reached_fails() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 500_000);
+
+    client.pledge(&pledger, &500_000);
+
+    // Move past deadline (goal not met)
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Try to collect pledges
+    let result = client.try_collect_pledges();
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalNotReached);
+}
+
+#[test]
+fn test_pledges_discarded_when_goal_not_met() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 500_000);
+
+    client.pledge(&pledger, &500_000);
+
+    let token_client = token::Client::new(&env, &token_address);
+    let pledger_balance = token_client.balance(&pledger);
+
+    // Move past deadline (goal not met)
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Pledges are simply not collected - no refund needed
+    // Verify pledger still has their tokens
+    assert_eq!(token_client.balance(&pledger), pledger_balance);
+    assert_eq!(client.pledge_amount(&pledger), 500_000);
+    assert_eq!(client.total_pledged(), 500_000);
+}
+
+#[test]
+fn test_pledge_after_deadline_fails() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 100;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Fast-forward past the deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 500_000);
+
+    let result = client.try_pledge(&pledger, &500_000);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignEnded);
+}
+
+#[test]
+#[should_panic(expected = "amount below minimum")]
+fn test_pledge_below_minimum_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 10_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 5_000);
+
+    client.pledge(&pledger, &5_000); // should panic
+}
+
+#[test]
+fn test_pledge_exact_minimum() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 10_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 10_000);
+
+    client.pledge(&pledger, &10_000);
+
+    assert_eq!(client.pledge_amount(&pledger), 10_000);
+    assert_eq!(client.total_pledged(), 10_000);
+}
+
+#[test]
+#[should_panic(expected = "campaign is not active")]
+fn test_collect_pledges_after_withdrawal_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 1_000_000);
+
+    client.pledge(&pledger, &1_000_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Collect pledges first
+    client.collect_pledges();
+
+    // Withdraw
+    client.withdraw();
+
+    // Try to collect pledges again (should panic - status is Successful)
+    client.collect_pledges();
+}
+
+#[test]
+fn test_withdraw_after_collecting_pledges() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let pledger = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &pledger, 1_000_000);
+
+    client.pledge(&pledger, &1_000_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Collect pledges
+    client.collect_pledges();
+
+    // Now withdraw should work
+    client.withdraw();
+
+    let token_client = token::Client::new(&env, &token_address);
+    assert_eq!(token_client.balance(&creator), 10_000_000 + 1_000_000);
+}
+
+#[test]
+fn test_collect_pledges_with_no_pledgers() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Make regular contribution to meet goal
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Collect pledges (should succeed even with no pledgers)
+    client.collect_pledges();
+
+    assert_eq!(client.total_pledged(), 0);
+    assert_eq!(client.total_raised(), 1_000_000);
+}
+
+#[test]
+fn test_pledge_and_contribute_from_same_address() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let user = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &user, 1_000_000);
+
+    // Same user can both contribute and pledge
+    client.contribute(&user, &300_000);
+    client.pledge(&user, &700_000);
+
+    assert_eq!(client.contribution(&user), 300_000);
+    assert_eq!(client.pledge_amount(&user), 700_000);
+    assert_eq!(client.total_raised(), 300_000);
+    assert_eq!(client.total_pledged(), 700_000);
+
+    // Move past deadline and collect
+    env.ledger().set_timestamp(deadline + 1);
+    client.collect_pledges();
+
+    assert_eq!(client.total_raised(), 1_000_000);
+    assert_eq!(client.pledge_amount(&user), 0);
+}
