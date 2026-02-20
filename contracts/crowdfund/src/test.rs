@@ -1,6 +1,6 @@
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env, Vec, String,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient};
@@ -1223,3 +1223,305 @@ fn test_update_metadata_after_cancel_panics() {
 // Note: The non-creator test would require complex mock setup.
 // The authorization check is covered by require_auth() in the contract,
 // which will panic if the caller is not the creator.
+
+// ── Milestone Tests ───────────────────────────────────────────────────────────────
+
+#[test]
+fn test_add_milestone() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add a milestone.
+    let description = soroban_sdk::String::from_str(&env, "First milestone");
+    client.add_milestone(&creator, &description, &500_000);
+
+    // Verify milestone was added.
+    let milestones = client.milestones();
+    assert_eq!(milestones.len(), 1);
+    let milestone = milestones.get(0).unwrap();
+    let expected_desc = soroban_sdk::String::from_str(&env, "First milestone");
+    assert_eq!(milestone.description, expected_desc);
+    assert_eq!(milestone.amount, 500_000);
+    assert!(!milestone.completed);
+}
+
+#[test]
+fn test_add_multiple_milestones() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add multiple milestones.
+    let desc1 = soroban_sdk::String::from_str(&env, "Phase 1");
+    client.add_milestone(&creator, &desc1, &300_000);
+
+    let desc2 = soroban_sdk::String::from_str(&env, "Phase 2");
+    client.add_milestone(&creator, &desc2, &400_000);
+
+    let desc3 = soroban_sdk::String::from_str(&env, "Phase 3");
+    client.add_milestone(&creator, &desc3, &300_000);
+
+    // Verify all milestones were added.
+    let milestones = client.milestones();
+    assert_eq!(milestones.len(), 3);
+    assert_eq!(client.milestone_count(), 3);
+    assert_eq!(client.total_milestone_amount(), 1_000_000);
+}
+
+#[test]
+fn test_add_milestone_exceeds_goal_fails() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add first milestone.
+    let desc1 = soroban_sdk::String::from_str(&env, "Phase 1");
+    client.add_milestone(&creator, &desc1, &600_000);
+
+    // Try to add milestone that exceeds goal.
+    let desc2 = soroban_sdk::String::from_str(&env, "Phase 2");
+    let result = client.try_add_milestone(&creator, &desc2, &500_000);
+    
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::MilestoneAmountExceedsGoal);
+}
+
+#[test]
+#[should_panic(expected = "milestones can only be added while campaign is active")]
+fn test_add_milestone_after_campaign_ends_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Meet the goal and withdraw (campaign becomes Successful).
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+    env.ledger().set_timestamp(deadline + 1);
+    client.withdraw();
+
+    // Try to add milestone (should panic - campaign not Active).
+    let description = soroban_sdk::String::from_str(&env, "New milestone");
+    client.add_milestone(&creator, &description, &100_000);
+}
+
+#[test]
+fn test_complete_milestone() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add milestone.
+    let description = soroban_sdk::String::from_str(&env, "First milestone");
+    client.add_milestone(&creator, &description, &500_000);
+
+    // Meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Complete the milestone.
+    client.complete_milestone(&0);
+
+    // Verify milestone is marked as completed.
+    let milestones = client.milestones();
+    let milestone = milestones.get(0).unwrap();
+    assert!(milestone.completed);
+    assert_eq!(client.total_released_from_milestones(), 500_000);
+}
+
+#[test]
+fn test_complete_milestone_out_of_order() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add multiple milestones.
+    let desc1 = soroban_sdk::String::from_str(&env, "Phase 1");
+    client.add_milestone(&creator, &desc1, &300_000);
+    let desc2 = soroban_sdk::String::from_str(&env, "Phase 2");
+    client.add_milestone(&creator, &desc2, &400_000);
+    let desc3 = soroban_sdk::String::from_str(&env, "Phase 3");
+    client.add_milestone(&creator, &desc3, &300_000);
+
+    // Meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Complete milestone 2 first (out of order).
+    client.complete_milestone(&1);
+
+    // Verify only milestone 2 is completed.
+    let milestones = client.milestones();
+    assert!(!milestones.get(0).unwrap().completed);
+    assert!(milestones.get(1).unwrap().completed);
+    assert!(!milestones.get(2).unwrap().completed);
+    assert_eq!(client.total_released_from_milestones(), 400_000);
+
+    // Complete milestone 0.
+    client.complete_milestone(&0);
+    assert_eq!(client.total_released_from_milestones(), 700_000);
+
+    // Try to complete milestone 1 again (index 1) - should fail (already completed).
+    let result = client.try_complete_milestone(&1);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::MilestoneAlreadyCompleted);
+}
+
+#[test]
+fn test_complete_milestone_not_found() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add a milestone.
+    let description = soroban_sdk::String::from_str(&env, "First milestone");
+    client.add_milestone(&creator, &description, &500_000);
+
+    // Meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Try to complete non-existent milestone.
+    let result = client.try_complete_milestone(&5);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::MilestoneNotFound);
+}
+
+#[test]
+fn test_complete_milestone_already_completed() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add milestone.
+    let description = soroban_sdk::String::from_str(&env, "First milestone");
+    client.add_milestone(&creator, &description, &500_000);
+
+    // Meet the goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Complete the milestone.
+    client.complete_milestone(&0);
+
+    // Try to complete again.
+    let result = client.try_complete_milestone(&0);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::MilestoneAlreadyCompleted);
+}
+
+#[test]
+fn test_complete_milestone_goal_not_reached() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    // Add milestone.
+    let description = soroban_sdk::String::from_str(&env, "First milestone");
+    client.add_milestone(&creator, &description, &500_000);
+
+    // Contribute but don't reach goal.
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 500_000);
+    client.contribute(&contributor, &500_000);
+
+    // Try to complete milestone (should fail - goal not reached).
+    let result = client.try_complete_milestone(&0);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalNotReached);
+}

@@ -47,6 +47,15 @@ pub struct PlatformConfig {
     pub fee_bps: u32,
 }
 
+/// Represents a funding milestone with description, amount, and completion status.
+#[derive(Clone)]
+#[contracttype]
+pub struct Milestone {
+    pub description: String,
+    pub amount: i128,
+    pub completed: bool,
+}
+
 /// Represents all storage keys used by the crowdfund contract.
 #[derive(Clone)]
 #[contracttype]
@@ -99,6 +108,8 @@ pub enum DataKey {
     SocialLinks,
     /// Platform configuration for fee handling.
     PlatformConfig,
+    /// Milestones for the campaign: Vec<Milestone>
+    Milestones,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -114,6 +125,10 @@ pub enum ContractError {
     CampaignStillActive = 3,
     GoalNotReached = 4,
     GoalReached = 5,
+    MilestoneAmountExceedsGoal = 6,
+    MilestoneNotFound = 7,
+    MilestoneAlreadyCompleted = 8,
+    NotCreator = 9,
 }
 
 // ── Contract ────────────────────────────────────────────────────────────────
@@ -179,6 +194,11 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::Roadmap, &empty_roadmap);
+
+        let empty_milestones: Vec<Milestone> = Vec::new(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::Milestones, &empty_milestones);
 
         Ok(())
     }
@@ -480,6 +500,126 @@ impl CrowdfundContract {
         env.events().publish((Symbol::new(&env, "campaign"), Symbol::new(&env, "metadata_updated")), updated_fields);
     }
 
+    /// Add a milestone to the campaign.
+    ///
+    /// Only the creator can add milestones, and they can be added while the
+    /// campaign is still active. The total of all milestone amounts must not
+    /// exceed the campaign goal.
+    pub fn add_milestone(
+        env: Env,
+        creator: Address,
+        description: String,
+        amount: i128,
+    ) -> Result<(), ContractError> {
+        let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        if creator != stored_creator {
+            return Err(ContractError::NotCreator);
+        }
+        creator.require_auth();
+
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            panic!("milestones can only be added while campaign is active");
+        }
+
+        let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
+
+        let mut milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        // Calculate total milestone amount including the new one
+        let mut current_total: i128 = 0;
+        for i in 0..milestones.len() {
+            let m = milestones.get(i).unwrap();
+            current_total += m.amount;
+        }
+        if current_total + amount > goal {
+            return Err(ContractError::MilestoneAmountExceedsGoal);
+        }
+
+        let new_milestone = Milestone {
+            description: description.clone(),
+            amount,
+            completed: false,
+        };
+
+        milestones.push_back(new_milestone);
+        env.storage()
+            .instance()
+            .set(&DataKey::Milestones, &milestones);
+
+        // Emit milestone added event
+        env.events()
+            .publish(("campaign", "milestone_added"), (description, amount));
+
+        Ok(())
+    }
+
+    /// Complete a milestone and release its funds to the creator.
+    ///
+    /// Only callable by the creator. The milestone must not have been
+    /// completed already. The campaign goal must have been met, and funds
+    /// must be available.
+    pub fn complete_milestone(env: Env, milestone_index: u32) -> Result<(), ContractError> {
+        let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        creator.require_auth();
+
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active && status != Status::Successful {
+            panic!("campaign is not available for milestone completion");
+        }
+
+        let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
+        let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
+        if total < goal {
+            return Err(ContractError::GoalNotReached);
+        }
+
+        let mut milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        if milestone_index >= milestones.len() {
+            return Err(ContractError::MilestoneNotFound);
+        }
+
+        let milestone = milestones.get(milestone_index).unwrap();
+        if milestone.completed {
+            return Err(ContractError::MilestoneAlreadyCompleted);
+        }
+
+        let milestone_amount = milestone.amount;
+
+        // Mark milestone as completed
+        let mut updated_milestone = milestone.clone();
+        updated_milestone.completed = true;
+        milestones.set(milestone_index, updated_milestone);
+        env.storage()
+            .instance()
+            .set(&DataKey::Milestones, &milestones);
+
+        // Transfer the milestone amount to the creator
+        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+        let token_client = token::Client::new(&env, &token_address);
+
+        token_client.transfer(
+            &env.current_contract_address(),
+            &creator,
+            &milestone_amount,
+        );
+
+        // Emit milestone completed event
+        env.events()
+            .publish(("campaign", "milestone_completed"), (milestone_index, milestone_amount));
+
+        Ok(())
+    }
+
     // ── View helpers ────────────────────────────────────────────────────
 
     /// Add a roadmap item to the campaign timeline.
@@ -637,6 +777,71 @@ impl CrowdfundContract {
             .instance()
             .get(&DataKey::SocialLinks)
             .unwrap_or(empty)
+    }
+
+    /// Returns all milestones for the campaign.
+    pub fn milestones(env: Env) -> Vec<Milestone> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Returns a specific milestone by index.
+    pub fn milestone(env: Env, index: u32) {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        if index >= milestones.len() {
+            panic!("milestone index out of bounds");
+        }
+
+        let _milestone = milestones.get(index).unwrap();
+    }
+
+    /// Returns the number of milestones.
+    pub fn milestone_count(env: Env) -> u32 {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        milestones.len() as u32
+    }
+
+    /// Returns the total amount allocated to all milestones.
+    pub fn total_milestone_amount(env: Env) -> i128 {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut total: i128 = 0;
+        for i in 0..milestones.len() {
+            let m = milestones.get(i).unwrap();
+            total += m.amount;
+        }
+        total
+    }
+
+    /// Returns the total amount released from completed milestones.
+    pub fn total_released_from_milestones(env: Env) -> i128 {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut total: i128 = 0;
+        for i in 0..milestones.len() {
+            let m = milestones.get(i).unwrap();
+            if m.completed {
+                total += m.amount;
+            }
+        }
+        total
     }
 
     /// Returns the contract version.
