@@ -101,9 +101,12 @@ fn test_double_initialize_panics() {
         &min_contribution,
         &None,
     );
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::AlreadyInitialized);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::AlreadyInitialized
+    );
 }
 
 #[test]
@@ -183,9 +186,12 @@ fn test_contribute_after_deadline_panics() {
     mint_to(&env, &token_address, &admin, &contributor, 500_000);
 
     let result = client.try_contribute(&contributor, &500_000);
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignEnded);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::CampaignEnded
+    );
 }
 
 #[test]
@@ -244,9 +250,12 @@ fn test_withdraw_before_deadline_panics() {
     client.contribute(&contributor, &1_000_000);
 
     let result = client.try_withdraw();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::CampaignStillActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::CampaignStillActive
+    );
 }
 
 #[test]
@@ -273,9 +282,12 @@ fn test_withdraw_goal_not_reached_panics() {
     env.ledger().set_timestamp(deadline + 1);
 
     let result = client.try_withdraw();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalNotReached);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::GoalNotReached
+    );
 }
 
 #[test]
@@ -337,9 +349,12 @@ fn test_refund_when_goal_reached_panics() {
     env.ledger().set_timestamp(deadline + 1);
 
     let result = client.try_refund();
-    
+
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), crate::ContractError::GoalReached);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::ContractError::GoalReached
+    );
 }
 
 // ── Bug Condition Exploration Test ─────────────────────────────────────────
@@ -367,12 +382,16 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let (env, client, creator, token_address, _admin) = setup_env();
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
-        
+
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        let result = client.try_initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+        let result =
+            client.try_initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::AlreadyInitialized);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::AlreadyInitialized
+        );
     }
 
     // Test 2: Late contribution
@@ -381,13 +400,13 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 100;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         env.ledger().set_timestamp(deadline + 1);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         let result = client.try_contribute(&contributor, &500_000);
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignEnded);
     }
@@ -398,15 +417,18 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
         client.contribute(&contributor, &1_000_000);
-        
+
         let result = client.try_withdraw();
-        
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignStillActive);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::CampaignStillActive
+        );
     }
 
     // Test 4: Withdrawal without goal
@@ -415,14 +437,14 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         client.contribute(&contributor, &500_000);
-        
+
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_withdraw();
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::GoalNotReached);
     }
@@ -433,15 +455,18 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 500_000);
         client.contribute(&contributor, &500_000);
-        
+
         let result = client.try_refund();
-        
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignStillActive);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ContractError::CampaignStillActive
+        );
     }
 
     // Test 6: Refund after success
@@ -450,14 +475,14 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
         let deadline = env.ledger().timestamp() + 3600;
         let goal: i128 = 1_000_000;
         client.initialize(&creator, &token_address, &goal, &deadline, &1_000, &None);
-        
+
         let contributor = Address::generate(&env);
         mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
         client.contribute(&contributor, &1_000_000);
-        
+
         env.ledger().set_timestamp(deadline + 1);
         let result = client.try_refund();
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().unwrap(), ContractError::GoalReached);
     }
