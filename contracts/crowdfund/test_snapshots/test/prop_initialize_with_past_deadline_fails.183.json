@@ -67,7 +67,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 3315090
+                    "lo": 2022612
                   }
                 },
                 {
@@ -257,7 +257,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 3315090
+                            "lo": 2022612
                           }
                         }
                       },
@@ -286,6 +286,37 @@
                         },
                         "val": {
                           "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "SocialLinks"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "discord"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "twitter"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "website"
+                              },
+                              "val": "void"
+                            }
+                          ]
                         }
                       },
                       {

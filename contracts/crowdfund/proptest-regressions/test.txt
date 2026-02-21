@@ -6,3 +6,5 @@
 # everyone who runs the test benefits from these saved cases.
 cc 630bdb33f0f733bada7dc0e673d1bce011d5c1eb4be6216aace6dbdea28d103f # shrinks to goal = 1000000, deadline_offset = 100
 cc 388d5099e81dbce7cbfa06717d9a3efc6a9fbbe747e9328c39028e360810845a # shrinks to goal = 2000000, deadline_offset = 100, contribution_amount = 100000
+cc 5a780c451b21cf06730206ff31e7b8bbf40df129e481560afab43f2033274b55 # shrinks to goal = 5000000, deadline_offset = 100, amount1 = 1564596, amount2 = 4788729, amount3 = 3646676
+cc 45732dbbaba178bf90f5466cc87f926a41dfab0203f18bee327d5363fde06fdd # shrinks to goal = 1000000, deadline_offset = 100, amount1 = 1000, amount2 = 1000, amount3 = 1998001

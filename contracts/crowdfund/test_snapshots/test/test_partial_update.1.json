@@ -102,7 +102,6 @@
                 {
                   "string": "Updated Title"
                 },
-                "void",
                 "void"
               ]
             }
@@ -118,16 +117,16 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "update_metadata",
+              "function_name": "update_socials",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 "void",
-                "void",
                 {
                   "string": "https://twitter.com/new"
-                }
+                },
+                "void"
               ]
             }
           },
@@ -344,7 +343,28 @@
                           ]
                         },
                         "val": {
-                          "string": "https://twitter.com/new"
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "discord"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "twitter"
+                              },
+                              "val": {
+                                "string": "https://twitter.com/new"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "website"
+                              },
+                              "val": "void"
+                            }
+                          ]
                         }
                       },
                       {
@@ -752,33 +772,5 @@
       ]
     ]
   },
-  "events": [
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "campaign"
-              },
-              {
-                "symbol": "metadata_updated"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "symbol": "socials"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    }
-  ]
+  "events": []
 }

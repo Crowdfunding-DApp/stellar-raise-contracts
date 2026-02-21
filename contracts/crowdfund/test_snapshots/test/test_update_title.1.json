@@ -102,7 +102,6 @@
                 {
                   "string": "New Campaign Title"
                 },
-                "void",
                 "void"
               ]
             }
@@ -309,6 +308,37 @@
                         },
                         "val": {
                           "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "SocialLinks"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "discord"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "twitter"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "website"
+                              },
+                              "val": "void"
+                            }
+                          ]
                         }
                       },
                       {
