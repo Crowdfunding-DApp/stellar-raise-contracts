@@ -65,6 +65,15 @@ pub struct CampaignStats {
     pub largest_contribution: i128,
 }
 
+/// Campaign social links (website, Twitter/X, Discord).
+#[derive(Clone)]
+#[contracttype]
+pub struct SocialLinks {
+    pub website: Option<String>,
+    pub twitter: Option<String>,
+    pub discord: Option<String>,
+}
+
 /// Represents all storage keys used by the crowdfund contract.
 #[derive(Clone)]
 #[contracttype]
@@ -99,6 +108,14 @@ pub enum DataKey {
     SocialLinks,
     /// Platform configuration for fee handling.
     PlatformConfig,
+    /// Individual pledge by address.
+    Pledge(Address),
+    /// List of all pledger addresses.
+    Pledgers,
+    /// Total amount pledged (not yet collected).
+    TotalPledged,
+    /// List of stretch goal milestones.
+    StretchGoals,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -164,14 +181,6 @@ impl CrowdfundContract {
         env.storage().instance().set(&DataKey::Creator, &creator);
         env.storage().instance().set(&DataKey::Token, &token);
 
-        /// Returns the list of all contributor addresses.
-        pub fn contributors(env: Env) -> Vec<Address> {
-            env.storage()
-                .instance()
-                .get(&DataKey::Contributors)
-                .unwrap_or(Vec::new(&env))
-        }
-
         env.storage().instance().set(&DataKey::Goal, &goal);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
@@ -191,6 +200,15 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::Roadmap, &empty_roadmap);
+
+        let empty_social_links = SocialLinks {
+            website: None,
+            twitter: None,
+            discord: None,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::SocialLinks, &empty_social_links);
 
         Ok(())
     }
@@ -609,13 +627,11 @@ impl CrowdfundContract {
     /// * `creator`     – The campaign creator's address (for authentication).
     /// * `title`       – Optional new title (None to keep existing).
     /// * `description` – Optional new description (None to keep existing).
-    /// * `socials`    – Optional new social links (None to keep existing).
     pub fn update_metadata(
         env: Env,
         creator: Address,
         title: Option<String>,
         description: Option<String>,
-        socials: Option<String>,
     ) {
         // Check campaign is active.
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
@@ -647,14 +663,6 @@ impl CrowdfundContract {
             updated_fields.push_back(Symbol::new(&env, "description"));
         }
 
-        // Update social links if provided.
-        if let Some(new_socials) = socials {
-            env.storage()
-                .instance()
-                .set(&DataKey::SocialLinks, &new_socials);
-            updated_fields.push_back(Symbol::new(&env, "socials"));
-        }
-
         // Emit metadata_updated event with the list of updated field names.
         env.events().publish(
             (
@@ -663,6 +671,47 @@ impl CrowdfundContract {
             ),
             updated_fields,
         );
+    }
+
+    /// Update campaign social links — only callable by the creator while the
+    /// campaign is still Active. Allows partial updates (only provided fields are updated).
+    pub fn update_socials(
+        env: Env,
+        creator: Address,
+        website: Option<String>,
+        twitter: Option<String>,
+        discord: Option<String>,
+    ) {
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            panic!("campaign is not active");
+        }
+
+        let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        if creator != stored_creator {
+            panic!("not authorized");
+        }
+        creator.require_auth();
+
+        let current = env
+            .storage()
+            .instance()
+            .get(&DataKey::SocialLinks)
+            .unwrap_or(SocialLinks {
+                website: None,
+                twitter: None,
+                discord: None,
+            });
+
+        let updated = SocialLinks {
+            website: website.or(current.website),
+            twitter: twitter.or(current.twitter),
+            discord: discord.or(current.discord),
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::SocialLinks, &updated);
     }
 
     /// Update the campaign deadline — only callable by the creator while the
@@ -923,8 +972,12 @@ impl CrowdfundContract {
     }
 
     /// Returns the campaign social links.
-    pub fn socials(env: Env) -> String {
-        let empty = String::from_str(&env, "");
+    pub fn social_links(env: Env) -> SocialLinks {
+        let empty = SocialLinks {
+            website: None,
+            twitter: None,
+            discord: None,
+        };
         env.storage()
             .instance()
             .get(&DataKey::SocialLinks)

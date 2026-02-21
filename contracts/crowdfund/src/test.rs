@@ -1099,7 +1099,7 @@ fn test_update_title() {
 
     // Update title.
     let title = soroban_sdk::String::from_str(&env, "New Campaign Title");
-    client.update_metadata(&creator, &Some(title), &None, &None);
+    client.update_metadata(&creator, &Some(title), &None);
 
     // Verify title was updated (we'd need a getter, but the function should not panic).
 }
@@ -1122,7 +1122,95 @@ fn test_update_description() {
 
     // Update description.
     let description = soroban_sdk::String::from_str(&env, "New campaign description");
-    client.update_metadata(&creator, &None, &Some(description), &None);
+    client.update_metadata(&creator, &None, &Some(description));
+}
+
+#[test]
+fn test_social_links_all_three_stored_and_retrieved() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let website = soroban_sdk::String::from_str(&env, "https://project.com");
+    let twitter = soroban_sdk::String::from_str(&env, "https://twitter.com/campaign");
+    let discord = soroban_sdk::String::from_str(&env, "https://discord.gg/campaign");
+
+    client.update_socials(
+        &creator,
+        &Some(website.clone()),
+        &Some(twitter.clone()),
+        &Some(discord.clone()),
+    );
+
+    let links = client.social_links();
+    assert_eq!(links.website, Some(website));
+    assert_eq!(links.twitter, Some(twitter));
+    assert_eq!(links.discord, Some(discord));
+}
+
+#[test]
+fn test_social_links_partial_update() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let website = soroban_sdk::String::from_str(&env, "https://project.com");
+    client.update_socials(&creator, &Some(website.clone()), &None, &None);
+
+    let links = client.social_links();
+    assert_eq!(links.website, Some(website.clone()));
+    assert_eq!(links.twitter, None);
+    assert_eq!(links.discord, None);
+
+    let twitter = soroban_sdk::String::from_str(&env, "https://x.com/campaign");
+    client.update_socials(&creator, &None, &Some(twitter.clone()), &None);
+
+    let links = client.social_links();
+    assert_eq!(links.website, Some(website));
+    assert_eq!(links.twitter, Some(twitter));
+    assert_eq!(links.discord, None);
+}
+
+#[test]
+#[should_panic]
+fn test_update_socials_non_creator_rejected() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &min_contribution,
+        &None,
+    );
+
+    let non_creator = Address::generate(&env);
+    let website = soroban_sdk::String::from_str(&env, "https://evil.com");
+    client.update_socials(&non_creator, &Some(website), &None, &None);
 }
 
 #[test]
@@ -1141,9 +1229,11 @@ fn test_update_socials() {
         &None,
     );
 
-    // Update social links.
-    let socials = soroban_sdk::String::from_str(&env, "https://twitter.com/campaign");
-    client.update_metadata(&creator, &None, &None, &Some(socials));
+    let twitter = soroban_sdk::String::from_str(&env, "https://twitter.com/campaign");
+    client.update_socials(&creator, &None, &Some(twitter.clone()), &None);
+
+    let links = client.social_links();
+    assert_eq!(links.twitter, Some(twitter));
 }
 
 #[test]
@@ -1164,11 +1254,11 @@ fn test_partial_update() {
 
     // Update only title (description and socials should remain None).
     let title = soroban_sdk::String::from_str(&env, "Updated Title");
-    client.update_metadata(&creator, &Some(title), &None, &None);
+    client.update_metadata(&creator, &Some(title), &None);
 
     // Update only socials (should not affect title).
     let socials = soroban_sdk::String::from_str(&env, "https://twitter.com/new");
-    client.update_metadata(&creator, &None, &None, &Some(socials));
+    client.update_socials(&creator, &None, &Some(socials), &None);
 }
 
 #[test]
@@ -1199,7 +1289,7 @@ fn test_update_metadata_when_not_active_panics() {
 
     // Try to update metadata (should panic - campaign is not Active).
     let title = soroban_sdk::String::from_str(&env, "New Title");
-    client.update_metadata(&creator, &Some(title), &None, &None);
+    client.update_metadata(&creator, &Some(title), &None);
 }
 
 #[test]
@@ -1224,7 +1314,7 @@ fn test_update_metadata_after_cancel_panics() {
 
     // Try to update metadata (should panic - campaign is Cancelled).
     let title = soroban_sdk::String::from_str(&env, "New Title");
-    client.update_metadata(&creator, &Some(title), &None, &None);
+    client.update_metadata(&creator, &Some(title), &None);
 }
 
 // Note: The non-creator test would require complex mock setup.
@@ -1349,106 +1439,11 @@ fn test_add_single_stretch_goal() {
         &None,
     );
 
+    let stretch_milestone: i128 = 1_500_000;
+    client.add_stretch_goal(&stretch_milestone);
 
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
+    assert_eq!(client.current_milestone(), stretch_milestone);
 }
-
 
 // ── Property-Based Fuzz Tests with Proptest ────────────────────────────────
 
