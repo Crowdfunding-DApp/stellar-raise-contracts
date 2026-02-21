@@ -3178,6 +3178,10 @@ fn test_process_subscriptions_skips_when_interval_not_elapsed() {
 #[test]
 #[should_panic(expected = "new deadline must be after current deadline")]
 fn test_update_deadline_rejects_shortening() {
+// ── Campaign Active Tests ──────────────────────────────────────────────────
+
+#[test]
+fn test_is_campaign_active_before_deadline() {
     let (env, client, creator, token_address, _admin) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
@@ -3201,6 +3205,16 @@ fn test_update_deadline_rejects_shortening() {
 #[test]
 #[should_panic(expected = "new deadline must be after current deadline")]
 fn test_update_deadline_rejects_equal_deadline() {
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    assert_eq!(client.is_campaign_active(), true);
+}
+
+#[test]
+fn test_is_campaign_active_at_deadline() {
     let (env, client, creator, token_address, _admin) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
@@ -3223,6 +3237,18 @@ fn test_update_deadline_rejects_equal_deadline() {
 #[test]
 #[should_panic(expected = "campaign is not active")]
 fn test_update_deadline_when_not_active_panics() {
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    env.ledger().set_timestamp(deadline);
+
+    assert_eq!(client.is_campaign_active(), true);
+}
+
+#[test]
+fn test_is_campaign_active_after_deadline() {
     let (env, client, creator, token_address, _admin) = setup_env();
 
     let deadline = env.ledger().timestamp() + 3600;
@@ -5995,4 +6021,12 @@ fn test_set_verified_rejects_non_admin() {
         },
     }]);
     client.set_verified(&non_admin, &creator, &true);
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    assert_eq!(client.is_campaign_active(), false);
 }
