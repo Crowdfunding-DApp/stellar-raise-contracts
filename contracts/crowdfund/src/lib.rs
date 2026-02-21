@@ -207,6 +207,7 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::Status, &Status::Active);
+        env.storage().instance().set(&DataKey::Paused, &false);
 
         let empty_contributors: Vec<Address> = Vec::new(&env);
         env.storage()
@@ -231,6 +232,11 @@ impl CrowdfundContract {
     /// The contributor must authorize the call. Contributions are rejected
     /// after the deadline has passed.
     pub fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError> {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            return Err(ContractError::ContractPaused);
+        }
+
         contributor.require_auth();
 
         let min_contribution: i128 = env
@@ -460,6 +466,11 @@ impl CrowdfundContract {
     /// If a platform fee is configured, deducts the fee and transfers it to
     /// the platform address, then sends the remainder to the creator.
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            return Err(ContractError::ContractPaused);
+        }
+
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             panic!("campaign is not active");
@@ -525,6 +536,11 @@ impl CrowdfundContract {
     /// Refund all contributors — callable by anyone after the deadline
     /// if the goal was **not** met.
     pub fn refund(env: Env) -> Result<(), ContractError> {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            return Err(ContractError::ContractPaused);
+        }
+
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             panic!("campaign is not active");
@@ -632,6 +648,24 @@ impl CrowdfundContract {
         admin.require_auth();
 
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    /// Pause or unpause the contract — creator-only.
+    ///
+    /// When paused, all contributions, withdrawals, and refunds are blocked.
+    /// This is a security mechanism to halt operations in case of detected
+    /// vulnerabilities or external threats.
+    ///
+    /// # Arguments
+    /// * `paused` – True to pause, false to unpause.
+    pub fn set_paused(env: Env, paused: bool) {
+        let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        creator.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &paused);
+
+        let event_name = if paused { "paused" } else { "unpaused" };
+        env.events().publish(("campaign", event_name), ());
     }
 
     /// Update campaign metadata — only callable by the creator while the
