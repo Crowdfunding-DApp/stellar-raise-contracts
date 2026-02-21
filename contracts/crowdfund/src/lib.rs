@@ -820,4 +820,10 @@ impl CrowdfundContract {
     pub fn version(_env: Env) -> u32 {
         CONTRACT_VERSION
     }
+
+    /// Returns true if the campaign is still active (before or at deadline).
+    pub fn is_campaign_active(env: Env) -> bool {
+        let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
+        env.ledger().timestamp() <= deadline
+    }
 }
