@@ -1268,3 +1268,62 @@ fn test_withdraw_after_deadline_panics() {
 
     client.withdraw_contribution(&contributor, &50_000); // should panic
 }
+
+// ── Remaining Amount Tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_remaining_amount_underfunded() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 300_000);
+    client.contribute(&contributor, &300_000);
+
+    assert_eq!(client.remaining_amount(), 700_000);
+}
+
+#[test]
+fn test_remaining_amount_equals_goal() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    assert_eq!(client.remaining_amount(), 0);
+}
+
+#[test]
+fn test_remaining_amount_exceeds_goal() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    let title = soroban_sdk::String::from_str(&env, "Test Campaign");
+    let description = soroban_sdk::String::from_str(&env, "Test Description");
+
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &title, &description, &None);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_500_000);
+    client.contribute(&contributor, &1_500_000);
+
+    assert_eq!(client.remaining_amount(), 0);
+}
