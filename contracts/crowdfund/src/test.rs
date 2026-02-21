@@ -1,3 +1,5 @@
+#![allow(unused_doc_comments)]
+
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -1349,106 +1351,14 @@ fn test_add_single_stretch_goal() {
         &None,
     );
 
+    // Add a stretch goal that is greater than the primary goal
+    let stretch_goal: i128 = 2_000_000;
+    client.add_stretch_goal(&stretch_goal);
 
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
-
-
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &min_contribution,
-        &None,
-    );
+    // Verify the stretch goal was added by checking the current milestone
+    let current = client.current_milestone();
+    assert_eq!(current, stretch_goal);
 }
-
 
 // ── Property-Based Fuzz Tests with Proptest ────────────────────────────────
 
