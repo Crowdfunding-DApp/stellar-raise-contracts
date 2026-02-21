@@ -29,6 +29,24 @@ echo "[LOG] step=deploy status=ok contract_id=$CONTRACT_ID"
 
 echo "[LOG] step=initialize status=start"
 stellar contract invoke \
+# Determine the contract output path based on workspace structure
+CONTRACT_WASM="Crowdfund-stellar-raise-contracts/target/wasm32-unknown-unknown/release/crowdfund.wasm"
+
+echo "Building WASM..."
+cd Crowdfund-stellar-raise-contracts
+cargo build --target wasm32-unknown-unknown --release
+cd ..
+
+echo "Deploying contract to $NETWORK..."
+CONTRACT_ID=$(soroban contract deploy \
+  --wasm "$CONTRACT_WASM" \
+  --network "$NETWORK" \
+  --source "$CREATOR")
+
+echo "Contract deployed: $CONTRACT_ID"
+
+echo "Initializing campaign..."
+soroban contract invoke \
   --id "$CONTRACT_ID" \
   --network "$NETWORK" \
   --source "$CREATOR" \
@@ -46,3 +64,8 @@ stellar contract invoke \
 echo "[LOG] step=initialize status=ok"
 
 echo "[LOG] step=done contract_id=$CONTRACT_ID"
+  --min_contribution "$MIN_CONTRIBUTION"
+
+echo "Campaign initialized successfully."
+echo "Contract ID: $CONTRACT_ID"
+echo "Save this Contract ID for interacting with the campaign."

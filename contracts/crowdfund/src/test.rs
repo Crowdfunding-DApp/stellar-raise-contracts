@@ -10,6 +10,8 @@ use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env, String, Vec,
 use soroban_sdk::{testutils::{Address as _, Ledger, Events}, token, Address, Env};
+#![allow(unused_doc_comments)]
+
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -2280,6 +2282,15 @@ fn test_overflow_on_total_raised_not_individual_contribution() {
     assert_eq!(client.contribution(&bob), 0);
     // Total should only reflect Alice's contribution
     assert_eq!(client.total_raised(), alice_amount);
+
+    // Add a stretch goal that is greater than the primary goal
+    let stretch_goal: i128 = 2_000_000;
+    client.add_stretch_goal(&stretch_goal);
+
+    // Verify the stretch goal was added by checking the current milestone
+    let current = client.current_milestone();
+    assert_eq!(current, stretch_goal);
+}
 
 // ── Property-Based Fuzz Tests with Proptest ────────────────────────────────
 

@@ -16,6 +16,9 @@ Stellar Raise lets anyone create a crowdfunding campaign on-chain. Contributors 
 | **Contribute** | Pledge tokens before the deadline |
 | **Withdraw** | Creator claims funds after a successful campaign |
 | **Refund** | Contributors individually reclaim tokens if the goal is missed (pull-based) |
+| **Contribute** | Pledge tokens before the deadline                  |
+| **Withdraw**   | Creator claims funds after a successful campaign   |
+| **Refund**     | Contributors reclaim tokens if the goal is missed  |
 
 ## Project Structure
 
@@ -221,6 +224,16 @@ We provide automated scripts to simplify deploying and interacting with the crow
 
    ```bash
    stellar keys generate --global alice
+1. **Install Soroban CLI:**
+
+   ```bash
+   curl -Ls https://soroban.stellar.org/install-soroban.sh | sh
+   ```
+
+2. **Configure your Soroban identity:**
+
+   ```bash
+   soroban keys generate --global <alice>
    ```
 
 3. **Add the testnet network:**
@@ -228,6 +241,7 @@ We provide automated scripts to simplify deploying and interacting with the crow
    stellar network add testnet \
      --rpc-url https://soroban-testnet.stellar.org:443 \
      --network-passphrase "Test SDF Network ; September 2015"
+   soroban network add testnet --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015"
    ```
 
 #### Deploy Script
@@ -303,14 +317,15 @@ If you prefer manual deployment:
 # Build the optimized WASM
 cargo build --release --target wasm32-unknown-unknown
 
-# Deploy using Stellar CLI
-stellar contract deploy \
+# Deploy using Soroban CLI
+soroban contract deploy \
   --wasm target/wasm32-unknown-unknown/release/crowdfund.wasm \
   --network testnet \
   --source <YOUR_SECRET_KEY>
 
 # Initialize the campaign
 stellar contract invoke \
+soroban contract invoke \
   --id <CONTRACT_ADDRESS> \
   --network testnet \
   --source <YOUR_SECRET_KEY> \
