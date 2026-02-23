@@ -39,7 +39,7 @@ const styles: { button: React.CSSProperties } = {
     position: "fixed",
 const styles = {
   button: {
-    position: "fixed" as const,
+    position: "fixed",
     bottom: "2rem",
     right: "2rem",
     backgroundColor: "#4f46e5",
