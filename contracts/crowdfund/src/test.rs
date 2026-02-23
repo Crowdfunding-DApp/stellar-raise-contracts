@@ -5533,6 +5533,52 @@ fn test_tiered_fee_multiple_tiers() {
 
     client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution, &Some(platform_config), &Some(fee_tiers));
 
+// ── Remaining Amount Tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_remaining_amount_underfunded() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(&creator, &token_address, &goal, &(goal * 2), &deadline, &min_contribution, &None);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 300_000);
+    client.contribute(&contributor, &300_000);
+
+    assert_eq!(client.remaining_amount(), 700_000);
+}
+
+#[test]
+fn test_remaining_amount_equals_goal() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(&creator, &token_address, &goal, &(goal * 2), &deadline, &min_contribution, &None);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    assert_eq!(client.remaining_amount(), 0);
+}
+
+#[test]
+fn test_remaining_amount_exceeds_goal() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(&creator, &token_address, &goal, &(goal * 2), &deadline, &min_contribution, &None);
+
     let contributor = Address::generate(&env);
     mint_to(&env, &token_address, &admin, &contributor, 1_500_000);
     client.contribute(&contributor, &1_500_000);
@@ -6540,3 +6586,5 @@ fn test_set_verified_rejects_non_admin() {
     assert_eq!(client.referral_tally(&referrer), 225_000);
 }
 */
+    assert_eq!(client.remaining_amount(), 0);
+}
