@@ -7,6 +7,8 @@ function MyApp({ Component, pageProps }) {
       <SEO />
       <Component {...pageProps} />
     </GlobalErrorBoundary>
+﻿import "../styles/global.css";
+import SEO from "../components/SEO";
 
 function MyApp({ Component, pageProps }) {
   return (
