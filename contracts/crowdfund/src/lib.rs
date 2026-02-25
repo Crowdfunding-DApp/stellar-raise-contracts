@@ -1,7 +1,9 @@
 #![no_std]
 #![allow(missing_docs)]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, token, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
+};
 
 #[cfg(test)]
 mod test;
@@ -146,6 +148,12 @@ pub enum DataKey {
     TotalPledged,
     /// List of stretch goal milestones.
     StretchGoals,
+    /// Campaign updates blog: Vec<(u64, String)> of (timestamp, update text).
+    Updates,
+    /// Whether whitelist is enabled for this campaign.
+    WhitelistEnabled,
+    /// Individual whitelist entry by address.
+    Whitelist(Address),
 }
 
 // ── Rate Limiting ──────────────────────────────────────────────────────────
@@ -212,16 +220,6 @@ impl CrowdfundContract {
             return Err(ContractError::AlreadyInitialized);
         }
 
-        let eb_deadline = match early_bird_deadline {
-            Some(eb) => {
-                if eb >= deadline {
-                    panic!("early bird deadline must be before campaign deadline");
-                }
-                eb
-            }
-            None => core::cmp::min(env.ledger().timestamp() + 86400, deadline.saturating_sub(1)),
-        };
-
         creator.require_auth();
 
         // Validate platform fee if provided.
@@ -240,7 +238,9 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::MinContribution, &min_contribution);
         env.storage().instance().set(&DataKey::Title, &title);
-        env.storage().instance().set(&DataKey::Description, &description);
+        env.storage()
+            .instance()
+            .set(&DataKey::Description, &description);
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
         env.storage()
             .instance()
@@ -282,11 +282,15 @@ impl CrowdfundContract {
         creator.require_auth();
 
         if !env.storage().instance().has(&DataKey::WhitelistEnabled) {
-            env.storage().instance().set(&DataKey::WhitelistEnabled, &true);
+            env.storage()
+                .instance()
+                .set(&DataKey::WhitelistEnabled, &true);
         }
 
         for address in addresses.iter() {
-            env.storage().instance().set(&DataKey::Whitelist(address), &true);
+            env.storage()
+                .instance()
+                .set(&DataKey::Whitelist(address), &true);
         }
     }
 
@@ -608,11 +612,7 @@ impl CrowdfundContract {
         }
 
         // Update global total raised.
-        let total: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalRaised)
-            .unwrap();
+        let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
         env.storage()
             .instance()
             .set(&DataKey::TotalRaised, &(total - amount));
@@ -773,22 +773,20 @@ impl CrowdfundContract {
         token_client.transfer(&env.current_contract_address(), &contributor, &amount);
 
         // Reset the contributor's contribution to 0.
-        env.storage()
-            .persistent()
-            .set(&contribution_key, &0i128);
+        env.storage().persistent().set(&contribution_key, &0i128);
         env.storage()
             .persistent()
             .extend_ttl(&contribution_key, 100, 100);
 
         // Update total raised.
         let new_total = total - amount;
-        env.storage().instance().set(&DataKey::TotalRaised, &new_total);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalRaised, &new_total);
 
         // Emit refund event
-        env.events().publish(
-            ("campaign", "refunded"),
-            (contributor.clone(), amount),
-        );
+        env.events()
+            .publish(("campaign", "refunded"), (contributor.clone(), amount));
 
         Ok(())
     }
@@ -974,6 +972,43 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .get(&DataKey::Roadmap)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Post a campaign update (creator only).
+    ///
+    /// Records the current timestamp and the provided text. Rejects empty text.
+    /// Emits a (campaign, update_posted) event with timestamp and text.
+    pub fn post_update(env: Env, text: String) {
+        let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        creator.require_auth();
+
+        if text.is_empty() {
+            panic!("update text cannot be empty");
+        }
+
+        let timestamp = env.ledger().timestamp();
+
+        let mut updates: Vec<(u64, String)> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Updates)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        updates.push_back((timestamp, text.clone()));
+
+        env.storage().instance().set(&DataKey::Updates, &updates);
+        env.events()
+            .publish(("campaign", "update_posted"), (timestamp, text));
+    }
+
+    /// Returns the full ordered list of campaign updates.
+    ///
+    /// Each entry is a tuple of (timestamp, update text) in chronological order.
+    pub fn get_updates(env: Env) -> Vec<(u64, String)> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Updates)
             .unwrap_or_else(|| Vec::new(&env))
     }
 
@@ -1171,9 +1206,21 @@ impl CrowdfundContract {
         let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
-        let total_raised: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap_or(0);
-        let title: String = env.storage().instance().get(&DataKey::Title).unwrap_or_else(|| String::from_str(&env, ""));
-        let description: String = env.storage().instance().get(&DataKey::Description).unwrap_or_else(|| String::from_str(&env, ""));
+        let total_raised: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalRaised)
+            .unwrap_or(0);
+        let title: String = env
+            .storage()
+            .instance()
+            .get(&DataKey::Title)
+            .unwrap_or_else(|| String::from_str(&env, ""));
+        let description: String = env
+            .storage()
+            .instance()
+            .get(&DataKey::Description)
+            .unwrap_or_else(|| String::from_str(&env, ""));
 
         CampaignInfo {
             creator,
@@ -1185,7 +1232,7 @@ impl CrowdfundContract {
             description,
         }
     }
- 
+
     /// Returns true if the address is whitelisted.
     pub fn is_whitelisted(env: Env, address: Address) -> bool {
         env.storage()
