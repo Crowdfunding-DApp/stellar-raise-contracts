@@ -4725,6 +4725,18 @@ fn test_all_interactions_succeed_after_unpause() {
 #[should_panic]
 fn test_set_paused_rejected_from_non_creator() {
     let env = Env::default();
+// ── Multisig & DAO Creator Tests ───────────────────────────────────────────
+
+/// Test that withdraw works correctly when the creator is a contract address.
+///
+/// This simulates a multisig wallet or DAO contract as the campaign creator.
+/// In Soroban, when `creator.require_auth()` is called on a contract address,
+/// it invokes the contract's authorization logic, enabling multisig approval.
+#[test]
+fn test_withdraw_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
     let contract_id = env.register(CrowdfundContract, ());
     let client = CrowdfundContractClient::new(&env, &contract_id);
 
@@ -4783,4 +4795,278 @@ fn test_set_paused_rejected_from_non_creator() {
         result.unwrap_err().unwrap(),
         crate::ContractError::SubscriptionNotFound
     );
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+
+    // Use a contract address as the creator (simulating a multisig wallet)
+    // In a real scenario, this would be a deployed multisig contract
+    let multisig_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &multisig_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
+        &None,
+    );
+
+    // Contribute to meet the goal
+    let contributor = Address::generate(&env);
+    token_admin_client.mint(&contributor, &1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Fast forward past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Withdraw should succeed with multisig creator
+    // In a real scenario, this would require M-of-N signatures
+    let result = client.try_withdraw();
+    assert!(result.is_ok());
+}
+
+/// Test that set_paused works correctly with a multisig creator.
+///
+/// This ensures that pause/unpause operations can be controlled by
+/// a multisig wallet or DAO, preventing single-party control over
+/// this critical security function.
+#[test]
+fn test_set_paused_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    // Use a contract address as the creator (simulating a multisig wallet)
+    let multisig_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &multisig_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
+        &None,
+    );
+
+    // Pause the campaign - should work with multisig creator
+    client.set_paused(&true);
+
+    // Verify the campaign is paused
+    // (In a real scenario, this would require multisig approval)
+    let paused: bool = env
+        .storage()
+        .instance()
+        .get(&crate::DataKey::Paused)
+        .unwrap_or(false);
+    assert!(paused);
+
+    // Unpause the campaign
+    client.set_paused(&false);
+
+    let paused: bool = env
+        .storage()
+        .instance()
+        .get(&crate::DataKey::Paused)
+        .unwrap_or(false);
+    assert!(!paused);
+}
+
+/// Test that update_metadata works correctly with a multisig creator.
+///
+/// This ensures that campaign metadata changes can be controlled by
+/// a multisig wallet or DAO, maintaining transparency and preventing
+/// unauthorized modifications.
+#[test]
+fn test_update_metadata_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    // Use a contract address as the creator (simulating a DAO)
+    let dao_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &dao_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "DAO Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with DAO creator"),
+        &None,
+    );
+
+    // Update metadata - should work with DAO creator
+    let new_title = Some(soroban_sdk::String::from_str(&env, "Updated DAO Campaign"));
+    let new_description = Some(soroban_sdk::String::from_str(
+        &env,
+        "Updated description by DAO vote",
+    ));
+
+    client.update_metadata(&dao_creator, &new_title, &new_description, &None);
+
+    // Verify the metadata was updated
+    let title = client.title();
+    assert_eq!(title, new_title.unwrap());
+}
+
+/// Test that unauthorized addresses are still rejected even when creator is a multisig.
+///
+/// This ensures that the authorization mechanism works correctly for both
+/// user accounts and contract addresses, rejecting unauthorized callers.
+#[test]
+#[should_panic]
+fn test_multisig_creator_rejects_unauthorized_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    // Use a contract address as the creator (simulating a multisig wallet)
+    let multisig_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &multisig_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
+        &None,
+    );
+
+    // Try to pause with an unauthorized address
+    let unauthorized = Address::generate(&env);
+    env.mock_all_auths_allowing_non_root_auth();
+    env.set_auths(&[]);
+
+    // This should panic because unauthorized address is not the creator
+    client.set_paused(&true);
+}
+
+/// Test that all admin functions work correctly when creator is a DAO contract.
+///
+/// This comprehensive test verifies that all creator-restricted functions
+/// (withdraw, set_paused, update_metadata, add_roadmap_item, add_stretch_goal,
+/// add_reward_tier) work seamlessly with a DAO contract as the creator.
+#[test]
+fn test_all_admin_functions_with_dao_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+
+    // Use a contract address as the creator (simulating a DAO)
+    let dao_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &dao_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "DAO Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with DAO governance"),
+        &None,
+    );
+
+    // Test add_roadmap_item
+    let roadmap_date = env.ledger().timestamp() + 86400;
+    let roadmap_desc = soroban_sdk::String::from_str(&env, "Milestone 1");
+    client.add_roadmap_item(&roadmap_date, &roadmap_desc);
+
+    let roadmap = client.roadmap();
+    assert_eq!(roadmap.len(), 1);
+
+    // Test add_stretch_goal
+    let stretch_goal: i128 = 2_000_000;
+    client.add_stretch_goal(&stretch_goal);
+
+    // Test add_reward_tier
+    let tier_name = soroban_sdk::String::from_str(&env, "Gold");
+    client.add_reward_tier(&dao_creator, &tier_name, &10_000);
+
+    let tiers = client.reward_tiers();
+    assert_eq!(tiers.len(), 1);
+
+    // Test update_metadata
+    let new_title = Some(soroban_sdk::String::from_str(&env, "Updated by DAO"));
+    client.update_metadata(&dao_creator, &new_title, &None, &None);
+
+    // Test set_paused
+    client.set_paused(&true);
+    client.set_paused(&false);
+
+    // Test update_deadline
+    let new_deadline = deadline + 7200;
+    client.update_deadline(&new_deadline);
+
+    // Contribute to meet the goal
+    let contributor = Address::generate(&env);
+    token_admin_client.mint(&contributor, &1_000_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Fast forward past deadline
+    env.ledger().set_timestamp(new_deadline + 1);
+
+    // Test withdraw
+    let result = client.try_withdraw();
+    assert!(result.is_ok());
 }
