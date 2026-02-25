@@ -1,7 +1,9 @@
 #![no_std]
 #![allow(missing_docs)]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, token, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
+};
 
 #[cfg(test)]
 mod test;
@@ -44,6 +46,14 @@ pub struct RoadmapItem {
 #[contracttype]
 pub struct PlatformConfig {
     pub address: Address,
+    pub fee_bps: u32,
+}
+
+/// A fee tier with threshold and fee rate.
+#[derive(Clone)]
+#[contracttype]
+pub struct FeeTier {
+    pub threshold: i128,
     pub fee_bps: u32,
 }
 
@@ -146,6 +156,12 @@ pub enum DataKey {
     TotalPledged,
     /// List of stretch goal milestones.
     StretchGoals,
+    /// List of fee tiers ordered by threshold ascending.
+    FeeTiers,
+    /// Whether whitelist is enabled.
+    WhitelistEnabled,
+    /// Whitelist entry for an address.
+    Whitelist(Address),
 }
 
 // ── Rate Limiting ──────────────────────────────────────────────────────────
@@ -190,37 +206,31 @@ impl CrowdfundContract {
     /// * `title`              – The campaign title.
     /// * `description`        – The campaign description.
     /// * `platform_config`    – Optional platform configuration (address and fee in basis points).
+    /// * `fee_tiers`          – Optional fee tiers for dynamic fee calculation.
     ///
     /// # Panics
     /// * If already initialized.
     /// * If platform fee exceeds 10,000 (100%).
+    /// * If fee tiers are not ordered by threshold ascending.
+    /// * If any fee tier has fee_bps > 10,000.
     #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         creator: Address,
         token: Address,
         goal: i128,
-        _hard_cap: i128,
+        hard_cap: i128,
         deadline: u64,
         min_contribution: i128,
         title: String,
         description: String,
         platform_config: Option<PlatformConfig>,
+        fee_tiers: Option<Vec<FeeTier>>,
     ) -> Result<(), ContractError> {
         // Prevent re-initialization.
         if env.storage().instance().has(&DataKey::Creator) {
             return Err(ContractError::AlreadyInitialized);
         }
-
-        let eb_deadline = match early_bird_deadline {
-            Some(eb) => {
-                if eb >= deadline {
-                    panic!("early bird deadline must be before campaign deadline");
-                }
-                eb
-            }
-            None => core::cmp::min(env.ledger().timestamp() + 86400, deadline.saturating_sub(1)),
-        };
 
         creator.require_auth();
 
@@ -231,16 +241,42 @@ impl CrowdfundContract {
             }
         }
 
+        // Validate and store fee tiers if provided.
+        if let Some(ref tiers) = fee_tiers {
+            if !tiers.is_empty() {
+                // Validate each tier's fee_bps.
+                for tier in tiers.iter() {
+                    if tier.fee_bps > 10_000 {
+                        panic!("fee tier fee_bps cannot exceed 10000");
+                    }
+                }
+
+                // Validate tiers are ordered by threshold ascending.
+                for i in 1..tiers.len() {
+                    let prev = tiers.get(i - 1).unwrap();
+                    let curr = tiers.get(i).unwrap();
+                    if curr.threshold <= prev.threshold {
+                        panic!("fee tiers must be ordered by threshold ascending");
+                    }
+                }
+
+                env.storage().instance().set(&DataKey::FeeTiers, tiers);
+            }
+        }
+
         env.storage().instance().set(&DataKey::Creator, &creator);
         env.storage().instance().set(&DataKey::Token, &token);
 
         env.storage().instance().set(&DataKey::Goal, &goal);
+        env.storage().instance().set(&DataKey::HardCap, &hard_cap);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
             .instance()
             .set(&DataKey::MinContribution, &min_contribution);
         env.storage().instance().set(&DataKey::Title, &title);
-        env.storage().instance().set(&DataKey::Description, &description);
+        env.storage()
+            .instance()
+            .set(&DataKey::Description, &description);
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
         env.storage()
             .instance()
@@ -282,11 +318,15 @@ impl CrowdfundContract {
         creator.require_auth();
 
         if !env.storage().instance().has(&DataKey::WhitelistEnabled) {
-            env.storage().instance().set(&DataKey::WhitelistEnabled, &true);
+            env.storage()
+                .instance()
+                .set(&DataKey::WhitelistEnabled, &true);
         }
 
         for address in addresses.iter() {
-            env.storage().instance().set(&DataKey::Whitelist(address), &true);
+            env.storage()
+                .instance()
+                .set(&DataKey::Whitelist(address), &true);
         }
     }
 
@@ -608,11 +648,7 @@ impl CrowdfundContract {
         }
 
         // Update global total raised.
-        let total: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalRaised)
-            .unwrap();
+        let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
         env.storage()
             .instance()
             .set(&DataKey::TotalRaised, &(total - amount));
@@ -658,14 +694,20 @@ impl CrowdfundContract {
         // Calculate and transfer platform fee if configured.
         let platform_config: Option<PlatformConfig> =
             env.storage().instance().get(&DataKey::PlatformConfig);
+        let fee_tiers: Option<Vec<FeeTier>> = env.storage().instance().get(&DataKey::FeeTiers);
 
         let creator_payout = if let Some(config) = platform_config {
-            // Calculate fee using checked arithmetic to prevent overflow.
-            let fee = total
-                .checked_mul(config.fee_bps as i128)
-                .expect("fee calculation overflow")
-                .checked_div(10_000)
-                .expect("fee division by zero");
+            let fee = if let Some(tiers) = fee_tiers {
+                // Use tiered fee calculation.
+                Self::calculate_tiered_fee(&env, total, &tiers)
+            } else {
+                // Fall back to flat fee.
+                total
+                    .checked_mul(config.fee_bps as i128)
+                    .expect("fee calculation overflow")
+                    .checked_div(10_000)
+                    .expect("fee division by zero")
+            };
 
             // Transfer fee to platform.
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
@@ -773,22 +815,20 @@ impl CrowdfundContract {
         token_client.transfer(&env.current_contract_address(), &contributor, &amount);
 
         // Reset the contributor's contribution to 0.
-        env.storage()
-            .persistent()
-            .set(&contribution_key, &0i128);
+        env.storage().persistent().set(&contribution_key, &0i128);
         env.storage()
             .persistent()
             .extend_ttl(&contribution_key, 100, 100);
 
         // Update total raised.
         let new_total = total - amount;
-        env.storage().instance().set(&DataKey::TotalRaised, &new_total);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalRaised, &new_total);
 
         // Emit refund event
-        env.events().publish(
-            ("campaign", "refunded"),
-            (contributor.clone(), amount),
-        );
+        env.events()
+            .publish(("campaign", "refunded"), (contributor.clone(), amount));
 
         Ok(())
     }
@@ -1171,9 +1211,21 @@ impl CrowdfundContract {
         let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
-        let total_raised: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap_or(0);
-        let title: String = env.storage().instance().get(&DataKey::Title).unwrap_or_else(|| String::from_str(&env, ""));
-        let description: String = env.storage().instance().get(&DataKey::Description).unwrap_or_else(|| String::from_str(&env, ""));
+        let total_raised: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalRaised)
+            .unwrap_or(0);
+        let title: String = env
+            .storage()
+            .instance()
+            .get(&DataKey::Title)
+            .unwrap_or_else(|| String::from_str(&env, ""));
+        let description: String = env
+            .storage()
+            .instance()
+            .get(&DataKey::Description)
+            .unwrap_or_else(|| String::from_str(&env, ""));
 
         CampaignInfo {
             creator,
@@ -1185,7 +1237,7 @@ impl CrowdfundContract {
             description,
         }
     }
- 
+
     /// Returns true if the address is whitelisted.
     pub fn is_whitelisted(env: Env, address: Address) -> bool {
         env.storage()
@@ -1287,5 +1339,67 @@ impl CrowdfundContract {
     /// Returns the token contract address used for contributions.
     pub fn token(env: Env) -> Address {
         env.storage().instance().get(&DataKey::Token).unwrap()
+    }
+
+    /// Returns the configured fee tiers.
+    pub fn fee_tiers(env: Env) -> Vec<FeeTier> {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeTiers)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Calculate tiered fee based on total raised and fee tiers.
+    fn calculate_tiered_fee(_env: &Env, total: i128, tiers: &Vec<FeeTier>) -> i128 {
+        let mut fee = 0i128;
+        let mut prev_threshold = 0i128;
+
+        for tier in tiers.iter() {
+            if total <= prev_threshold {
+                break;
+            }
+
+            let portion_end = if total < tier.threshold {
+                total
+            } else {
+                tier.threshold
+            };
+
+            let portion = portion_end
+                .checked_sub(prev_threshold)
+                .expect("portion calculation underflow");
+
+            let portion_fee = portion
+                .checked_mul(tier.fee_bps as i128)
+                .expect("portion fee calculation overflow")
+                .checked_div(10_000)
+                .expect("portion fee division by zero");
+
+            fee = fee
+                .checked_add(portion_fee)
+                .expect("fee accumulation overflow");
+
+            prev_threshold = tier.threshold;
+        }
+
+        // Apply the last tier's rate to any amount above the highest threshold.
+        if total > prev_threshold && !tiers.is_empty() {
+            let last_tier = tiers.get(tiers.len() - 1).unwrap();
+            let remaining = total
+                .checked_sub(prev_threshold)
+                .expect("remaining calculation underflow");
+
+            let remaining_fee = remaining
+                .checked_mul(last_tier.fee_bps as i128)
+                .expect("remaining fee calculation overflow")
+                .checked_div(10_000)
+                .expect("remaining fee division by zero");
+
+            fee = fee
+                .checked_add(remaining_fee)
+                .expect("final fee accumulation overflow");
+        }
+
+        fee
     }
 }

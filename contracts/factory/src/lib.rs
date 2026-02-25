@@ -1,6 +1,8 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, Symbol, Vec,
+};
 
 #[cfg(test)]
 mod test;
@@ -49,7 +51,13 @@ impl FactoryContract {
         let _: () = env.invoke_contract(
             &deployed_address,
             &Symbol::new(&env, "initialize"),
-            soroban_sdk::vec![&env, creator.into_val(&env), token.into_val(&env), goal.into_val(&env), deadline.into_val(&env)],
+            soroban_sdk::vec![
+                &env,
+                creator.into_val(&env),
+                token.into_val(&env),
+                goal.into_val(&env),
+                deadline.into_val(&env)
+            ],
         );
 
         // Add to registry.

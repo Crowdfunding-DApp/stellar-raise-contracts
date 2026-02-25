@@ -1,21 +1,19 @@
 #![cfg(test)]
 
 use crate::{FactoryContract, FactoryContractClient};
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
 extern crate std;
 
 // Import the crowdfund contract WASM.
 mod crowdfund_wasm {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/crowdfund.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/crowdfund.wasm");
 }
 
-fn create_token_contract<'a>(env: &Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
+fn create_token_contract<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (Address, token::StellarAssetClient<'a>) {
     let token_contract_id = env.register_stellar_asset_contract_v2(admin.clone());
     let token_address = token_contract_id.address();
     let token_client = token::StellarAssetClient::new(env, &token_address);
@@ -40,13 +38,8 @@ fn test_create_single_campaign() {
     let goal = 1000i128;
     let deadline = 100u64;
 
-    let campaign_addr = factory.create_campaign(
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &wasm_hash,
-    );
+    let campaign_addr =
+        factory.create_campaign(&creator, &token_address, &goal, &deadline, &wasm_hash);
 
     // Verify campaign was added to registry.
     let campaigns = factory.campaigns();
@@ -75,29 +68,14 @@ fn test_create_multiple_campaigns() {
     let creator2 = Address::generate(&env);
     let creator3 = Address::generate(&env);
 
-    let campaign1 = factory.create_campaign(
-        &creator1,
-        &token_address,
-        &1000i128,
-        &100u64,
-        &wasm_hash,
-    );
+    let campaign1 =
+        factory.create_campaign(&creator1, &token_address, &1000i128, &100u64, &wasm_hash);
 
-    let campaign2 = factory.create_campaign(
-        &creator2,
-        &token_address,
-        &2000i128,
-        &200u64,
-        &wasm_hash,
-    );
+    let campaign2 =
+        factory.create_campaign(&creator2, &token_address, &2000i128, &200u64, &wasm_hash);
 
-    let campaign3 = factory.create_campaign(
-        &creator3,
-        &token_address,
-        &3000i128,
-        &300u64,
-        &wasm_hash,
-    );
+    let campaign3 =
+        factory.create_campaign(&creator3, &token_address, &3000i128, &300u64, &wasm_hash);
 
     // Verify all campaigns are in registry.
     let campaigns = factory.campaigns();
