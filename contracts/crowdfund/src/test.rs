@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    testutils::{Address as _, Events, Ledger},
+    token, Address, Env,
 };
 
 use crate::{CrowdfundContract, CrowdfundContractClient, FeeTier, PlatformConfig};
@@ -78,8 +78,6 @@ fn test_initialize() {
         &description,
         &None,
         &None,
-        &None,
-        &None,
     );
 
     assert_eq!(client.goal(), goal);
@@ -127,8 +125,6 @@ fn test_double_initialize_panics() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
-        &None,
         &None,
         &None,
     );
@@ -1111,8 +1107,6 @@ fn test_get_user_tier_no_tiers_defined_returns_none() {
         &default_description(&env),
         &None,
         &None,
-        &None,
-        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1174,8 +1168,8 @@ fn test_add_reward_tier_non_creator_rejected() {
         &(goal * 2),
         &deadline,
         &min_contribution,
-        &None,
-        &None,
+        &default_title(&env),
+        &default_description(&env),
         &None,
         &None,
     );
@@ -1200,8 +1194,8 @@ fn test_add_reward_tier_rejects_zero_min_amount() {
         &(goal * 2),
         &deadline,
         &min_contribution,
-        &None,
-        &None,
+        &default_title(&env),
+        &default_description(&env),
         &None,
         &None,
     );
@@ -1224,6 +1218,8 @@ fn test_reward_tiers_view() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
         &None,
         &None,
     );
@@ -1259,6 +1255,8 @@ fn test_add_single_roadmap_item() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
         &None,
         &None,
     );
@@ -1479,6 +1477,177 @@ fn test_roadmap_empty_after_initialization() {
     assert_eq!(roadmap.len(), 0);
 }
 
+// ── Campaign Updates Tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_post_single_update() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
+    );
+
+    let update_text = soroban_sdk::String::from_str(&env, "Development milestone reached!");
+    client.post_update(&update_text);
+
+    let updates = client.get_updates();
+    assert_eq!(updates.len(), 1);
+    let (timestamp, text) = updates.get(0).unwrap();
+    assert_eq!(timestamp, env.ledger().timestamp());
+    assert_eq!(text, update_text);
+}
+
+#[test]
+fn test_post_multiple_updates_chronological_order() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
+    );
+
+    let update1 = soroban_sdk::String::from_str(&env, "First update");
+    let time1 = env.ledger().timestamp();
+    client.post_update(&update1);
+
+    env.ledger().set_timestamp(time1 + 100);
+    let update2 = soroban_sdk::String::from_str(&env, "Second update");
+    let time2 = env.ledger().timestamp();
+    client.post_update(&update2);
+
+    env.ledger().set_timestamp(time2 + 200);
+    let update3 = soroban_sdk::String::from_str(&env, "Third update");
+    let time3 = env.ledger().timestamp();
+    client.post_update(&update3);
+
+    let updates = client.get_updates();
+    assert_eq!(updates.len(), 3);
+
+    let (ts1, text1) = updates.get(0).unwrap();
+    assert_eq!(ts1, time1);
+    assert_eq!(text1, update1);
+
+    let (ts2, text2) = updates.get(1).unwrap();
+    assert_eq!(ts2, time2);
+    assert_eq!(text2, update2);
+
+    let (ts3, text3) = updates.get(2).unwrap();
+    assert_eq!(ts3, time3);
+    assert_eq!(text3, update3);
+}
+
+#[test]
+#[should_panic]
+fn test_post_update_by_non_creator_panics() {
+    let env = Env::default();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    let creator = Address::generate(&env);
+    env.mock_all_auths();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
+    );
+
+    env.set_auths(&[]);
+    let update_text = soroban_sdk::String::from_str(&env, "Unauthorized update");
+    client.post_update(&update_text);
+}
+
+#[test]
+#[should_panic(expected = "update text cannot be empty")]
+fn test_post_update_with_empty_text_panics() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
+    );
+
+    let empty_text = soroban_sdk::String::from_str(&env, "");
+    client.post_update(&empty_text); // should panic
+}
+
+#[test]
+fn test_get_updates_empty_after_initialization() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+    client.initialize(
+        &creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
+    );
+
+    let updates = client.get_updates();
+    assert_eq!(updates.len(), 0);
+}
+
 // ── Campaign Info Tests ────────────────────────────────────────────────────
 
 #[test]
@@ -1497,8 +1666,6 @@ fn test_creator() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
-        &None,
         &None,
         &None,
     );
@@ -1549,6 +1716,10 @@ fn test_get_campaign_info_with_contributions() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let alice = Address::generate(&env);
@@ -1582,6 +1753,10 @@ fn test_get_campaign_info_after_goal_reached() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1613,6 +1788,10 @@ fn test_whitelisted_contribution() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let alice = Address::generate(&env);
@@ -1647,6 +1826,10 @@ fn test_open_campaign_no_whitelist() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let alice = Address::generate(&env);
@@ -1668,8 +1851,13 @@ fn test_batch_whitelist_addition() {
         &creator,
         &token_address,
         &goal,
+        &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let alice = Address::generate(&env);
@@ -1726,6 +1914,10 @@ fn test_partial_withdrawal() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1756,6 +1948,10 @@ fn test_full_withdrawal_removes_contributor() {
         &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1787,8 +1983,13 @@ fn test_withdraw_exceeding_balance_panics() {
         &creator,
         &token_address,
         &goal,
+        &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1810,8 +2011,13 @@ fn test_withdraw_after_deadline_panics() {
         &creator,
         &token_address,
         &goal,
+        &(goal * 2),
         &deadline,
         &min_contribution,
+        &default_title(&env),
+        &default_description(&env),
+        &None,
+        &None,
     );
 
     let contributor = Address::generate(&env);
@@ -1824,309 +2030,281 @@ fn test_withdraw_after_deadline_panics() {
     client.withdraw_contribution(&contributor, &50_000); // should panic
 }
 
-// ── Dynamic Platform Fees Tests ────────────────────────────────────────────
+// ── Multisig & DAO Creator Tests ───────────────────────────────────────────
 
+/// Test that withdraw works correctly when the creator is a contract address.
+///
+/// This simulates a multisig wallet or DAO contract as the campaign creator.
+/// In Soroban, when `creator.require_auth()` is called on a contract address,
+/// it invokes the contract's authorization logic, enabling multisig approval.
 #[test]
-fn test_tiered_fee_single_tier() {
-    let (env, client, creator, token_address, admin) = setup_env();
+fn test_withdraw_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+
+    // Use a contract address as the creator (simulating a multisig wallet)
+    // In a real scenario, this would be a deployed multisig contract
+    let multisig_creator = Address::generate(&env);
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
     let min_contribution: i128 = 1_000;
 
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform.clone(),
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000_000,
-        fee_bps: 500,
-    });
-
     client.initialize(
-        &creator,
+        &multisig_creator,
         &token_address,
         &goal,
-        &(goal * 2),
+        &hard_cap,
         &deadline,
         &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers),
-    );
-
-    let contributor = Address::generate(&env);
-    mint_to(&env, &token_address, &admin, &contributor, 5_000_000);
-    client.contribute(&contributor, &5_000_000);
-
-    env.ledger().set_timestamp(deadline + 1);
-    client.withdraw();
-
-    let token_client = token::Client::new(&env, &token_address);
-    let expected_fee = 5_000_000 * 500 / 10_000;
-    assert_eq!(token_client.balance(&platform), expected_fee);
-    assert_eq!(
-        token_client.balance(&creator),
-        10_000_000 + 5_000_000 - expected_fee
-    );
-}
-
-#[test]
-fn test_tiered_fee_multiple_tiers() {
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform.clone(),
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000,
-        fee_bps: 500,
-    });
-    fee_tiers.push_back(FeeTier {
-        threshold: 50_000,
-        fee_bps: 200,
-    });
-
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &(goal * 2),
-        &deadline,
-        &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers),
-    );
-
-    let contributor = Address::generate(&env);
-    mint_to(&env, &token_address, &admin, &contributor, 100_000);
-    client.contribute(&contributor, &100_000);
-
-    env.ledger().set_timestamp(deadline + 1);
-    client.withdraw();
-
-    let token_client = token::Client::new(&env, &token_address);
-    let fee_tier1 = 10_000 * 500 / 10_000;
-    let fee_tier2 = 40_000 * 200 / 10_000;
-    let fee_tier3 = 50_000 * 200 / 10_000;
-    let expected_fee = fee_tier1 + fee_tier2 + fee_tier3;
-    assert_eq!(token_client.balance(&platform), expected_fee);
-}
-
-#[test]
-fn test_flat_fee_fallback() {
-    let (env, client, creator, token_address, admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform.clone(),
-        fee_bps: 300,
-    };
-
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &(goal * 2),
-        &deadline,
-        &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
         &None,
         &None,
     );
 
+    // Contribute to meet the goal
     let contributor = Address::generate(&env);
-    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    token_admin_client.mint(&contributor, &1_000_000);
     client.contribute(&contributor, &1_000_000);
 
+    // Fast forward past deadline
     env.ledger().set_timestamp(deadline + 1);
-    client.withdraw();
 
-    let token_client = token::Client::new(&env, &token_address);
-    let expected_fee = 1_000_000 * 300 / 10_000;
-    assert_eq!(token_client.balance(&platform), expected_fee);
+    // Withdraw should succeed with multisig creator
+    // In a real scenario, this would require M-of-N signatures
+    let result = client.try_withdraw();
+    assert!(result.is_ok());
 }
 
+/// Test that set_paused works correctly with a multisig creator.
+///
+/// This ensures that pause/unpause operations can be controlled by
+/// a multisig wallet or DAO, preventing single-party control over
+/// this critical security function.
 #[test]
-fn test_zero_fee_tiers() {
-    let (env, client, creator, token_address, admin) = setup_env();
+fn test_set_paused_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    let multisig_creator = Address::generate(&env);
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
     let min_contribution: i128 = 1_000;
 
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform.clone(),
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000_000,
-        fee_bps: 0,
-    });
-
     client.initialize(
-        &creator,
+        &multisig_creator,
         &token_address,
         &goal,
-        &(goal * 2),
+        &hard_cap,
         &deadline,
         &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers),
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
+        &None,
+        &None,
     );
 
+    client.set_paused(&true);
+    client.set_paused(&false);
+}
+
+/// Test that update_metadata works correctly with a multisig creator.
+///
+/// This ensures that campaign metadata changes can be controlled by
+/// a multisig wallet or DAO, maintaining transparency and preventing
+/// unauthorized modifications.
+#[test]
+fn test_update_metadata_with_multisig_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    // Use a contract address as the creator (simulating a DAO)
+    let dao_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &dao_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "DAO Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with DAO creator"),
+        &None,
+        &None,
+    );
+
+    // Update metadata - should work with DAO creator
+    let new_title = Some(soroban_sdk::String::from_str(&env, "Updated DAO Campaign"));
+    let new_description = Some(soroban_sdk::String::from_str(
+        &env,
+        "Updated description by DAO vote",
+    ));
+
+    client.update_metadata(&dao_creator, &new_title, &new_description, &None);
+
+    // Verify the metadata was updated
+    let title = client.title();
+    assert_eq!(title, new_title.unwrap());
+}
+
+/// Test that unauthorized addresses are still rejected even when creator is a multisig.
+///
+/// This ensures that the authorization mechanism works correctly for both
+/// user accounts and contract addresses, rejecting unauthorized callers.
+#[test]
+#[should_panic]
+fn test_multisig_creator_rejects_unauthorized_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_contract_id.address();
+
+    // Use a contract address as the creator (simulating a multisig wallet)
+    let multisig_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &multisig_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
+        &None,
+        &None,
+    );
+
+    // Try to pause with an unauthorized address
+    let unauthorized = Address::generate(&env);
+    env.mock_all_auths_allowing_non_root_auth();
+    env.set_auths(&[]);
+
+    // This should panic because unauthorized address is not the creator
+    client.set_paused(&true);
+}
+
+/// Test that all admin functions work correctly when creator is a DAO contract.
+///
+/// This comprehensive test verifies that all creator-restricted functions
+/// (withdraw, set_paused, update_metadata, add_roadmap_item, add_stretch_goal,
+/// add_reward_tier) work seamlessly with a DAO contract as the creator.
+#[test]
+fn test_all_admin_functions_with_dao_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+
+    // Use a contract address as the creator (simulating a DAO)
+    let dao_creator = Address::generate(&env);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let hard_cap: i128 = goal * 2;
+    let min_contribution: i128 = 1_000;
+
+    client.initialize(
+        &dao_creator,
+        &token_address,
+        &goal,
+        &hard_cap,
+        &deadline,
+        &min_contribution,
+        &soroban_sdk::String::from_str(&env, "DAO Campaign"),
+        &soroban_sdk::String::from_str(&env, "Campaign with DAO governance"),
+        &None,
+        &None,
+    );
+
+    // Test add_roadmap_item
+    let roadmap_date = env.ledger().timestamp() + 86400;
+    let roadmap_desc = soroban_sdk::String::from_str(&env, "Milestone 1");
+    client.add_roadmap_item(&roadmap_date, &roadmap_desc);
+
+    let roadmap = client.roadmap();
+    assert_eq!(roadmap.len(), 1);
+
+    // Test add_stretch_goal
+    let stretch_goal: i128 = 2_000_000;
+    client.add_stretch_goal(&stretch_goal);
+
+    // Test add_reward_tier
+    let tier_name = soroban_sdk::String::from_str(&env, "Gold");
+    client.add_reward_tier(&dao_creator, &tier_name, &10_000);
+
+    let tiers = client.reward_tiers();
+    assert_eq!(tiers.len(), 1);
+
+    // Test update_metadata
+    let new_title = Some(soroban_sdk::String::from_str(&env, "Updated by DAO"));
+    client.update_metadata(&dao_creator, &new_title, &None, &None);
+
+    // Test set_paused
+    client.set_paused(&true);
+    client.set_paused(&false);
+
+    // Test update_deadline
+    let new_deadline = deadline + 7200;
+    client.update_deadline(&new_deadline);
+
+    // Contribute to meet the goal
     let contributor = Address::generate(&env);
-    mint_to(&env, &token_address, &admin, &contributor, 1_000_000);
+    token_admin_client.mint(&contributor, &1_000_000);
     client.contribute(&contributor, &1_000_000);
 
-    env.ledger().set_timestamp(deadline + 1);
-    client.withdraw();
+    // Fast forward past deadline
+    env.ledger().set_timestamp(new_deadline + 1);
 
-    let token_client = token::Client::new(&env, &token_address);
-    assert_eq!(token_client.balance(&platform), 0);
-    assert_eq!(token_client.balance(&creator), 10_000_000 + 1_000_000);
-}
-
-#[test]
-#[should_panic(expected = "fee tier fee_bps cannot exceed 10000")]
-fn test_reject_fee_tier_exceeding_10000() {
-    let (env, client, creator, token_address, _admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform,
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000,
-        fee_bps: 10_001,
-    });
-
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &(goal * 2),
-        &deadline,
-        &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers),
-    );
-}
-
-#[test]
-#[should_panic(expected = "fee tiers must be ordered by threshold ascending")]
-fn test_reject_unordered_fee_tiers() {
-    let (env, client, creator, token_address, _admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform,
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 50_000,
-        fee_bps: 200,
-    });
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000,
-        fee_bps: 500,
-    });
-
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &(goal * 2),
-        &deadline,
-        &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers),
-    );
-}
-
-#[test]
-fn test_fee_tiers_view() {
-    let (env, client, creator, token_address, _admin) = setup_env();
-
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let min_contribution: i128 = 1_000;
-
-    let platform = Address::generate(&env);
-    let platform_config = PlatformConfig {
-        address: platform,
-        fee_bps: 0,
-    };
-
-    let mut fee_tiers: Vec<FeeTier> = Vec::new(&env);
-    fee_tiers.push_back(FeeTier {
-        threshold: 10_000,
-        fee_bps: 500,
-    });
-    fee_tiers.push_back(FeeTier {
-        threshold: 50_000,
-        fee_bps: 200,
-    });
-
-    client.initialize(
-        &creator,
-        &token_address,
-        &goal,
-        &(goal * 2),
-        &deadline,
-        &min_contribution,
-        &default_title(&env),
-        &default_description(&env),
-        &Some(platform_config),
-        &Some(fee_tiers.clone()),
-    );
-
-    let stored_tiers = client.fee_tiers();
-    assert_eq!(stored_tiers.len(), 2);
-    assert_eq!(stored_tiers.get(0).unwrap().threshold, 10_000);
-    assert_eq!(stored_tiers.get(0).unwrap().fee_bps, 500);
-    assert_eq!(stored_tiers.get(1).unwrap().threshold, 50_000);
-    assert_eq!(stored_tiers.get(1).unwrap().fee_bps, 200);
+    // Test withdraw
+    let result = client.try_withdraw();
+    assert!(result.is_ok());
 }

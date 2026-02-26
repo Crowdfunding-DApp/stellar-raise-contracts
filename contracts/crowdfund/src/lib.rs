@@ -146,6 +146,8 @@ pub enum DataKey {
     SocialLinks,
     /// Platform configuration for fee handling.
     PlatformConfig,
+    /// Fee tiers for dynamic fee calculation.
+    FeeTier,
     /// List of reward tiers (name + min_amount).
     RewardTiers,
     /// Individual pledge by address.
@@ -156,11 +158,11 @@ pub enum DataKey {
     TotalPledged,
     /// List of stretch goal milestones.
     StretchGoals,
-    /// List of fee tiers ordered by threshold ascending.
-    FeeTiers,
-    /// Whether whitelist is enabled.
+    /// Campaign updates blog: Vec<(u64, String)> of (timestamp, update text).
+    Updates,
+    /// Whether whitelist is enabled for this campaign.
     WhitelistEnabled,
-    /// Whitelist entry for an address.
+    /// Individual whitelist entry by address.
     Whitelist(Address),
 }
 
@@ -194,10 +196,81 @@ pub struct CrowdfundContract;
 
 #[contractimpl]
 impl CrowdfundContract {
+    // ── Multisig & DAO Compatibility ───────────────────────────────────────
+    //
+    // IMPORTANT: This contract fully supports multi-signature wallets and DAO
+    // contracts as the campaign creator. The Soroban `Address` type can represent
+    // both standard user accounts and contract addresses.
+    //
+    // When `creator.require_auth()` is called:
+    // - For user accounts: Standard signature verification is performed
+    // - For contract addresses: The contract's authorization logic is invoked,
+    //   allowing multisig wallets, DAO governance contracts, or any custom
+    //   authorization scheme to control the campaign
+    //
+    // All creator-restricted functions (withdraw, set_paused, update_metadata,
+    // add_roadmap_item, add_stretch_goal, add_reward_tier, update_deadline,
+    // post_update, add_to_whitelist) work seamlessly with multisig creators.
+    //
+    // Security Benefits:
+    // - Eliminates single point of failure for high-value campaigns
+    // - Enables decentralized governance of campaign operations
+    // - Supports time-locked or threshold-based authorization schemes
+    //
+    // Example Multisig Patterns:
+    // 1. M-of-N Threshold: Require M signatures out of N authorized signers
+    // 2. DAO Governance: Require on-chain voting approval for admin actions
+    // 3. Time-locked Admin: Require time delay before executing sensitive operations
+    // 4. Hierarchical Control: Different authorization levels for different operations
+    //
+    // ───────────────────────────────────────────────────────────────────────
+
+    /// Helper function to check if the creator address is a contract.
+    ///
+    /// This is useful for distinguishing between standard user accounts and
+    /// contract-based creators (multisig wallets, DAOs, etc.) for logging,
+    /// analytics, or conditional logic.
+    ///
+    /// # Arguments
+    /// * `env` – The contract environment
+    /// * `creator` – The address to check
+    ///
+    /// # Returns
+    /// * `true` if the address is a contract, `false` if it's a user account
+    ///
+    /// # Note
+    /// This function does not affect authorization - `require_auth()` works
+    /// correctly for both user accounts and contracts. This is purely for
+    /// informational purposes.
+    ///
+    /// # Implementation Note
+    /// In Soroban, the Address type abstracts over both account and contract
+    /// addresses. While there's no direct API to check the address type at
+    /// runtime, the authorization mechanism (`require_auth()`) handles both
+    /// cases transparently. This helper is provided for documentation purposes
+    /// and potential future use cases where distinguishing address types is needed.
+    #[allow(dead_code)]
+    fn is_contract_creator(_env: &Env, _creator: &Address) -> bool {
+        // Note: Soroban's Address type doesn't expose a direct method to check
+        // if an address is a contract vs. an account at runtime. However, this
+        // doesn't matter for authorization - require_auth() works correctly for
+        // both types.
+        //
+        // For actual runtime checks, you would need to:
+        // 1. Attempt to invoke a known contract function (will fail for accounts)
+        // 2. Use external indexing/metadata to track contract addresses
+        // 3. Rely on off-chain knowledge of the creator type
+        //
+        // Since authorization works transparently for both types, this function
+        // is primarily for documentation and potential future enhancements.
+        false // Placeholder - actual implementation would require additional context
+    }
+
     /// Initializes a new crowdfunding campaign.
     ///
     /// # Arguments
-    /// * `creator`            – The campaign creator's address.
+    /// * `creator`            – The campaign creator's address (can be a user account,
+    ///                          multisig wallet, or DAO contract).
     /// * `token`              – The token contract address used for contributions.
     /// * `goal`               – The funding goal (in the token's smallest unit).
     /// * `hard_cap`           – Maximum total amount that can be raised (must be >= goal).
@@ -207,6 +280,16 @@ impl CrowdfundContract {
     /// * `description`        – The campaign description.
     /// * `platform_config`    – Optional platform configuration (address and fee in basis points).
     /// * `fee_tiers`          – Optional fee tiers for dynamic fee calculation.
+    ///
+    /// # Multisig Support
+    /// The `creator` parameter can be any valid Soroban address, including:
+    /// - Standard user accounts (ed25519 public keys)
+    /// - Multisig wallet contracts (requiring M-of-N signatures)
+    /// - DAO governance contracts (requiring on-chain voting)
+    /// - Custom authorization contracts (time-locks, hierarchical permissions, etc.)
+    ///
+    /// The `creator.require_auth()` call ensures that only the authorized entity
+    /// (whether a single user or a multisig group) can initialize the campaign.
     ///
     /// # Panics
     /// * If already initialized.
@@ -260,7 +343,7 @@ impl CrowdfundContract {
                     }
                 }
 
-                env.storage().instance().set(&DataKey::FeeTiers, tiers);
+                env.storage().instance().set(&DataKey::FeeTier, tiers);
             }
         }
 
@@ -354,6 +437,23 @@ impl CrowdfundContract {
         }
 
         contributor.require_auth();
+
+        // Check whitelist if enabled
+        let whitelist_enabled: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::WhitelistEnabled)
+            .unwrap_or(false);
+        if whitelist_enabled {
+            let is_whitelisted: bool = env
+                .storage()
+                .instance()
+                .get(&DataKey::Whitelist(contributor.clone()))
+                .unwrap_or(false);
+            if !is_whitelisted {
+                panic!("contributor not whitelisted");
+            }
+        }
 
         let min_contribution: i128 = env
             .storage()
@@ -599,7 +699,7 @@ impl CrowdfundContract {
 
         let prev: i128 = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Contribution(contributor.clone()))
             .unwrap_or(0);
 
@@ -617,13 +717,13 @@ impl CrowdfundContract {
         let new_balance = prev - amount;
         if new_balance == 0 {
             env.storage()
-                .instance()
+                .persistent()
                 .remove(&DataKey::Contribution(contributor.clone()));
 
             // Remove from contributors list.
             let mut contributors: Vec<Address> = env
                 .storage()
-                .instance()
+                .persistent()
                 .get(&DataKey::Contributors)
                 .unwrap();
             let mut index = 0;
@@ -638,12 +738,12 @@ impl CrowdfundContract {
             if found {
                 contributors.remove(index);
                 env.storage()
-                    .instance()
+                    .persistent()
                     .set(&DataKey::Contributors, &contributors);
             }
         } else {
             env.storage()
-                .instance()
+                .persistent()
                 .set(&DataKey::Contribution(contributor.clone()), &new_balance);
         }
 
@@ -659,6 +759,20 @@ impl CrowdfundContract {
     ///
     /// If a platform fee is configured, deducts the fee and transfers it to
     /// the platform address, then sends the remainder to the creator.
+    ///
+    /// # Multisig Support
+    /// This function fully supports multisig and DAO creators. When the creator
+    /// is a contract address, `creator.require_auth()` will invoke the contract's
+    /// authorization logic, enabling:
+    /// - M-of-N threshold signatures for withdrawal approval
+    /// - DAO governance voting before fund withdrawal
+    /// - Time-locked withdrawals for added security
+    /// - Any custom authorization scheme implemented by the creator contract
+    ///
+    /// # Security Note
+    /// For high-value campaigns, using a multisig or DAO as the creator significantly
+    /// reduces the risk of unauthorized fund withdrawal, as multiple parties must
+    /// approve the transaction.
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
         let paused: bool = env
             .storage()
@@ -694,7 +808,7 @@ impl CrowdfundContract {
         // Calculate and transfer platform fee if configured.
         let platform_config: Option<PlatformConfig> =
             env.storage().instance().get(&DataKey::PlatformConfig);
-        let fee_tiers: Option<Vec<FeeTier>> = env.storage().instance().get(&DataKey::FeeTiers);
+        let fee_tiers: Option<Vec<FeeTier>> = env.storage().instance().get(&DataKey::FeeTier);
 
         let creator_payout = if let Some(config) = platform_config {
             let fee = if let Some(tiers) = fee_tiers {
@@ -859,6 +973,13 @@ impl CrowdfundContract {
     ///
     /// # Arguments
     /// * `paused` – True to pause, false to unpause.
+    ///
+    /// # Multisig Support
+    /// This critical security function works seamlessly with multisig creators.
+    /// When the creator is a multisig contract, pausing/unpausing requires
+    /// approval from the multisig signers, preventing any single party from
+    /// unilaterally halting the campaign. This is especially important for
+    /// high-value campaigns where pause decisions should be collective.
     pub fn set_paused(env: Env, paused: bool) {
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
@@ -877,6 +998,12 @@ impl CrowdfundContract {
     /// * `title`       – Optional new title (None to keep existing).
     /// * `description` – Optional new description (None to keep existing).
     /// * `socials`    – Optional new social links (None to keep existing).
+    ///
+    /// # Multisig Support
+    /// Metadata updates support multisig creators, ensuring that campaign
+    /// information changes require collective approval when using a multisig
+    /// or DAO creator. This prevents unauthorized modification of campaign
+    /// details and maintains transparency.
     pub fn update_metadata(
         env: Env,
         creator: Address,
@@ -1014,6 +1141,43 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .get(&DataKey::Roadmap)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Post a campaign update (creator only).
+    ///
+    /// Records the current timestamp and the provided text. Rejects empty text.
+    /// Emits a (campaign, update_posted) event with timestamp and text.
+    pub fn post_update(env: Env, text: String) {
+        let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        creator.require_auth();
+
+        if text.is_empty() {
+            panic!("update text cannot be empty");
+        }
+
+        let timestamp = env.ledger().timestamp();
+
+        let mut updates: Vec<(u64, String)> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Updates)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        updates.push_back((timestamp, text.clone()));
+
+        env.storage().instance().set(&DataKey::Updates, &updates);
+        env.events()
+            .publish(("campaign", "update_posted"), (timestamp, text));
+    }
+
+    /// Returns the full ordered list of campaign updates.
+    ///
+    /// Each entry is a tuple of (timestamp, update text) in chronological order.
+    pub fn get_updates(env: Env) -> Vec<(u64, String)> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Updates)
             .unwrap_or_else(|| Vec::new(&env))
     }
 
@@ -1256,7 +1420,7 @@ impl CrowdfundContract {
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
         let contributors: Vec<Address> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Contributors)
             .unwrap();
 
@@ -1280,7 +1444,7 @@ impl CrowdfundContract {
             for contributor in contributors.iter() {
                 let amount: i128 = env
                     .storage()
-                    .instance()
+                    .persistent()
                     .get(&DataKey::Contribution(contributor))
                     .unwrap_or(0);
                 if amount > largest {
@@ -1345,7 +1509,7 @@ impl CrowdfundContract {
     pub fn fee_tiers(env: Env) -> Vec<FeeTier> {
         env.storage()
             .instance()
-            .get(&DataKey::FeeTiers)
+            .get(&DataKey::FeeTier)
             .unwrap_or_else(|| Vec::new(&env))
     }
 

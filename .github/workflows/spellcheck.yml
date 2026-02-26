@@ -14,6 +14,8 @@ jobs:
   spellcheck:
     name: Check spelling
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -25,3 +27,9 @@ jobs:
           config: .github/spellcheck
           post_comment: true
           experimental_apply_changes_via_bot: true
+          extra_dictionaries: |
+            cspell:software-terms/dict/softwareTerms.txt
+            cspell:typescript/dict/typescript.txt
+            cspell:css/dict/css.txt
+            cspell:html/dict/html.txt
+            cspell:npm/dict/npm.txt
