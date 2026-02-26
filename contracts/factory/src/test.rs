@@ -7,7 +7,7 @@ extern crate std;
 
 // Import the crowdfund contract WASM.
 mod crowdfund_wasm {
-    soroban_sdk::contractimport!(file = "../../target/wasm32-unknown-unknown/release/crowdfund.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/crowdfund.wasm");
 }
 
 fn create_token_contract<'a>(

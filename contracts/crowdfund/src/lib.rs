@@ -291,6 +291,16 @@ impl CrowdfundContract {
     /// The `creator.require_auth()` call ensures that only the authorized entity
     /// (whether a single user or a multisig group) can initialize the campaign.
     ///
+    /// # Multisig Support
+    /// The `creator` parameter can be any valid Soroban address, including:
+    /// - Standard user accounts (ed25519 public keys)
+    /// - Multisig wallet contracts (requiring M-of-N signatures)
+    /// - DAO governance contracts (requiring on-chain voting)
+    /// - Custom authorization contracts (time-locks, hierarchical permissions, etc.)
+    ///
+    /// The `creator.require_auth()` call ensures that only the authorized entity
+    /// (whether a single user or a multisig group) can initialize the campaign.
+    ///
     /// # Panics
     /// * If already initialized.
     /// * If platform fee exceeds 10,000 (100%).

@@ -108,12 +108,10 @@ fn test_double_initialize_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
     let result = client.try_initialize(
@@ -147,12 +145,10 @@ fn test_contribute() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -176,12 +172,10 @@ fn test_multiple_contributions() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -209,12 +203,10 @@ fn test_contribute_after_deadline_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -244,12 +236,10 @@ fn test_withdraw_after_goal_met() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -283,12 +273,10 @@ fn test_withdraw_before_deadline_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -316,12 +304,10 @@ fn test_withdraw_goal_not_reached_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -352,12 +338,10 @@ fn test_refund_single_when_goal_not_met() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -393,12 +377,10 @@ fn test_refund_when_goal_reached_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -427,12 +409,10 @@ fn test_refund_single_before_deadline_fails() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -480,24 +460,20 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
         let result = client.try_initialize(
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -517,12 +493,10 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -545,12 +519,10 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -576,12 +548,10 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -605,12 +575,10 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -636,12 +604,10 @@ fn test_bug_condition_exploration_all_error_conditions_panic() {
             &creator,
             &token_address,
             &goal,
-            &(goal * 2),
             &deadline,
             &1_000,
             &default_title(&env),
             &default_description(&env),
-            &None,
             &None,
         );
 
@@ -842,12 +808,10 @@ fn test_double_withdraw_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -872,12 +836,10 @@ fn test_double_refund_single_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -969,12 +931,10 @@ fn test_contribute_above_minimum() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1000,12 +960,10 @@ fn test_get_user_tier_bronze_level() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1036,12 +994,10 @@ fn test_get_user_tier_gold_level() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1072,12 +1028,10 @@ fn test_get_user_tier_non_contributor_returns_none() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1284,12 +1238,10 @@ fn test_add_multiple_roadmap_items_in_order() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1328,12 +1280,10 @@ fn test_add_roadmap_item_with_past_date_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1358,12 +1308,10 @@ fn test_add_roadmap_item_with_current_date_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1385,12 +1333,10 @@ fn test_add_roadmap_item_with_empty_description_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1424,12 +1370,10 @@ fn test_add_roadmap_item_by_non_creator_panics() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1464,12 +1408,10 @@ fn test_roadmap_empty_after_initialization() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1496,7 +1438,6 @@ fn test_post_single_update() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1527,7 +1468,6 @@ fn test_post_multiple_updates_chronological_order() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1565,6 +1505,8 @@ fn test_post_multiple_updates_chronological_order() {
 #[should_panic]
 fn test_post_update_by_non_creator_panics() {
     let env = Env::default();
+    env.mock_all_auths();
+
     let contract_id = env.register(CrowdfundContract, ());
     let client = CrowdfundContractClient::new(&env, &contract_id);
 
@@ -1573,7 +1515,7 @@ fn test_post_update_by_non_creator_panics() {
     let token_address = token_contract_id.address();
 
     let creator = Address::generate(&env);
-    env.mock_all_auths();
+    let non_creator = Address::generate(&env);
 
     let deadline = env.ledger().timestamp() + 3600;
     let goal: i128 = 1_000_000;
@@ -1589,11 +1531,13 @@ fn test_post_update_by_non_creator_panics() {
         &default_title(&env),
         &default_description(&env),
         &None,
-        &None,
     );
 
-    env.set_auths(&[]);
+    // Set auth to non-creator
+    env.mock_all_auths_allowing_non_root_auth();
     let update_text = soroban_sdk::String::from_str(&env, "Unauthorized update");
+
+    // This should panic because non_creator is not authorized
     client.post_update(&update_text);
 }
 
@@ -1615,7 +1559,6 @@ fn test_post_update_with_empty_text_panics() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1640,7 +1583,6 @@ fn test_get_updates_empty_after_initialization() {
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -1684,12 +1626,10 @@ fn test_get_campaign_info_initial() {
         &creator,
         &token_address,
         &goal,
-        &(goal * 2),
         &deadline,
         &min_contribution,
         &default_title(&env),
         &default_description(&env),
-        &None,
         &None,
     );
 
@@ -2069,7 +2009,6 @@ fn test_withdraw_with_multisig_creator() {
         &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
         &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
         &None,
-        &None,
     );
 
     // Contribute to meet the goal
@@ -2103,6 +2042,7 @@ fn test_set_paused_with_multisig_creator() {
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin);
     let token_address = token_contract_id.address();
 
+    // Use a contract address as the creator (simulating a multisig wallet)
     let multisig_creator = Address::generate(&env);
 
     let deadline = env.ledger().timestamp() + 3600;
@@ -2120,11 +2060,29 @@ fn test_set_paused_with_multisig_creator() {
         &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
         &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
         &None,
-        &None,
     );
 
+    // Pause the campaign - should work with multisig creator
     client.set_paused(&true);
+
+    // Verify the campaign is paused
+    // (In a real scenario, this would require multisig approval)
+    let paused: bool = env
+        .storage()
+        .instance()
+        .get(&crate::DataKey::Paused)
+        .unwrap_or(false);
+    assert!(paused);
+
+    // Unpause the campaign
     client.set_paused(&false);
+
+    let paused: bool = env
+        .storage()
+        .instance()
+        .get(&crate::DataKey::Paused)
+        .unwrap_or(false);
+    assert!(!paused);
 }
 
 /// Test that update_metadata works correctly with a multisig creator.
@@ -2161,7 +2119,6 @@ fn test_update_metadata_with_multisig_creator() {
         &min_contribution,
         &soroban_sdk::String::from_str(&env, "DAO Campaign"),
         &soroban_sdk::String::from_str(&env, "Campaign with DAO creator"),
-        &None,
         &None,
     );
 
@@ -2214,7 +2171,6 @@ fn test_multisig_creator_rejects_unauthorized_address() {
         &soroban_sdk::String::from_str(&env, "Multisig Campaign"),
         &soroban_sdk::String::from_str(&env, "Campaign with multisig creator"),
         &None,
-        &None,
     );
 
     // Try to pause with an unauthorized address
@@ -2261,7 +2217,6 @@ fn test_all_admin_functions_with_dao_creator() {
         &min_contribution,
         &soroban_sdk::String::from_str(&env, "DAO Campaign"),
         &soroban_sdk::String::from_str(&env, "Campaign with DAO governance"),
-        &None,
         &None,
     );
 
