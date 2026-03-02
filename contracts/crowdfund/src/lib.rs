@@ -12,6 +12,8 @@ use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, token, Address, Env,
     String, Symbol, Vec,
     contract, contractimpl, contracttype, token, Address, Env, IntoVal, String, Symbol, Vec,
+    contract, contractclient, contractimpl, contracttype, token, Address, Env, IntoVal, String,
+    Symbol, Vec,
 };
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, token, Address, Env, String, Symbol, Vec};
 
@@ -123,13 +125,6 @@ const AUTO_EXTENSION_DURATION: u64 = 86400;
 const MAX_AUTO_EXTENSIONS: u32 = 5;
 
 // ── Data Keys ───────────────────────────────────────────────────────────────
-
-/// Contract version constant.
-///
-/// This constant must be manually incremented with every contract upgrade
-/// (see Issue #38). External tools use this to detect logic changes at a
-/// given contract address.
-const CONTRACT_VERSION: u32 = 1;
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
