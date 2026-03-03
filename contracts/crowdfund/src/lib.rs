@@ -660,7 +660,9 @@ impl CrowdfundContract {
         }
 
         env.storage().instance().set(&DataKey::Goal, &goal);
-        env.storage().instance().set(&DataKey::HardCap, &hard_cap_value);
+        env.storage()
+            .instance()
+            .set(&DataKey::HardCap, &hard_cap_value);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
             .instance()
@@ -699,6 +701,9 @@ impl CrowdfundContract {
         // Store auto-extension threshold if provided.
         if let Some(threshold) = auto_extension_threshold {
             env.storage().instance().set(&DataKey::AutoExtensionThreshold, &threshold);
+            env.storage()
+                .instance()
+                .set(&DataKey::PlatformConfig, &config);
         }
 
         let empty_contributors: Vec<Address> = Vec::new(&env);
