@@ -2648,7 +2648,12 @@ fn test_update_metadata_stores_fields() {
     let desc = String::from_str(&env, "A great project");
     let socials = String::from_str(&env, "https://twitter.com/example");
 
-    client.update_metadata(&creator, &Some(title.clone()), &Some(desc.clone()), &Some(socials.clone()));
+    client.update_metadata(
+        &creator,
+        &Some(title.clone()),
+        &Some(desc.clone()),
+        &Some(socials.clone()),
+    );
 
     assert_eq!(client.title(), title);
     assert_eq!(client.description(), desc);

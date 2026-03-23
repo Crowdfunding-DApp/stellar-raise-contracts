@@ -69,9 +69,9 @@ mod contribute_error_handling_tests;
 #[path = "npm_package_lock_test.rs"]
 mod npm_package_lock_test;
 #[cfg(test)]
-mod test;
-#[cfg(test)]
 mod auth_tests;
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 pub mod proptest_generator_boundary;
