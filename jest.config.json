@@ -18,6 +18,11 @@
   "testMatch": [
     "**/*.test.(ts|tsx|js|jsx)"
   ],
+        "module": "commonjs"
+      }
+    }]
+  },
+  "testMatch": ["**/*.test.(ts|tsx|js|jsx)"],
   "transformIgnorePatterns": [
     "node_modules/(?!(@?react|react-dom)/)"
   ],
@@ -25,4 +30,5 @@
     "\\.(css|less|scss|sass)$": "identity-obj-proxy"
   },
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"]
+  }
 }

@@ -82,6 +82,196 @@ export class CSSVariablesContract {
   static getSpacingPx(key: keyof typeof DESIGN_TOKENS.SPACING): number {
     const remStr = DESIGN_TOKENS.SPACING[key];
     return parseFloat(remStr) * 16;
+ * @title CSS Variables Usage Utility
+ * @notice Secure utility for CSS custom properties (CSS variables) handling
+ * @dev Provides type-safe access to design tokens with validation and sanitization
+ * @author Stellar Raise Security Team
+ * @notice SECURITY: All CSS variable access must go through this utility to prevent
+ *         CSS injection attacks and ensure variable name validation.
+ */
+
+/**
+ * @notice Predefined list of allowed CSS variable names
+ * @dev Only variables defined in this list can be accessed via the utility
+ *      This prevents CSS injection through arbitrary variable names
+ */
+/**
+ * @notice Predefined list of allowed CSS variable names
+ * @dev Only variables defined in this list can be accessed via the utility
+ *      This prevents CSS injection through arbitrary variable names
+ */
+export const ALLOWED_CSS_VARIABLES = [
+  // Breakpoints
+  '--breakpoint-mobile',
+  '--breakpoint-tablet',
+
+  // Brand Colors
+  '--color-primary-blue',
+  '--color-deep-navy',
+  '--color-success-green',
+  '--color-error-red',
+  '--color-warning-orange',
+  '--color-neutral-100',
+  '--color-neutral-200',
+  '--color-neutral-300',
+  '--color-neutral-700',
+  '--color-neutral-900',
+
+  // Typography
+  '--font-family-primary',
+  '--font-size-xs',
+  '--font-size-sm',
+  '--font-size-base',
+  '--font-size-lg',
+  '--font-size-xl',
+  '--font-size-2xl',
+  '--font-size-3xl',
+
+  // Spacing
+  '--space-1',
+  '--space-2',
+  '--space-3',
+  '--space-4',
+  '--space-5',
+  '--space-6',
+  '--space-8',
+  '--space-10',
+  '--space-12',
+  '--space-16',
+
+  // Touch Targets
+  '--touch-target-min',
+
+  // Grid System
+  '--grid-columns-mobile',
+  '--grid-columns-tablet',
+  '--grid-columns-desktop',
+  '--grid-gutter-mobile',
+  '--grid-gutter-tablet',
+  '--grid-gutter-desktop',
+
+  // Container
+  '--container-mobile',
+  '--container-tablet',
+  '--container-desktop',
+
+  // Z-index Scale
+  '--z-base',
+  '--z-dropdown',
+  '--z-sticky',
+  '--z-fixed',
+  '--z-modal-backdrop',
+  '--z-modal',
+  '--z-toast',
+
+  // Transitions
+  '--transition-fast',
+  '--transition-base',
+  '--transition-slow',
+
+  // Border Radius
+  '--radius-sm',
+  '--radius-md',
+  '--radius-lg',
+  '--radius-xl',
+  '--radius-full',
+
+  // Shadows
+  '--shadow-sm',
+  '--shadow-md',
+  '--shadow-lg',
+  '--shadow-xl',
+
+  // Safe Area Insets
+  '--safe-area-inset-top',
+  '--safe-area-inset-right',
+  '--safe-area-inset-bottom',
+  '--safe-area-inset-left',
+] as const;
+
+/**
+ * @notice Type for allowed CSS variable names
+ */
+export type AllowedCssVariable = typeof ALLOWED_CSS_VARIABLES[number];
+
+/**
+ * @notice Regular expression for validating CSS variable names
+ * @dev Ensures variable names start with -- and contain only valid characters
+ */
+const CSS_VAR_NAME_REGEX = /^--[a-zA-Z][a-zA-Z0-9-_]*$/;
+
+/**
+ * @notice Regular expression for detecting potentially malicious CSS values
+ * @dev Blocks URL() references and expression() which could be used for attacks
+ */
+const DANGEROUS_CSS_PATTERN = /(?:url\s*\(|expression\s*|javascript:|data:text\/css|@import)/i;
+
+/**
+ * @notice Type for CSS variable value map
+ */
+export type CssVariablesMap = Partial<Record<AllowedCssVariable, string>>;
+
+/**
+ * @title CssVariablesError
+ * @notice Custom error class for CSS variable related errors
+ */
+export class CssVariablesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CssVariablesError';
+  }
+}
+
+/**
+ * @title CssVariableValidator
+ * @notice Static validator class for CSS variable operations
+ */
+export class CssVariableValidator {
+  /**
+   * @notice Validates if a CSS variable name is allowed
+   * @param variableName The variable name to validate
+   * @returns True if the variable is valid and allowed
+   * @throws CssVariablesError if validation fails
+   */
+  static isValidVariableName(variableName: string): boolean {
+    // Check format
+    if (!CSS_VAR_NAME_REGEX.test(variableName)) {
+      throw new CssVariablesError(
+        `Invalid CSS variable name format: "${variableName}". Must start with "--" and contain only alphanumeric characters, hyphens, and underscores.`
+      );
+    }
+
+    // Check against allowed list
+    if (!ALLOWED_CSS_VARIABLES.includes(variableName as AllowedCssVariable)) {
+      throw new CssVariablesError(
+        `CSS variable "${variableName}" is not in the allowed list. Use getAllowedVariables() to see available variables.`
+      );
+    }
+
+    return true;
+  }
+
+  /**
+   * @notice Validates a CSS value for potential security issues
+   * @param value The CSS value to validate
+   * @returns True if the value is safe
+   * @throws CssVariablesError if dangerous patterns are detected
+   */
+  static isValidValue(value: string): boolean {
+    if (DANGEROUS_CSS_PATTERN.test(value)) {
+      throw new CssVariablesError(
+        `Potentially dangerous CSS value detected. URL(), expression(), and @import are not allowed for security reasons.`
+      );
+    }
+    return true;
+  }
+
+  /**
+   * @notice Returns the list of all allowed CSS variables
+   * @returns Readonly array of allowed variable names
+   */
+  static getAllowedVariables(): readonly string[] {
+    return ALLOWED_CSS_VARIABLES;
   }
 }
 
@@ -127,6 +317,17 @@ export class CssVariablesUsage {
     const value = computedStyle.getPropertyValue(normalizedName).trim();
     this._cache.set(normalizedName, value);
 
+    // Normalize variable name
+    const normalizedName = this.normalizeVariableName(variableName);
+
+    // Validate the variable name
+    CssVariableValidator.isValidVariableName(normalizedName);
+
+    // Get computed style
+    const computedStyle = getComputedStyle(this.element);
+    const value = computedStyle.getPropertyValue(normalizedName).trim();
+
+    // Return value or fallback
     return value || fallback || '';
   }
 
@@ -144,6 +345,17 @@ export class CssVariablesUsage {
 
     this.element.style.setProperty(normalizedName, value);
     this.invalidateCache();
+    // Normalize variable name
+    const normalizedName = this.normalizeVariableName(variableName);
+
+    // Validate the variable name
+    CssVariableValidator.isValidVariableName(normalizedName);
+
+    // Validate the value
+    CssVariableValidator.isValidValue(value);
+
+    // Set the property
+    this.element.style.setProperty(normalizedName, value);
   }
 
   /**
@@ -158,6 +370,14 @@ export class CssVariablesUsage {
 
     this.element.style.removeProperty(normalizedName);
     this.invalidateCache();
+    // Normalize variable name
+    const normalizedName = this.normalizeVariableName(variableName);
+
+    // Validate the variable name
+    CssVariableValidator.isValidVariableName(normalizedName);
+
+    // Remove the property
+    this.element.style.removeProperty(normalizedName);
   }
 
   /**
@@ -251,6 +471,11 @@ export type VarExpression = string;
 export function cssVar<V extends AllowedCssVariable>(variableName: V, fallback?: string): VarExpression {
   const trimmed = (variableName as string).trim() as V;
   const normalizedName = trimmed.startsWith('--') ? trimmed : `--${trimmed}` as V;
+export function cssVar(variableName: string, fallback?: string): string {
+  // Validate the variable name
+  const normalizedName = variableName.trim().startsWith('--')
+    ? variableName.trim()
+    : `--${variableName.trim()}`;
   
   CssVariableValidator.isValidVariableName(normalizedName);
 
@@ -258,6 +483,9 @@ export function cssVar<V extends AllowedCssVariable>(variableName: V, fallback?:
     return `var(${normalizedName}, ${fallback})` as VarExpression;
   }
   return `var(${normalizedName})` as VarExpression;
+    return `var(${normalizedName}, ${fallback})`;
+  }
+  return `var(${normalizedName})`;
 }
 
 /**
@@ -302,3 +530,5 @@ export const SSR_FALLBACKS: Partial<Record<AllowedCssVariable, string>> = {
 // Default export for convenience
 export default CssVariablesUsage;
 
+// Default export for convenience
+export default CssVariablesUsage;

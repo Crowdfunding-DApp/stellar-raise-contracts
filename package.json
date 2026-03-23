@@ -35,8 +35,19 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
     "optimize:svg": "svgo --folder frontend/public/images/ --recursive --multipass --config svgo.config.js"
+    "format": "prettier --write \"frontend/**/*.ts\" \"frontend/**/*.tsx\""
   },
   "devDependencies": {
-    "svgo": "^3.3.2"
+    "@babel/preset-env": "^7.29.2",
+    "@babel/preset-react": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
+    "@types/jest": "^30.0.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "svgo": "^3.3.2",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
