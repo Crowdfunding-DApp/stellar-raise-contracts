@@ -9,6 +9,8 @@ use soroban_sdk::{
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod auth_tests;
 
 const CONTRACT_VERSION: u32 = 3;
 #[allow(dead_code)]
@@ -130,9 +132,10 @@ impl CrowdfundContract {
     /// # Panics
     /// * If already initialized.
     /// * If platform fee exceeds 10,000 (100%).
+    /// * If bonus goal is not greater than the primary goal.
     pub fn initialize(
         env: Env,
-        _admin: Address,
+        admin: Address,
         creator: Address,
         token: Address,
         goal: i128,
@@ -147,6 +150,9 @@ impl CrowdfundContract {
         }
 
         creator.require_auth();
+
+        // Store admin for upgrade authorization.
+        env.storage().instance().set(&DataKey::Admin, &admin);
 
         if let Some(ref config) = platform_config {
             if config.fee_bps > 10_000 {
@@ -164,13 +170,6 @@ impl CrowdfundContract {
             env.storage().instance().set(&DataKey::BonusGoal, &bg);
         }
 
-        if let Some(bg) = bonus_goal {
-            if bg <= goal {
-                panic!("bonus goal must be greater than primary goal");
-            }
-            env.storage().instance().set(&DataKey::BonusGoal, &bg);
-        }
-
         if let Some(bg_description) = bonus_goal_description {
             env.storage()
                 .instance()
@@ -179,16 +178,6 @@ impl CrowdfundContract {
 
         env.storage().instance().set(&DataKey::Creator, &creator);
         env.storage().instance().set(&DataKey::Token, &token);
-
-        /// Returns the list of all contributor addresses.
-        #[allow(dead_code)]
-        pub fn contributors(env: Env) -> Vec<Address> {
-            env.storage()
-                .instance()
-                .get(&DataKey::Contributors)
-                .unwrap_or(Vec::new(&env))
-        }
-
         env.storage().instance().set(&DataKey::Goal, &goal);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
@@ -200,17 +189,7 @@ impl CrowdfundContract {
             .set(&DataKey::BonusGoalReachedEmitted, &false);
         env.storage()
             .instance()
-            .set(&DataKey::BonusGoalReachedEmitted, &false);
-        env.storage()
-            .instance()
             .set(&DataKey::Status, &Status::Active);
-
-        // Store platform config if provided.
-        if let Some(config) = platform_config {
-            env.storage()
-                .instance()
-                .set(&DataKey::PlatformConfig, &config);
-        }
 
         let empty_contributors: Vec<Address> = Vec::new(&env);
         env.storage()
@@ -223,6 +202,14 @@ impl CrowdfundContract {
             .set(&DataKey::Roadmap, &empty_roadmap);
 
         Ok(())
+    }
+
+    /// Returns the list of all contributor addresses.
+    pub fn contributors(env: Env) -> Vec<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Contributors)
+            .unwrap_or(Vec::new(&env))
     }
 
     /// Contribute tokens to the campaign.
