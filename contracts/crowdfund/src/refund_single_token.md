@@ -53,10 +53,10 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 1. **Authentication** — `contributor.require_auth()` is called first. Only the
    contributor themselves can trigger their own refund.
 
-2. **Checks-Effects-Interactions** — The contribution record is zeroed in
-   storage *before* the token transfer is executed. This prevents re-entrancy
-   and double-claim attacks even if the token contract calls back into the
-   crowdfund contract.
+2. **Interactions** — Token transfer runs first via [`refund_single_transfer`](./refund_single_token.rs);
+   contribution storage is then zeroed and `total_raised` updated (`lib.rs`).
+   Soroban does not offer EVM-style reentrancy; ordering still keeps the flow
+   auditable and matches the batch `refund()` helper.
 
 3. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
    panicking on underflow rather than silently wrapping.
@@ -136,10 +136,19 @@ async function claimRefund(
 | `DataKey::Contribution(addr)`| Persistent | `i128`  | Per-contributor balance; zeroed on claim |
 | `DataKey::TotalRaised`       | Instance   | `i128`  | Global total; decremented on each claim  |
 
+## Module: `refund_single_token.rs`
+
+Shared helpers live in [`refund_single_token.rs`](./refund_single_token.rs):
+
+| Item | Role |
+|------|------|
+| `refund_single_transfer` | Single canonical **contract → contributor** transfer |
+| `refund_single` (module) | Test/helper path: transfer + clear storage + event |
+| `get_contribution` | Read stored balance without transferring |
+
 ## Test Coverage
 
-See [`refund_single_token_tests.rs`](./refund_single_token_tests.rs) for the
-full test suite. Tests cover:
+See [`refund_single_token.test.rs`](./refund_single_token.test.rs) (module `refund_single_token_test` in `lib.rs`). Tests cover:
 
 - Basic single-contributor refund
 - Multi-contributor independent claims
@@ -156,3 +165,9 @@ full test suite. Tests cover:
 - Contribution record zeroed after claim
 - Partial claims (other contributors unaffected)
 - Minimum contribution boundary
+- Internal helper suite (`internal_token_helpers`) for module-level `refund_single` / `get_contribution`
+
+### Coverage target
+
+Run `cargo llvm-cov -p crowdfund --lcov --output-path /tmp/crowdfund.lcov` and
+check `refund_single_token.rs` — expect **≥ 95 %** line coverage for the module.

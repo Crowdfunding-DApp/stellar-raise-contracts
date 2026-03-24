@@ -6,12 +6,15 @@
 //!   - `validate_min_contribution`— happy path, boundary, below minimum
 //!   - `validate_deadline`        — happy path, exact boundary, too soon, overflow safety
 //!   - `validate_platform_fee`    — happy path, exact cap, above cap
-//!   - `compute_progress_bps`     — zero raised, partial, exact goal, over goal, zero goal guard
+//!   - `compute_progress_bps`     — zero raised, partial, exact goal, over goal, zero goal guard,
+//!                                  overflow cap, negative goal
+//!   - `min_contribution_exceeds_goal` / `single_minimum_contribution_meets_goal` — UX / security
 
 use crate::campaign_goal_minimum::{
-    compute_progress_bps, validate_deadline, validate_goal, validate_min_contribution,
-    validate_platform_fee, MAX_PLATFORM_FEE_BPS, MAX_PROGRESS_BPS, MIN_CONTRIBUTION_AMOUNT,
-    MIN_DEADLINE_OFFSET, MIN_GOAL_AMOUNT, PROGRESS_BPS_SCALE,
+    compute_progress_bps, min_contribution_exceeds_goal, single_minimum_contribution_meets_goal,
+    validate_deadline, validate_goal, validate_min_contribution, validate_platform_fee,
+    MAX_PLATFORM_FEE_BPS, MAX_PROGRESS_BPS, MIN_CONTRIBUTION_AMOUNT, MIN_DEADLINE_OFFSET,
+    MIN_GOAL_AMOUNT, PROGRESS_BPS_SCALE,
 };
 
 // ── Constant value assertions ─────────────────────────────────────────────────
@@ -202,8 +205,10 @@ fn compute_progress_bps_over_goal_capped() {
     assert_eq!(compute_progress_bps(2_000_000, 1_000_000), MAX_PROGRESS_BPS);
 }
 
+/// Large `total_raised` vs small `goal`: progress capped at max; `checked_mul`
+/// must not wrap when `total_raised * PROGRESS_BPS_SCALE` overflows `i128`.
 #[test]
-fn compute_progress_bps_massively_over_goal_capped() {
+fn compute_progress_bps_extreme_raised_caps_at_max() {
     assert_eq!(compute_progress_bps(i128::MAX, 1), MAX_PROGRESS_BPS);
 }
 
@@ -240,4 +245,27 @@ fn compute_progress_bps_99_percent() {
 fn compute_progress_bps_1_bps() {
     // 1 / 10_000 = 0.01 % = 1 bps
     assert_eq!(compute_progress_bps(1, 10_000), 1);
+}
+
+// ── min_contribution vs goal (security / UX semantics) ───────────────────────
+
+#[test]
+fn min_contribution_exceeds_goal_true_when_min_is_higher() {
+    assert!(min_contribution_exceeds_goal(2_000, 1_000));
+    assert!(min_contribution_exceeds_goal(2, 1));
+}
+
+#[test]
+fn min_contribution_exceeds_goal_false_when_min_lte_goal() {
+    assert!(!min_contribution_exceeds_goal(1_000, 1_000));
+    assert!(!min_contribution_exceeds_goal(500, 1_000));
+    assert!(!min_contribution_exceeds_goal(1, 1));
+}
+
+#[test]
+fn single_minimum_contribution_meets_goal_boundary() {
+    assert!(single_minimum_contribution_meets_goal(1_000, 1_000));
+    assert!(single_minimum_contribution_meets_goal(2_000, 1_000));
+    assert!(!single_minimum_contribution_meets_goal(500, 1_000));
+    assert!(single_minimum_contribution_meets_goal(1, 1));
 }
