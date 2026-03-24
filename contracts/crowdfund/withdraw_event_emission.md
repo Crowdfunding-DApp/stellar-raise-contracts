@@ -30,7 +30,7 @@ resource consumption.
 pub const MAX_NFT_MINT_BATCH: u32 = 50;
 ```
 
-Defined in `lib.rs`. Controls the maximum number of NFT mints (and their events)
+Defined in [`stellar_token_minter.rs`](./src/stellar_token_minter.rs) and re-exported from `lib.rs`. Controls the maximum number of NFT mints (and their events)
 per `withdraw()` call. Adjust this value based on network resource limits.
 
 ### Changes to `withdraw()`
@@ -69,7 +69,7 @@ env.events().publish(("campaign", "withdrawn"), (creator, payout, nft_minted_cou
 
 ## Test Coverage
 
-File: `contracts/crowdfund/src/withdraw_event_emission_test.rs`
+File: [`contracts/crowdfund/src/stellar_token_minter.test.rs`](./src/stellar_token_minter.test.rs) (module `stellar_token_minter_test` in `lib.rs`).
 
 | Test | What it verifies |
 |------|-----------------|
@@ -79,4 +79,4 @@ File: `contracts/crowdfund/src/withdraw_event_emission_test.rs`
 | `test_withdraw_emits_single_batch_event` | Exactly one `nft_batch_minted` event emitted |
 | `test_withdraw_no_batch_event_without_nft_contract` | No batch event when NFT contract not set |
 | `test_withdraw_emits_withdrawn_event_once` | `withdrawn` event emitted exactly once |
-| `test_withdraw_no_batch_event_when_no_eligible_contributors` | Batch event still fires for ≥1 contributor |
+| `test_withdraw_emits_one_nft_batch_event_with_eligible_contributors` | One `nft_batch_minted` when ≥1 eligible contributor |

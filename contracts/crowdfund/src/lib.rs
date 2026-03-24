@@ -14,8 +14,12 @@ use crate::campaign_goal_minimum::{
     validate_platform_fee, MAX_PLATFORM_FEE_BPS, MIN_CONTRIBUTION_AMOUNT, MIN_DEADLINE_OFFSET,
     MIN_GOAL_AMOUNT, PROGRESS_BPS_SCALE,
 };
+use crate::stellar_token_minter::{
+    bump_token_id_after_mint, mint_batch_is_full, NFT_MINT_FN_NAME,
+};
 
 pub mod soroban_sdk_minor;
+pub mod stellar_token_minter;
 
 #[cfg(test)]
 mod auth_tests;
@@ -34,6 +38,9 @@ mod proptest_generator_boundary_tests;
 mod refund_single_token_tests;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test;
 
 const CONTRACT_VERSION: u32 = 3;
 #[allow(dead_code)]
@@ -42,7 +49,7 @@ const CONTRIBUTION_COOLDOWN: u64 = 60; // 60 seconds cooldown
 /// Maximum number of NFT mint calls (and their events) emitted in a single
 /// `withdraw()` invocation.  Caps per-contributor event emission to prevent
 /// unbounded gas consumption when the contributor list is large.
-pub const MAX_NFT_MINT_BATCH: u32 = 50;
+pub use stellar_token_minter::MAX_NFT_MINT_BATCH;
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
@@ -539,8 +546,7 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::Status, &Status::Successful);
 
-        // Bounded NFT minting: process at most MAX_NFT_MINT_BATCH contributors
-        // per withdraw() call to cap event emission and gas consumption.
+        // Bounded NFT minting: see `stellar_token_minter` for cap and ABI notes.
         let nft_minted_count: u32 = if let Some(nft_contract) = env
             .storage()
             .instance()
@@ -554,7 +560,7 @@ impl CrowdfundContract {
             let mut token_id: u64 = 1;
             let mut minted: u32 = 0;
             for contributor in contributors.iter() {
-                if minted >= MAX_NFT_MINT_BATCH {
+                if mint_batch_is_full(minted) {
                     break;
                 }
                 let contribution: i128 = env
@@ -565,13 +571,13 @@ impl CrowdfundContract {
                 if contribution > 0 {
                     env.invoke_contract::<()>(
                         &nft_contract,
-                        &Symbol::new(&env, "mint"),
+                        &Symbol::new(&env, NFT_MINT_FN_NAME),
                         Vec::from_array(
                             &env,
                             [contributor.into_val(&env), token_id.into_val(&env)],
                         ),
                     );
-                    token_id += 1;
+                    token_id = bump_token_id_after_mint(token_id);
                     minted += 1;
                 }
             }
