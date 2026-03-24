@@ -16,6 +16,8 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, token, Address, Env, String, Symbol, Vec};
+mod refund_single_token;
+use refund_single_token::refund_single_transfer;
 
 pub mod access_control;
 pub mod admin_upgrade_mechanism;
@@ -70,6 +72,9 @@ mod contribute_error_handling_tests;
 mod npm_package_lock_test;
 #[cfg(test)]
 mod auth_tests;
+#[cfg(test)]
+#[path = "refund_single_token.test.rs"]
+mod refund_single_token_test;
 #[cfg(test)]
 mod test;
 
@@ -1847,7 +1852,12 @@ impl CrowdfundContract {
                 .get(&contribution_key)
                 .unwrap_or(0);
             if amount > 0 {
-                token_client.transfer(&env.current_contract_address(), &contributor, &amount);
+                refund_single_transfer(
+                    &token_client,
+                    &env.current_contract_address(),
+                    &contributor,
+                    amount,
+                );
                 env.storage().persistent().set(&contribution_key, &0i128);
                 env.storage()
                     .persistent()
@@ -1889,6 +1899,66 @@ impl CrowdfundContract {
             (contributor.clone(), amount),
         );
             .set(&DataKey::Status, &Status::Refunded);
+
+        Ok(())
+    }
+
+    /// Refund a single contributor after campaign failure.
+    ///
+    /// @notice Transfers the full stored contribution from contract to contributor.
+    /// @dev The transfer direction is explicitly contract -> contributor to prevent
+    ///      script-level parameter typos and accidental reverse transfer attempts.
+    /// @param contributor Contributor address to refund.
+    /// @return Ok(()) when the refund is complete or nothing is owed.
+    pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
+        contributor.require_auth();
+
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            panic!("campaign is not active");
+        }
+
+        let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
+        if env.ledger().timestamp() <= deadline {
+            return Err(ContractError::CampaignStillActive);
+        }
+
+        let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
+        let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
+        if total >= goal {
+            return Err(ContractError::GoalReached);
+        }
+
+        let contribution_key = DataKey::Contribution(contributor.clone());
+        let amount: i128 = env
+            .storage()
+            .persistent()
+            .get(&contribution_key)
+            .unwrap_or(0);
+
+        if amount == 0 {
+            return Ok(());
+        }
+
+        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+        let token_client = token::Client::new(&env, &token_address);
+        refund_single_transfer(
+            &token_client,
+            &env.current_contract_address(),
+            &contributor,
+            amount,
+        );
+
+        env.storage().persistent().set(&contribution_key, &0i128);
+        env.storage()
+            .persistent()
+            .extend_ttl(&contribution_key, 100, 100);
+
+        let new_total = total.checked_sub(amount).ok_or(ContractError::Overflow)?;
+        env.storage().instance().set(&DataKey::TotalRaised, &new_total);
+
+        env.events()
+            .publish(("campaign", "refund_single"), (contributor, amount));
 
         Ok(())
     }
