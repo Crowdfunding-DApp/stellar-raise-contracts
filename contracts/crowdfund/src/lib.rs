@@ -35,7 +35,8 @@ mod proptest_generator_boundary;
 #[cfg(test)]
 mod proptest_generator_boundary_tests;
 #[cfg(test)]
-mod refund_single_token_tests;
+#[path = "refund_single_token.test.rs"]
+mod refund_single_token_test;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
