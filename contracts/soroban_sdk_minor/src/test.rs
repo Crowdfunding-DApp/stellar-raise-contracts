@@ -12,6 +12,8 @@ fn setup() -> (Env, SorobanSdkMinorClient<'static>) {
     let client = SorobanSdkMinorClient::new(&env, &id);
     (env, client)
 }
+    let contract_id = env.register(SorobanSdkMinor, ());
+    let client = SorobanSdkMinorClient::new(&env, &contract_id);
 
 // Same as `setup` but do NOT mock auths so we can test real require_auth failure.
 fn setup_no_mock() -> (Env, SorobanSdkMinorClient<'static>) {
@@ -163,6 +165,11 @@ fn test_init_different_admins() {
     client.init(&admin2);
     assert_eq!(client.get_admin(), admin2);
 }
+fn test_check_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(SorobanSdkMinor, ());
+    let client = SorobanSdkMinorClient::new(&env, &contract_id);
 
 // ── check_auth ────────────────────────────────────────────────────────────────
 
