@@ -104,6 +104,7 @@ mod contribute_error_handling_tests;
 #[cfg(test)]
 #[path = "npm_package_lock_test.rs"]
 mod npm_package_lock_test;
+pub mod admin_upgrade_mechanism;
 pub mod soroban_sdk_minor;
 #[cfg(test)]
 #[path = "soroban_sdk_minor.test.rs"]
@@ -123,6 +124,8 @@ pub mod crowdfund_initialize_function;
 #[path = "crowdfund_initialize_function.test.rs"]
 mod crowdfund_initialize_function_test;
 
+#[cfg(test)]
+mod admin_upgrade_mechanism_test;
 pub mod contribute_error_handling;
 #[cfg(test)]
 mod contribute_error_handling_tests;
@@ -2416,6 +2419,8 @@ impl CrowdfundContract {
     /// * `"zero wasm hash"` — if `new_wasm_hash` is all-zero bytes.
     /// * `"Admin not initialized"` — if `initialize()` was never called.
     /// * Auth error — if the caller is not the stored admin.
+    /// Delegates to [`admin_upgrade_mechanism::upgrade`]. See that module for
+    /// full NatSpec documentation and security assumptions.
     pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
         // Gas-efficiency edge case: reject zero hash before any storage read.
         if !admin_upgrade_mechanism::validate_wasm_hash(&new_wasm_hash) {
@@ -2431,6 +2436,7 @@ impl CrowdfundContract {
             new_wasm_hash,
             new_wasm_hash
         );
+        admin_upgrade_mechanism::upgrade(&env, new_wasm_hash);
     }
 
     /// Update campaign metadata — only callable by the creator while the
