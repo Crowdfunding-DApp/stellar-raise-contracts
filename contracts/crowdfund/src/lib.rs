@@ -94,6 +94,8 @@ mod withdraw_event_emission_test;
 mod refund_single_token_tests;
 #[cfg(test)]
 mod stellar_token_minter_test;
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 pub mod proptest_generator_boundary;
@@ -1667,6 +1669,9 @@ impl CrowdfundContract {
 
         // Mint one commemorative NFT per eligible contributor after successful payout.
         if let Some(nft_contract) = env
+        // Bounded NFT minting: process at most MAX_NFT_MINT_BATCH contributors
+        // per withdraw() call to cap event emission and gas consumption.
+        let nft_minted_count: u32 = if let Some(nft_contract) = env
             .storage()
             .instance()
             .get::<_, Address>(&DataKey::NFTContract)
@@ -1682,6 +1687,12 @@ impl CrowdfundContract {
                 let amount: i128 = env
             let mut token_id: u64 = 1;
             for contributor in contributors.iter() {
+            let mut token_id: u64 = 1;
+            let mut minted: u32 = 0;
+            for contributor in contributors.iter() {
+                if minted >= MAX_NFT_MINT_BATCH {
+                    break;
+                }
                 let contribution: i128 = env
                     .storage()
                     .persistent()
@@ -1742,6 +1753,9 @@ impl CrowdfundContract {
                             [contributor.into_val(&env), token_id.into_val(&env)],
                         ),
                     );
+                    token_id += 1;
+                    minted += 1;
+                }
                     token_id += 1;
                     minted += 1;
                 }
@@ -2055,6 +2069,7 @@ impl CrowdfundContract {
         }
 
         // ── Checks-Effects-Interactions ──────────────────────────────────────
+        // Zero the record first to prevent any re-entrancy / double-claim.
         env.storage().persistent().set(&contribution_key, &0i128);
         env.storage()
             .persistent()
@@ -2069,6 +2084,7 @@ impl CrowdfundContract {
         let token_client = token::Client::new(&env, &token_address);
         token_client.transfer(&env.current_contract_address(), &contributor, &amount);
 
+        // Emit a structured event for off-chain indexers and scripts.
         env.events()
             .publish(("campaign", "refund_single"), (contributor, amount));
 
