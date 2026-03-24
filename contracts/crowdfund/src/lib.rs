@@ -9,12 +9,23 @@ use soroban_sdk::{
 pub mod refund_single_token;
 use refund_single_token::refund_single_transfer;
 
+use crate::campaign_goal_minimum::{
+    compute_progress_bps, validate_deadline, validate_goal, validate_min_contribution,
+    validate_platform_fee, MAX_PLATFORM_FEE_BPS, MIN_CONTRIBUTION_AMOUNT, MIN_DEADLINE_OFFSET,
+    MIN_GOAL_AMOUNT, PROGRESS_BPS_SCALE,
+};
+use crate::stellar_token_minter::{
+    bump_token_id_after_mint, mint_batch_is_full, NFT_MINT_FN_NAME,
+};
+
 pub mod soroban_sdk_minor;
+pub mod stellar_token_minter;
 
 #[cfg(test)]
 mod auth_tests;
 pub mod campaign_goal_minimum;
 #[cfg(test)]
+#[path = "campaign_goal_minimum.test.rs"]
 mod campaign_goal_minimum_test;
 pub mod contribute_error_handling;
 #[cfg(test)]
@@ -27,6 +38,9 @@ mod proptest_generator_boundary_tests;
 mod refund_single_token_tests;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test;
 
 const CONTRACT_VERSION: u32 = 3;
 #[allow(dead_code)]
@@ -35,7 +49,7 @@ const CONTRIBUTION_COOLDOWN: u64 = 60; // 60 seconds cooldown
 /// Maximum number of NFT mint calls (and their events) emitted in a single
 /// `withdraw()` invocation.  Caps per-contributor event emission to prevent
 /// unbounded gas consumption when the contributor list is large.
-pub const MAX_NFT_MINT_BATCH: u32 = 50;
+pub use stellar_token_minter::MAX_NFT_MINT_BATCH;
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
@@ -154,7 +168,10 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If already initialized.
-    /// * If platform fee exceeds 10,000 (100%).
+    /// * If `goal` or optional bonus goal is below the on-chain minimum (`policy_min_goal_amount`).
+    /// * If `min_contribution` is below the floor (`policy_min_contribution_floor`).
+    /// * If `deadline` is too soon relative to the ledger timestamp (`policy_min_deadline_offset_secs`).
+    /// * If platform fee exceeds 100 % in basis points (`policy_max_platform_fee_bps`).
     /// * If bonus goal is not greater than the primary goal.
     pub fn initialize(
         env: Env,
@@ -177,8 +194,13 @@ impl CrowdfundContract {
         // Store admin for upgrade authorization.
         env.storage().instance().set(&DataKey::Admin, &admin);
 
+        let now = env.ledger().timestamp();
+        validate_goal(goal).unwrap_or_else(|m| panic!("{}", m));
+        validate_min_contribution(min_contribution).unwrap_or_else(|m| panic!("{}", m));
+        validate_deadline(now, deadline).unwrap_or_else(|m| panic!("{}", m));
+
         if let Some(ref config) = platform_config {
-            if config.fee_bps > 10_000 {
+            if validate_platform_fee(config.fee_bps).is_err() {
                 panic!("platform fee cannot exceed 100%");
             }
             env.storage()
@@ -187,6 +209,7 @@ impl CrowdfundContract {
         }
 
         if let Some(bg) = bonus_goal {
+            validate_goal(bg).unwrap_or_else(|m| panic!("{}", m));
             if bg <= goal {
                 panic!("bonus goal must be greater than primary goal");
             }
@@ -505,7 +528,7 @@ impl CrowdfundContract {
             let fee = total
                 .checked_mul(config.fee_bps as i128)
                 .expect("fee calculation overflow")
-                .checked_div(10_000)
+                .checked_div(PROGRESS_BPS_SCALE)
                 .expect("fee division by zero");
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
@@ -523,8 +546,7 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::Status, &Status::Successful);
 
-        // Bounded NFT minting: process at most MAX_NFT_MINT_BATCH contributors
-        // per withdraw() call to cap event emission and gas consumption.
+        // Bounded NFT minting: see `stellar_token_minter` for cap and ABI notes.
         let nft_minted_count: u32 = if let Some(nft_contract) = env
             .storage()
             .instance()
@@ -538,7 +560,7 @@ impl CrowdfundContract {
             let mut token_id: u64 = 1;
             let mut minted: u32 = 0;
             for contributor in contributors.iter() {
-                if minted >= MAX_NFT_MINT_BATCH {
+                if mint_batch_is_full(minted) {
                     break;
                 }
                 let contribution: i128 = env
@@ -549,13 +571,13 @@ impl CrowdfundContract {
                 if contribution > 0 {
                     env.invoke_contract::<()>(
                         &nft_contract,
-                        &Symbol::new(&env, "mint"),
+                        &Symbol::new(&env, NFT_MINT_FN_NAME),
                         Vec::from_array(
                             &env,
                             [contributor.into_val(&env), token_id.into_val(&env)],
                         ),
                     );
-                    token_id += 1;
+                    token_id = bump_token_id_after_mint(token_id);
                     minted += 1;
                 }
             }
@@ -648,13 +670,6 @@ impl CrowdfundContract {
         Ok(())
     }
 
-    /// Refund a single contributor after campaign failure.
-    ///
-    /// @notice Transfers the full stored contribution from contract to contributor.
-    /// @dev The transfer direction is explicitly contract -> contributor to prevent
-    ///      script-level parameter typos and accidental reverse transfer attempts.
-    /// @param contributor Contributor address to refund.
-    /// @return Ok(()) when the refund is complete or nothing is owed.
     /// Claim a refund for a single contributor (pull-based).
     ///
     /// Each contributor independently claims their own refund after the campaign
@@ -665,22 +680,13 @@ impl CrowdfundContract {
     ///
     /// # Errors
     /// * [`ContractError::CampaignStillActive`] – Deadline has not yet passed.
-    /// * [`ContractError::GoalReached`]         – Goal was met; no refunds available.
-    /// * [`ContractError::NothingToRefund`]     – Caller has no contribution on record.
+    /// * [`ContractError::GoalReached`] – Goal was met; no refunds available.
+    /// * [`ContractError::NothingToRefund`] – Caller has no contribution on record.
     ///
     /// # Security
-    /// * Requires `contributor.require_auth()` — only the contributor can claim.
-    /// * Zeroes the contribution record **before** transfer (checks-effects-interactions).
+    /// * Requires `contributor.require_auth()`.
+    /// * Uses `refund_single_transfer` for a single canonical contract → contributor transfer.
     /// * Uses `checked_sub` to prevent underflow on `total_raised`.
-    pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
-        contributor.require_auth();
-
-    /// Claim a refund for a single contributor (pull-based).
-    ///
-    /// # Errors
-    /// * [`ContractError::CampaignStillActive`] when deadline has not passed.
-    /// * [`ContractError::GoalReached`] when the funding goal was met.
-    /// * [`ContractError::NothingToRefund`] when the contributor has no balance.
     pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
         contributor.require_auth();
 
@@ -716,7 +722,6 @@ impl CrowdfundContract {
             return Err(ContractError::NothingToRefund);
         }
 
-        // ── Checks-Effects-Interactions ──────────────────────────────────────
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
         refund_single_transfer(
@@ -735,10 +740,6 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalRaised, &new_total);
-
-        let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
-        token_client.transfer(&env.current_contract_address(), &contributor, &amount);
 
         env.events()
             .publish(("campaign", "refund_single"), (contributor, amount));
@@ -980,12 +981,7 @@ impl CrowdfundContract {
 
         if let Some(bg) = env.storage().instance().get::<_, i128>(&DataKey::BonusGoal) {
             if bg > 0 {
-                let raw = (total_raised * 10_000) / bg;
-                if raw > 10_000 {
-                    10_000
-                } else {
-                    raw as u32
-                }
+                compute_progress_bps(total_raised, bg)
             } else {
                 0
             }
@@ -1027,16 +1023,7 @@ impl CrowdfundContract {
             .get(&DataKey::Contributors)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let progress_bps = if goal > 0 {
-            let raw = (total_raised * 10_000) / goal;
-            if raw > 10_000 {
-                10_000
-            } else {
-                raw as u32
-            }
-        } else {
-            0
-        };
+        let progress_bps = compute_progress_bps(total_raised, goal);
 
         let contributor_count = contributors.len();
         let (average_contribution, largest_contribution) = if contributor_count == 0 {
@@ -1100,5 +1087,35 @@ impl CrowdfundContract {
     /// Returns the configured NFT contract address, if any.
     pub fn nft_contract(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::NFTContract)
+    }
+
+    // ── Policy constants (on-chain source of truth for UIs) ─────────────────
+
+    /// @notice Minimum campaign goal (token smallest units) enforced by `initialize`.
+    ///
+    /// @dev Frontends should query this instead of duplicating literals so validation
+    ///      stays aligned after upgrades.
+    pub fn policy_min_goal_amount(_env: Env) -> i128 {
+        MIN_GOAL_AMOUNT
+    }
+
+    /// @notice Minimum allowed `min_contribution` argument at initialization.
+    pub fn policy_min_contribution_floor(_env: Env) -> i128 {
+        MIN_CONTRIBUTION_AMOUNT
+    }
+
+    /// @notice Minimum seconds between ledger `now` and `deadline` at initialization.
+    pub fn policy_min_deadline_offset_secs(_env: Env) -> u64 {
+        MIN_DEADLINE_OFFSET
+    }
+
+    /// @notice Maximum platform fee in basis points (100 % = 10_000 bps).
+    pub fn policy_max_platform_fee_bps(_env: Env) -> u32 {
+        MAX_PLATFORM_FEE_BPS
+    }
+
+    /// @notice Scale factor for all progress calculations (`progress_bps` / bonus progress).
+    pub fn policy_progress_bps_scale(_env: Env) -> i128 {
+        PROGRESS_BPS_SCALE
     }
 }

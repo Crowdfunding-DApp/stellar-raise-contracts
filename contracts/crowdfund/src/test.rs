@@ -11,7 +11,13 @@ use soroban_sdk::{
     token, Address, Env, String, Vec,
 };
 
-use crate::{CrowdfundContract, CrowdfundContractClient, PlatformConfig};
+use crate::{
+    campaign_goal_minimum::{
+        MAX_PLATFORM_FEE_BPS, MIN_CONTRIBUTION_AMOUNT, MIN_DEADLINE_OFFSET, MIN_GOAL_AMOUNT,
+        PROGRESS_BPS_SCALE,
+    },
+    CrowdfundContract, CrowdfundContractClient, PlatformConfig,
+};
 
 // ── Mock NFT contract ────────────────────────────────────────────────────────
 
@@ -214,6 +220,84 @@ fn test_initialize_bonus_goal_not_greater_panics() {
         &Some(500_000i128), // less than goal
         &None,
     );
+}
+
+/// Goal below on-chain minimum must panic (frontend must not submit zero goal).
+#[test]
+#[should_panic(expected = "MIN_GOAL_AMOUNT")]
+fn test_initialize_goal_below_minimum_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    client.initialize(
+        &admin,
+        &creator,
+        &token_address,
+        &0i128,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+}
+
+/// `min_contribution` below on-chain floor must panic.
+#[test]
+#[should_panic(expected = "MIN_CONTRIBUTION_AMOUNT")]
+fn test_initialize_min_contribution_below_floor_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    client.initialize(
+        &admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &0i128,
+        &None,
+        &None,
+        &None,
+    );
+}
+
+/// Deadline sooner than `now + MIN_DEADLINE_OFFSET` must panic.
+#[test]
+#[should_panic(expected = "MIN_DEADLINE_OFFSET")]
+fn test_initialize_deadline_too_soon_panics() {
+    let (env, client, creator, token_address, admin) = setup_env();
+    let now = env.ledger().timestamp();
+    let deadline = now + MIN_DEADLINE_OFFSET - 1;
+    client.initialize(
+        &admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+}
+
+/// Policy getters mirror `campaign_goal_minimum` for dApp validation without Rust imports.
+#[test]
+fn test_policy_enforcement_getters_match_module_constants() {
+    let (_env, client, _creator, _token_address, _admin) = setup_env();
+    assert_eq!(client.policy_min_goal_amount(), MIN_GOAL_AMOUNT);
+    assert_eq!(
+        client.policy_min_contribution_floor(),
+        MIN_CONTRIBUTION_AMOUNT
+    );
+    assert_eq!(
+        client.policy_min_deadline_offset_secs(),
+        MIN_DEADLINE_OFFSET
+    );
+    assert_eq!(
+        client.policy_max_platform_fee_bps(),
+        MAX_PLATFORM_FEE_BPS
+    );
+    assert_eq!(client.policy_progress_bps_scale(), PROGRESS_BPS_SCALE);
 }
 
 // ── contribute ───────────────────────────────────────────────────────────────
