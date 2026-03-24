@@ -449,5 +449,20 @@ export function cssCalc(expression: string): string {
   return `calc(${expression})`;
 }
 
+/**
+ * @notice Gets a CSS variable value specifically tailored for documentation components.
+ * @dev NatSpec: This React hook wrapper simplifies extracting documentation-specific 
+ * design tokens. It guarantees that documentation styling variables are securely validated, 
+ * maintaining architectural separation and reducing component clutter.
+ * @custom:security Variables fetched via this hook still pass through the core validator 
+ * preventing rogue values or untested variables from breaking documentation layout.
+ * @param variableName The documentation CSS variable name to fetch.
+ * @param fallback Optional fallback value if the documentation token is undefined.
+ * @returns The computed styling value.
+ */
+export function useDocsCssVariable(variableName: string, fallback?: string): string {
+  return useCssVariable(variableName, fallback);
+}
+
 // Default export for convenience
 export default CssVariablesUsage;
