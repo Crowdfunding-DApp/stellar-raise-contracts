@@ -6,7 +6,8 @@
 //!   - `validate_min_contribution`— happy path, boundary, below minimum
 //!   - `validate_deadline`        — happy path, exact boundary, too soon, overflow safety
 //!   - `validate_platform_fee`    — happy path, exact cap, above cap
-//!   - `compute_progress_bps`     — zero raised, partial, exact goal, over goal, zero goal guard
+//!   - `compute_progress_bps`     — zero raised, partial, exact goal, over goal, zero goal guard,
+//!                                  overflow cap, negative goal
 
 use crate::campaign_goal_minimum::{
     compute_progress_bps, validate_deadline, validate_goal, validate_min_contribution,
@@ -202,8 +203,10 @@ fn compute_progress_bps_over_goal_capped() {
     assert_eq!(compute_progress_bps(2_000_000, 1_000_000), MAX_PROGRESS_BPS);
 }
 
+/// Large `total_raised` vs small `goal`: progress capped at max; `checked_mul`
+/// must not wrap when `total_raised * PROGRESS_BPS_SCALE` overflows `i128`.
 #[test]
-fn compute_progress_bps_massively_over_goal_capped() {
+fn compute_progress_bps_extreme_raised_caps_at_max() {
     assert_eq!(compute_progress_bps(i128::MAX, 1), MAX_PROGRESS_BPS);
 }
 

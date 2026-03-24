@@ -41,6 +41,9 @@
 //! 5. `MIN_DEADLINE_OFFSET` ensures the campaign deadline is always in the
 //!    future relative to the ledger timestamp at initialization, preventing
 //!    campaigns that are dead-on-arrival.
+//! 6. `compute_progress_bps` uses `checked_mul` so pathological `total_raised`
+//!    values cannot overflow `i128` during the progress calculation; on overflow
+//!    the result is capped at [`MAX_PROGRESS_BPS`] (treat as “goal exceeded”).
 //!
 //! ## Validation flow
 //!
@@ -62,8 +65,6 @@
 //!                └─ fee_bps <= MAX_PLATFORM_FEE_BPS
 //!                               ──► Ok / Err::FeeTooHigh
 //! ```
-
-#![no_std]
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -171,14 +172,19 @@ pub fn validate_platform_fee(fee_bps: u32) -> Result<(), &'static str> {
 /// @param  goal          Campaign goal (token units, must be > 0).
 /// @return               Progress in bps in the range `[0, MAX_PROGRESS_BPS]`.
 ///
-/// @dev    Returns 0 when `goal == 0` to avoid division by zero; callers
-///         should ensure `goal >= MIN_GOAL_AMOUNT` before calling.
+/// @dev    Returns 0 when `goal <= 0` to avoid division by zero; callers
+///         should ensure `goal >= MIN_GOAL_AMOUNT` before calling.  Uses
+///         `checked_mul` so `total_raised * PROGRESS_BPS_SCALE` cannot wrap;
+///         on overflow returns [`MAX_PROGRESS_BPS`].
 #[inline]
 pub fn compute_progress_bps(total_raised: i128, goal: i128) -> u32 {
     if goal <= 0 {
         return 0;
     }
-    let raw = (total_raised * PROGRESS_BPS_SCALE) / goal;
+    let Some(product) = total_raised.checked_mul(PROGRESS_BPS_SCALE) else {
+        return MAX_PROGRESS_BPS;
+    };
+    let raw = product / goal;
     if raw > PROGRESS_BPS_SCALE {
         MAX_PROGRESS_BPS
     } else {

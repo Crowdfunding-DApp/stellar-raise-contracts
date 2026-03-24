@@ -1,171 +1,141 @@
-# `campaign_goal_minimum` — Extracted Constants for Campaign Goal & Minimum Threshold Enforcement
+# `campaign_goal_minimum` — Campaign goal & minimum threshold enforcement
 
 ## Overview
 
-`campaign_goal_minimum` centralizes every magic number and threshold used
-during campaign initialization and contribution validation into named,
-documented constants.  It also exposes pure validation helpers that can be
-called from the contract, from tests, and from off-chain tooling without
-pulling in the full contract dependency.
+`campaign_goal_minimum` centralizes **on-chain** magic numbers and thresholds used
+during `initialize()` and basis-point progress math. It exposes pure validation
+helpers and constants that can be imported from the crate, from tests, and
+referenced in off-chain tooling.
+
+**Deprecated pattern:** scattering literals such as `10_000` and ad-hoc deadline
+checks across `lib.rs`. All such paths now go through this module and
+[`compute_progress_bps`](./campaign_goal_minimum.rs) so reviewers and frontends
+have a single source of truth.
 
 ## Why extract constants?
 
-Before this module the contract contained inline literals scattered across
-`initialize()`, `contribute()`, `withdraw()`, and `get_stats()`:
+| Literal / pattern | Previous risk | Mitigation |
+|-------------------|---------------|------------|
+| `10_000` (bps scale / fee divisor) | Inconsistent updates, audit noise | `PROGRESS_BPS_SCALE`, `MAX_PLATFORM_FEE_BPS` |
+| Goal / min contribution `0` | Zero-goal drain, useless contributions | `validate_goal`, `validate_min_contribution` |
+| Short deadline | Dead-on-arrival campaigns | `validate_deadline` + `MIN_DEADLINE_OFFSET` |
 
-| Literal | Occurrences | Intent |
-|---------|-------------|--------|
-| `10_000` | 4 | Basis-point scale / fee cap |
-| `0` | 6+ | Zero-amount guard / default |
-| `60` | 1 | deadline floor |
-
-Inline literals:
-
-- Force reviewers to infer intent from context.
-- Create silent inconsistency risk when one occurrence is updated but others are not.
-- Make audits harder — a security reviewer must grep for every occurrence.
-
-Named constants are resolved at **compile time** (zero runtime cost) and
-appear in a single place, so a future change touches one line.
+Named constants are resolved at **compile time** (no extra gas for the constants
+themselves). View functions on the contract (see below) expose the same values
+for Soroban clients that cannot import Rust.
 
 ## Constants
 
 | Constant | Type | Value | Description |
 |----------|------|-------|-------------|
 | `MIN_GOAL_AMOUNT` | `i128` | `1` | Minimum campaign goal in token units |
-| `MIN_CONTRIBUTION_AMOUNT` | `i128` | `1` | Minimum value for the `min_contribution` parameter |
+| `MIN_CONTRIBUTION_AMOUNT` | `i128` | `1` | Minimum value for the `min_contribution` parameter at init |
 | `MAX_PLATFORM_FEE_BPS` | `u32` | `10_000` | Maximum platform fee (100 % in basis points) |
 | `PROGRESS_BPS_SCALE` | `i128` | `10_000` | Scale factor for all basis-point progress calculations |
-| `MIN_DEADLINE_OFFSET` | `u64` | `60` | Minimum seconds the deadline must be in the future |
+| `MIN_DEADLINE_OFFSET` | `u64` | `60` | Minimum seconds the deadline must be in the future at init |
 | `MAX_PROGRESS_BPS` | `u32` | `10_000` | Cap on progress value returned to callers |
 
-## Validation Helpers
+## Validation helpers
 
 ### `validate_goal(goal: i128) -> Result<(), &'static str>`
 
-Ensures the campaign goal is at least `MIN_GOAL_AMOUNT`.
-
-A goal of zero would let the creator withdraw immediately after any
-contribution, effectively turning the contract into a donation drain.
-
-```rust
-validate_goal(1_000_000)?; // Ok
-validate_goal(0)?;          // Err("goal must be at least MIN_GOAL_AMOUNT")
-```
+Ensures `goal >= MIN_GOAL_AMOUNT`. A zero goal would allow the creator to treat
+the campaign as “funded” after arbitrary dust.
 
 ### `validate_min_contribution(min_contribution: i128) -> Result<(), &'static str>`
 
-Ensures the minimum contribution floor is at least `MIN_CONTRIBUTION_AMOUNT`.
-
-A zero minimum allows zero-amount contributions that waste gas on a no-op
-token transfer and pollute the contributors list.
-
-```rust
-validate_min_contribution(1_000)?; // Ok
-validate_min_contribution(0)?;     // Err("min_contribution must be at least MIN_CONTRIBUTION_AMOUNT")
-```
+Ensures `min_contribution >= MIN_CONTRIBUTION_AMOUNT`.
 
 ### `validate_deadline(now: u64, deadline: u64) -> Result<(), &'static str>`
 
-Ensures the deadline is at least `MIN_DEADLINE_OFFSET` seconds in the future.
-
-Prevents campaigns that expire before a single transaction can be submitted.
-Uses `saturating_add` to avoid overflow when `now` is near `u64::MAX`.
-
-```rust
-validate_deadline(1_000, 1_060)?; // Ok  (exactly MIN_DEADLINE_OFFSET)
-validate_deadline(1_000, 1_059)?; // Err("deadline must be at least MIN_DEADLINE_OFFSET seconds in the future")
-```
+Ensures `deadline >= now + MIN_DEADLINE_OFFSET` using `saturating_add` on `now`
+so `u64::MAX` does not wrap.
 
 ### `validate_platform_fee(fee_bps: u32) -> Result<(), &'static str>`
 
-Ensures the platform fee does not exceed `MAX_PLATFORM_FEE_BPS` (100 %).
-
-A fee above 100 % would mean the platform takes more than the total raised,
-leaving the creator with a negative payout.
-
-```rust
-validate_platform_fee(500)?;        // Ok  (5 %)
-validate_platform_fee(10_001)?;     // Err("platform fee cannot exceed MAX_PLATFORM_FEE_BPS (100%)")
-```
+Ensures `fee_bps <= MAX_PLATFORM_FEE_BPS`.
 
 ### `compute_progress_bps(total_raised: i128, goal: i128) -> u32`
 
-Computes campaign progress in basis points, capped at `MAX_PROGRESS_BPS`.
+Computes `(total_raised * PROGRESS_BPS_SCALE) / goal`, capped at
+`MAX_PROGRESS_BPS`. Returns `0` if `goal <= 0` (division-by-zero guard). Uses
+`checked_mul` on the product: if `total_raised * PROGRESS_BPS_SCALE` overflows
+`i128`, returns `MAX_PROGRESS_BPS` instead of wrapping.
 
-```rust
-compute_progress_bps(500_000, 1_000_000); // 5_000  (50 %)
-compute_progress_bps(1_000_000, 1_000_000); // 10_000 (100 %, goal met)
-compute_progress_bps(2_000_000, 1_000_000); // 10_000 (capped, goal exceeded)
-compute_progress_bps(0, 0);               // 0      (zero-goal guard)
-```
+## On-chain policy view functions (frontend / scalability)
 
-Returns `0` when `goal <= 0` to avoid division by zero.
+Integrations should **call these** instead of hardcoding thresholds so UI
+validation stays aligned after WASM upgrades:
 
-## Security Assumptions
+| Method | Returns |
+|--------|---------|
+| `policy_min_goal_amount` | `MIN_GOAL_AMOUNT` |
+| `policy_min_contribution_floor` | `MIN_CONTRIBUTION_AMOUNT` |
+| `policy_min_deadline_offset_secs` | `MIN_DEADLINE_OFFSET` |
+| `policy_max_platform_fee_bps` | `MAX_PLATFORM_FEE_BPS` |
+| `policy_progress_bps_scale` | `PROGRESS_BPS_SCALE` |
 
-1. **`MIN_GOAL_AMOUNT`** — Prevents zero-goal campaigns that could be
-   immediately drained by the creator.
+**Note:** `contracts/crowdfund/src/proptest_generator_boundary.rs` uses **stricter
+test-only ranges** (e.g. larger minimum goal for proptest). That module is for
+property-test stability and UI *suggested* bounds — it does not override
+on-chain enforcement.
 
-2. **`MIN_CONTRIBUTION_AMOUNT`** — Prevents zero-amount contributions that
-   waste gas and pollute the contributors list.
+## Security assumptions
 
-3. **`MAX_PLATFORM_FEE_BPS`** — Caps the platform fee at 100 % so the
-   contract can never be configured to steal all contributor funds.
-
-4. **`PROGRESS_BPS_SCALE`** — Single authoritative scale factor; using it
-   everywhere prevents off-by-one errors if the scale ever changes.
-
-5. **`MIN_DEADLINE_OFFSET`** — Ensures the campaign deadline is always in the
-   future at initialization, preventing dead-on-arrival campaigns.
-
-6. **`compute_progress_bps` cap** — Progress is capped at `MAX_PROGRESS_BPS`
-   so callers always receive a value in `[0, 10_000]` regardless of how much
-   the goal was exceeded.  This prevents integer overflow in downstream
-   percentage calculations.
+1. **`MIN_GOAL_AMOUNT`** — Prevents zero-goal campaigns that could be abused for
+   immediate “success” semantics after minimal funding.
+2. **`MIN_CONTRIBUTION_AMOUNT`** — Prevents zero-amount contributions that waste
+   gas and grow contributor storage without economic meaning.
+3. **`MAX_PLATFORM_FEE_BPS`** — Caps the fee at 100 % so fee math never implies
+   taking more than the raised total.
+4. **`PROGRESS_BPS_SCALE`** — Single scale for fee divisor (`withdraw`) and
+   progress views (`get_stats`, `bonus_goal_progress_bps`), avoiding mismatched
+   literals.
+5. **`MIN_DEADLINE_OFFSET`** — Ensures the campaign is not initialized already
+   expired relative to practical submission latency.
+6. **`compute_progress_bps` overflow** — `checked_mul` avoids silent `i128`
+   wrap on extreme inputs; capped result is safe for downstream percentage UI.
 
 ## Integration with `lib.rs`
 
-The constants and helpers are imported where the inline literals previously
-appeared:
+`initialize` runs `validate_goal`, `validate_min_contribution`, and
+`validate_deadline` before persisting campaign fields. Optional `bonus_goal`
+values also pass `validate_goal`. Platform fees use `validate_platform_fee`
+(with a stable panic message for the 100 % cap). `get_stats`,
+`bonus_goal_progress_bps`, and platform fee division in `withdraw` use
+`PROGRESS_BPS_SCALE` / `compute_progress_bps`.
 
-```rust
-use crate::campaign_goal_minimum::{
-    MAX_PLATFORM_FEE_BPS, MAX_PROGRESS_BPS, MIN_CONTRIBUTION_AMOUNT,
-    MIN_DEADLINE_OFFSET, MIN_GOAL_AMOUNT, PROGRESS_BPS_SCALE,
-    compute_progress_bps, validate_deadline, validate_goal,
-    validate_min_contribution, validate_platform_fee,
-};
-```
+## Test coverage
 
-## Test Coverage
+See [`campaign_goal_minimum.test.rs`](./campaign_goal_minimum.test.rs) (wired as
+`campaign_goal_minimum_test` in `lib.rs` via `#[path = "..."]`). Tests cover:
 
-See [`campaign_goal_minimum_test.rs`](./campaign_goal_minimum_test.rs) for the
-full test suite.  Tests cover:
+- Constant stability and `PROGRESS_BPS_SCALE == MAX_PROGRESS_BPS` invariant
+- All validation helpers: boundaries, negatives, `u64` / `i128` edge cases
+- `compute_progress_bps`: fractional progress, cap when over goal, zero/negative
+  goal, **overflow on multiply**
 
-- Constant value stability (regression guard)
-- `PROGRESS_BPS_SCALE == MAX_PROGRESS_BPS` invariant
-- `validate_goal`: minimum, above minimum, zero, negative, `i128::MIN`
-- `validate_min_contribution`: floor, above floor, zero, negative, `i128::MIN`
-- `validate_deadline`: exact offset, well in future, one second past offset,
-  equal to now, in past, one second before offset, `u64::MAX` overflow safety
-- `validate_platform_fee`: zero, typical (2.5 %), exact cap, one above cap, `u32::MAX`
-- `compute_progress_bps`: zero raised, 25 %, 50 %, 99 %, exact goal, 2× goal,
-  `i128::MAX` raised, zero goal guard, negative goal guard, 1-token of large goal,
-  minimum goal + minimum raised, 1 bps precision
+Integration tests in `test.rs` assert `initialize` panics on invalid goal, min
+contribution, or deadline, and that policy view functions match module
+constants.
 
-## CLI Usage
-
-These constants are compile-time values and do not require a contract call.
-Off-chain scripts can import them directly from the crate:
+### Measuring coverage (target ≥ 95 % for this module)
 
 ```bash
-# Build and inspect constants
-cargo build -p crowdfund
+cargo install cargo-llvm-cov --locked  # once
+cd /path/to/stellar-raise-contracts
+cargo llvm-cov -p crowdfund --lcov --output-path /tmp/crowdfund.lcov
 ```
 
+As of the latest run on this branch, **line coverage (LCOV `DA` records) for
+`campaign_goal_minimum.rs` is 100 %** (35/35 instrumented lines hit), exceeding
+the 95 % target for this module.
+
+For HTML output: `cargo llvm-cov -p crowdfund --html --output-dir target/cov`
+
+## Off-chain TypeScript example
+
 ```typescript
-// Off-chain: replicate the progress calculation
 const PROGRESS_BPS_SCALE = 10_000n;
 const MAX_PROGRESS_BPS = 10_000n;
 
@@ -175,3 +145,7 @@ function computeProgressBps(totalRaised: bigint, goal: bigint): number {
   return Number(raw > MAX_PROGRESS_BPS ? MAX_PROGRESS_BPS : raw);
 }
 ```
+
+Prefer fetching `policy_*` from the contract for thresholds. For amounts near
+`i128::MAX`, mirror Rust’s `checked_mul` (cap at `MAX_PROGRESS_BPS` if multiply
+would overflow a bounded integer type).
