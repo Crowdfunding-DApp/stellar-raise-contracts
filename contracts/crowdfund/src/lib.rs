@@ -18,6 +18,11 @@ mod test;
 #[cfg(test)]
 mod refund_single_token_tests;
 
+pub mod refund_single_token;
+
+#[cfg(test)]
+mod refund_single_token_test;
+
 const CONTRACT_VERSION: u32 = 3;
 #[allow(dead_code)]
 const CONTRIBUTION_COOLDOWN: u64 = 60; // 60 seconds cooldown
