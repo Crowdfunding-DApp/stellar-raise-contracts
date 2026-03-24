@@ -44,6 +44,12 @@
 //! 6. `compute_progress_bps` uses `checked_mul` so pathological `total_raised`
 //!    values cannot overflow `i128` during the progress calculation; on overflow
 //!    the result is capped at [`MAX_PROGRESS_BPS`] (treat as “goal exceeded”).
+//! 7. **`min_contribution` vs `goal`** — The contract does **not** require
+//!    `min_contribution <= goal`.  Requiring it would forbid legitimate
+//!    “high floor / small headline goal” campaigns.  Use
+//!    [`min_contribution_exceeds_goal`] off-chain to surface warnings when the
+//!    minimum ticket exceeds the goal (first qualifying transfer may
+//!    over-fund in one transaction).
 //!
 //! ## Validation flow
 //!
@@ -164,6 +170,35 @@ pub fn validate_platform_fee(fee_bps: u32) -> Result<(), &'static str> {
         return Err("platform fee cannot exceed MAX_PLATFORM_FEE_BPS (100%)");
     }
     Ok(())
+}
+
+/// Returns `true` when `min_contribution` is strictly greater than `goal`.
+///
+/// @notice This is **not** a validation error for `initialize` — the contract
+///         deliberately allows `min_contribution > goal` (e.g. a small nominal
+///         goal with a high minimum ticket).  Integrations should use this to
+///         drive **warnings** in UIs so users understand the first qualifying
+///         contribution may exceed the displayed goal.
+///
+/// @param  min_contribution  Campaign minimum contribution (already ≥ [`MIN_CONTRIBUTION_AMOUNT`] if validated).
+/// @param  goal              Campaign goal (already ≥ [`MIN_GOAL_AMOUNT`] if validated).
+/// @return                  `true` if the minimum ticket is larger than the goal.
+///
+/// @dev    Pure function for off-chain tools and tests; **no on-chain enforcement**
+///         was added to avoid breaking flexible campaign economics.
+#[inline]
+pub fn min_contribution_exceeds_goal(min_contribution: i128, goal: i128) -> bool {
+    min_contribution > goal
+}
+
+/// Returns `true` if a single contribution of `min_contribution` meets or exceeds `goal`.
+///
+/// @notice When `true`, the campaign can reach “goal met” in one minimum-sized
+///         contribution (assuming no prior `total_raised`).  Useful for UX
+///         and security reviews of “single-tx funding” scenarios.
+#[inline]
+pub fn single_minimum_contribution_meets_goal(min_contribution: i128, goal: i128) -> bool {
+    min_contribution >= goal
 }
 
 /// Computes campaign progress in basis points, capped at [`MAX_PROGRESS_BPS`].

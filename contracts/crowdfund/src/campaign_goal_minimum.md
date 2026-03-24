@@ -95,6 +95,23 @@ on-chain enforcement.
    expired relative to practical submission latency.
 6. **`compute_progress_bps` overflow** — `checked_mul` avoids silent `i128`
    wrap on extreme inputs; capped result is safe for downstream percentage UI.
+7. **`min_contribution` vs `goal`** — The contract does **not** require
+   `min_contribution <= goal`. Requiring it would disallow valid campaigns
+   where the minimum ticket is larger than the headline goal (e.g. whale-only
+   raises). **Potential confusion:** when `min_contribution > goal`, the first
+   qualifying contribution can exceed the goal in one transaction — use
+   [`min_contribution_exceeds_goal`](./campaign_goal_minimum.rs) and
+   [`single_minimum_contribution_meets_goal`](./campaign_goal_minimum.rs) in
+   wallets and indexers to warn users and auditors.
+
+## Security investigation notes
+
+| Question | Finding |
+|----------|---------|
+| Can `initialize` skip threshold checks? | No — `validate_goal`, `validate_min_contribution`, `validate_deadline`, and fee validation run before storage writes. |
+| Is `min_contribution > goal` an exploit? | No — economically unusual but intentional flexibility; document and surface in UI via helpers above. |
+| Progress / fee `i128` overflow? | Progress uses `checked_mul`; token paths use `checked_add` / `checked_mul` in `lib.rs`. |
+| Deadline `u64` wrap? | `validate_deadline` uses `now.saturating_add(MIN_DEADLINE_OFFSET)`. |
 
 ## Integration with `lib.rs`
 
@@ -114,6 +131,8 @@ See [`campaign_goal_minimum.test.rs`](./campaign_goal_minimum.test.rs) (wired as
 - All validation helpers: boundaries, negatives, `u64` / `i128` edge cases
 - `compute_progress_bps`: fractional progress, cap when over goal, zero/negative
   goal, **overflow on multiply**
+- `min_contribution_exceeds_goal` / `single_minimum_contribution_meets_goal`:
+  boundary cases for UX and security review
 
 Integration tests in `test.rs` assert `initialize` panics on invalid goal, min
 contribution, or deadline, and that policy view functions match module
@@ -127,9 +146,8 @@ cd /path/to/stellar-raise-contracts
 cargo llvm-cov -p crowdfund --lcov --output-path /tmp/crowdfund.lcov
 ```
 
-As of the latest run on this branch, **line coverage (LCOV `DA` records) for
-`campaign_goal_minimum.rs` is 100 %** (35/35 instrumented lines hit), exceeding
-the 95 % target for this module.
+Latest LCOV run: **`campaign_goal_minimum.rs` — 100 %** (41/41 DA lines), above
+the 95 % target.
 
 For HTML output: `cargo llvm-cov -p crowdfund --html --output-dir target/cov`
 
