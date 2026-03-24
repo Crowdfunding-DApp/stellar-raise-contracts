@@ -56,3 +56,4 @@ yarn-error.log*
 .kiro/
 
 contracts/*/test_snapshots/
+node_modules
