@@ -59,6 +59,7 @@ fn validate_goal_rejects_zero() {
         err.contains("MIN_GOAL_AMOUNT"),
         "error should mention MIN_GOAL_AMOUNT: {err}"
     );
+    assert!(err.contains("MIN_GOAL_AMOUNT"), "error should mention MIN_GOAL_AMOUNT: {err}");
 }
 
 #[test]

@@ -75,6 +75,9 @@ pub mod soroban_sdk_minor;
 
 #[cfg(test)]
 mod auth_tests;
+pub mod campaign_goal_minimum;
+#[cfg(test)]
+mod campaign_goal_minimum_test;
 pub mod contribute_error_handling;
 #[cfg(test)]
 mod contribute_error_handling_tests;
