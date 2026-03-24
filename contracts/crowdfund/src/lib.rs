@@ -572,6 +572,10 @@ pub struct CampaignInfo {
     InvalidToken = 11,
     /// Returned by `contribute` when `amount` is negative.
     NegativeAmount = 11,
+    /// Returned when the campaign goal is below the minimum allowed threshold.
+    GoalTooLow = 8,
+    /// Returned when the contribution amount is below the campaign minimum.
+    AmountTooLow = 9,
 }
 
 /// Interface for an external NFT contract used to mint contributor rewards.
@@ -1419,7 +1423,7 @@ impl CrowdfundContract {
             .get(&DataKey::MinContribution)
             .unwrap();
         if amount < min_contribution {
-            panic!("amount below minimum");
+            return Err(ContractError::AmountTooLow);
         }
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();

@@ -39,8 +39,16 @@
 //! All previously untyped panics in `contribute()` are now returned as typed
 //! `ContractError` variants, enabling scripts and CI/CD pipelines to handle
 //! errors programmatically.
+//! # contribute_error_handling
 //!
-//! # Error taxonomy for `contribute()`
+//! @title   ContributeErrorHandling — Centralized error codes and helpers for
+//!          the `contribute()` and `pledge()` entry points.
+//!
+//! @notice  All error conditions that can arise during a contribution are
+//!          represented as typed `ContractError` variants.  This module
+//!          re-exports their numeric codes and provides off-chain helpers so
+//!          scripts can map a raw error code to a human-readable description
+//!          without embedding magic numbers.
 //!
 //! | Code | Variant              | Trigger                                          |
 //! |------|----------------------|--------------------------------------------------|
@@ -69,8 +77,13 @@
 //! |  9   | `AmountTooLow`   | `amount < min_contribution`                      |
 //! | 10   | `ZeroAmount`     | `amount == 0`                                    |
 //! | 11   | `NegativeAmount`     | `amount < 0`                                     |
+//! @dev     ## Error taxonomy for `contribute()`
 //!
-//! # Security assumptions
+//!          | Code | Variant         | Trigger                                        |
+//!          |------|-----------------|------------------------------------------------|
+//!          |  2   | `CampaignEnded` | `ledger.timestamp > deadline`                  |
+//!          |  6   | `Overflow`      | `checked_add` would wrap on contribution totals|
+//!          |  9   | `AmountTooLow`  | `amount < min_contribution`                    |
 //!
 //! - `contributor.require_auth()` is called before any state mutation.
 //! - Negative amounts are rejected before zero/minimum checks to prevent
@@ -88,6 +101,21 @@
 //!   wrapping silently.
 //! - The deadline check uses strict `>`, so a contribution at exactly the
 //!   deadline timestamp is accepted — scripts should account for this boundary.
+//! @dev     ## Security assumptions
+//!
+//!          - `contributor.require_auth()` is called before any state mutation;
+//!            unauthenticated callers are rejected at the host level.
+//!          - Token transfer happens before storage writes; if the transfer
+//!            fails the transaction rolls back atomically — no partial state.
+//!          - Overflow is caught with `checked_add` on both the per-contributor
+//!            total and `total_raised`, returning `ContractError::Overflow`
+//!            rather than wrapping silently.
+//!          - The deadline check uses strict `>`, so a contribution at exactly
+//!            the deadline timestamp is accepted.  Scripts should account for
+//!            this boundary when computing whether a campaign is still open.
+//!          - `AmountTooLow` is now a typed error (code 9), replacing the
+//!            previous `panic!("amount below minimum")`.  Scripts can
+//!            distinguish it from host-level panics.
 
 /// Numeric error codes returned by the contract host for `contribute()`.
 ///
@@ -134,6 +162,8 @@ pub mod error_codes {
     pub const AMOUNT_TOO_LOW: u32 = 9;
     /// The contribution amount is zero.
     pub const ZERO_AMOUNT: u32 = 10;
+    /// The contribution amount is below the campaign's minimum.
+    pub const AMOUNT_TOO_LOW: u32 = 9;
 }
 
 /// Returns a human-readable description for a `contribute()` error code.
@@ -144,6 +174,11 @@ pub mod error_codes {
 /// assert_eq!(describe_error(error_codes::CAMPAIGN_ENDED), "Campaign has ended");
 /// assert_eq!(describe_error(error_codes::AMOUNT_TOO_LOW), "Amount is below the campaign minimum");
 /// ```
+/// @param  code  The `ContractError` repr value (e.g. from `e as u32`).
+/// @return       A static string suitable for logging or user-facing messages.
+///
+/// @dev    Off-chain scripts should use this instead of hardcoding strings so
+///         that a future code change only requires updating this one function.
 pub fn describe_error(code: u32) -> &'static str {
     match code {
         error_codes::CAMPAIGN_ENDED => "Campaign has ended",
@@ -155,6 +190,7 @@ pub fn describe_error(code: u32) -> &'static str {
         error_codes::AMOUNT_TOO_LOW => "Amount is below the campaign minimum",
         error_codes::ZERO_AMOUNT => "Contribution amount must be greater than zero",
         error_codes::NEGATIVE_AMOUNT => "Contribution amount must not be negative",
+        error_codes::AMOUNT_TOO_LOW => "Contribution amount is below the campaign minimum",
         _ => "Unknown error",
     }
 }
@@ -212,6 +248,9 @@ pub fn log_contribute_error(env: &soroban_sdk::Env, error: crate::ContractError)
 ///
 /// - `CampaignEnded` and `CampaignNotActive` are permanent for this campaign.
 /// - All other `contribute()` errors require the caller to fix their input.
+/// @param  code  The `ContractError` repr value.
+/// @return       `false` for all known `contribute()` errors — none can be
+///               resolved by retrying the same call without a state change.
 pub fn is_retryable(_code: u32) -> bool {
     false
 /// - `AmountTooLow` and `ZeroAmount` are retryable — the caller can submit a
