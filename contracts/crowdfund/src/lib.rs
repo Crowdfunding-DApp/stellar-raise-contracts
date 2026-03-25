@@ -428,9 +428,23 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If the caller is not the admin.
+    /// * If `new_wasm_hash` is all-zero bytes (null hash guard).
     pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
+
+        // Guard: reject a zeroed hash — it indicates a missing or unset value.
+        let zero_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+        if new_wasm_hash == zero_hash {
+            panic!("upgrade: wasm hash must not be zero");
+        }
+
+        // Emit an audit event before applying the upgrade so indexers and
+        // monitoring tools can detect and log every admin-triggered upgrade.
+        env.events().publish(
+            (Symbol::new(&env, "admin"), Symbol::new(&env, "upgrade_initiated")),
+            (admin.clone(), new_wasm_hash.clone()),
+        );
 
         env.deployer().update_current_contract_wasm(new_wasm_hash);
     }
