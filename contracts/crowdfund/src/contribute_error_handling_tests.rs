@@ -513,6 +513,53 @@ fn error_code_constants_match_enum_reprs() {
 }
 
 // ── describe_error helpers ────────────────────────────────────────────────────
+// ── NegativeAmount (typed — new guard) ───────────────────────────────────────
+
+#[test]
+fn contribute_negative_amount_returns_typed_error() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let result = client.try_contribute(&contributor, &-1);
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::NegativeAmount);
+}
+
+#[test]
+fn contribute_large_negative_amount_returns_typed_error() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let result = client.try_contribute(&contributor, &i128::MIN);
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::NegativeAmount);
+}
+
+// ── error_codes: NegativeAmount ───────────────────────────────────────────────
+
+#[test]
+fn negative_amount_error_code_is_correct() {
+    assert_eq!(
+        contribute_error_handling::error_codes::NEGATIVE_AMOUNT,
+        11
+    );
+    assert_eq!(ContractError::NegativeAmount as u32, 11);
+}
+
+#[test]
+fn describe_error_negative_amount() {
+    assert_eq!(
+        contribute_error_handling::describe_error(
+            contribute_error_handling::error_codes::NEGATIVE_AMOUNT
+        ),
+        "Contribution amount must not be negative"
+    );
+}
+
+#[test]
+fn is_retryable_returns_false_for_negative_amount() {
+    assert!(!contribute_error_handling::is_retryable(
+        contribute_error_handling::error_codes::NEGATIVE_AMOUNT
+    ));
+}
+
+
 
 #[test]
 fn describe_error_campaign_ended() {
