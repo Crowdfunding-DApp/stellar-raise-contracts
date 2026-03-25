@@ -1035,6 +1035,74 @@ pub fn validate_bonus_goal_description(s: &String) -> Result<(), StateSizeError>
 }
 
 /// Validate combined metadata length does not exceed [`MAX_METADATA_TOTAL_LENGTH`].
+// ── Per-field string length limits ───────────────────────────────────────────
+
+/// Maximum byte length for a campaign title.
+pub const MAX_TITLE_LENGTH: u32 = 100;
+
+/// Maximum byte length for a campaign description.
+pub const MAX_DESCRIPTION_LENGTH: u32 = 512;
+
+/// Maximum byte length for social links.
+pub const MAX_SOCIAL_LINKS_LENGTH: u32 = 256;
+
+/// Maximum byte length for a bonus-goal description.
+pub const MAX_BONUS_GOAL_DESCRIPTION_LENGTH: u32 = 256;
+
+/// Maximum byte length for a roadmap item description.
+pub const MAX_ROADMAP_DESCRIPTION_LENGTH: u32 = 256;
+
+/// Maximum total byte length of all metadata fields combined.
+pub const MAX_METADATA_TOTAL_LENGTH: u32 = 768;
+
+/// Alias for `MAX_CONTRIBUTORS` used in pledger-capacity checks.
+pub const MAX_PLEDGERS: u32 = MAX_CONTRIBUTORS;
+
+// ── Per-field validators ──────────────────────────────────────────────────────
+
+/// Validate that a title string is within [`MAX_TITLE_LENGTH`].
+pub fn validate_title(s: &String) -> Result<(), StateSizeError> {
+    if s.len() > MAX_TITLE_LENGTH {
+        return Err(StateSizeError::StringTooLong);
+    }
+    Ok(())
+}
+
+/// Validate that a description string is within [`MAX_DESCRIPTION_LENGTH`].
+pub fn validate_description(s: &String) -> Result<(), StateSizeError> {
+    if s.len() > MAX_DESCRIPTION_LENGTH {
+        return Err(StateSizeError::StringTooLong);
+    }
+    Ok(())
+}
+
+/// Validate that a social-links string is within [`MAX_SOCIAL_LINKS_LENGTH`].
+pub fn validate_social_links(s: &String) -> Result<(), StateSizeError> {
+    if s.len() > MAX_SOCIAL_LINKS_LENGTH {
+        return Err(StateSizeError::StringTooLong);
+    }
+    Ok(())
+}
+
+/// Validate that a bonus-goal description is within [`MAX_BONUS_GOAL_DESCRIPTION_LENGTH`].
+pub fn validate_bonus_goal_description(s: &String) -> Result<(), StateSizeError> {
+    if s.len() > MAX_BONUS_GOAL_DESCRIPTION_LENGTH {
+        return Err(StateSizeError::StringTooLong);
+    }
+    Ok(())
+}
+
+/// Validate that a roadmap item description is within [`MAX_ROADMAP_DESCRIPTION_LENGTH`].
+pub fn validate_roadmap_description(s: &String) -> Result<(), StateSizeError> {
+    if s.len() > MAX_ROADMAP_DESCRIPTION_LENGTH {
+        return Err(StateSizeError::StringTooLong);
+    }
+    Ok(())
+}
+
+/// Validate that the combined metadata length is within [`MAX_METADATA_TOTAL_LENGTH`].
+///
+/// Uses saturating addition to prevent overflow on the sum.
 pub fn validate_metadata_total_length(
     title_len: u32,
     description_len: u32,
@@ -1060,6 +1128,11 @@ pub fn validate_contributor_capacity(current_len: u32) -> Result<(), StateSizeEr
 #[inline]
 pub fn validate_contributor_capacity(capacity: u32) -> Result<(), StateSizeError> {
     if capacity >= MAX_CONTRIBUTORS {
+// ── Collection capacity validators ───────────────────────────────────────────
+
+/// Validate that `current_len` is below [`MAX_CONTRIBUTORS`].
+pub fn validate_contributor_capacity(current_len: u32) -> Result<(), StateSizeError> {
+    if current_len >= MAX_CONTRIBUTORS {
         return Err(StateSizeError::ContributorLimitExceeded);
     }
     Ok(())
@@ -1074,6 +1147,9 @@ pub fn validate_pledger_capacity(current_len: u32) -> Result<(), StateSizeError>
 #[inline]
 pub fn validate_pledger_capacity(capacity: u32) -> Result<(), StateSizeError> {
     if capacity >= MAX_PLEDGERS {
+/// Validate that `current_len` is below [`MAX_PLEDGERS`].
+pub fn validate_pledger_capacity(current_len: u32) -> Result<(), StateSizeError> {
+    if current_len >= MAX_PLEDGERS {
         return Err(StateSizeError::ContributorLimitExceeded);
     }
     Ok(())
@@ -1088,6 +1164,9 @@ pub fn validate_roadmap_capacity(current_len: u32) -> Result<(), StateSizeError>
 #[inline]
 pub fn validate_roadmap_capacity(capacity: u32) -> Result<(), StateSizeError> {
     if capacity >= MAX_ROADMAP_ITEMS {
+/// Validate that `current_len` is below [`MAX_ROADMAP_ITEMS`].
+pub fn validate_roadmap_capacity(current_len: u32) -> Result<(), StateSizeError> {
+    if current_len >= MAX_ROADMAP_ITEMS {
         return Err(StateSizeError::RoadmapLimitExceeded);
     }
     Ok(())
@@ -1096,6 +1175,7 @@ pub fn validate_roadmap_capacity(capacity: u32) -> Result<(), StateSizeError> {
 /// Validate that the stretch-goals list has not reached capacity.
 ///
 /// @param current_len Current length of the stretch-goals list.
+/// Validate that `current_len` is below [`MAX_STRETCH_GOALS`].
 pub fn validate_stretch_goal_capacity(current_len: u32) -> Result<(), StateSizeError> {
     if current_len >= MAX_STRETCH_GOALS {
         return Err(StateSizeError::StretchGoalLimitExceeded);
@@ -1198,3 +1278,4 @@ pub fn validate_contributor_capacity(len: u32) -> bool { len < MAX_CONTRIBUTORS 
 pub fn validate_pledger_capacity(len: u32) -> bool { len < MAX_CONTRIBUTORS }
 pub fn validate_roadmap_capacity(len: u32) -> bool { len < 20 }
 pub fn validate_stretch_goal_capacity(len: u32) -> bool { len < 10 }
+}

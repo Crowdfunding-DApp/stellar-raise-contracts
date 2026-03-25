@@ -20,6 +20,10 @@ mod refund_single_token;
 
 // --- Modules ---
 pub mod cargo_toml_rust;
+pub mod withdraw_event_emission;
+#[cfg(test)]
+mod withdraw_event_emission_test;
+
 pub mod contract_state_size;
 #[cfg(test)]
 #[path = "contract_state_size.test.rs"]
@@ -1853,8 +1857,7 @@ impl CrowdfundContract {
             };
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
-            env.events()
-                .publish(("campaign", "fee_transferred"), (&config.address, fee));
+            withdraw_event_emission::emit_fee_transferred(&env, &config.address, fee);
             total.checked_sub(fee).expect("creator payout underflow")
             total - fee
         } else {
@@ -1966,8 +1969,7 @@ impl CrowdfundContract {
             }
             // Single summary event instead of one event per contributor.
             if minted > 0 {
-                env.events()
-                    .publish(("campaign", "nft_batch_minted"), minted);
+                withdraw_event_emission::emit_nft_batch_minted(&env, minted);
             }
             minted
         } else {
@@ -1975,10 +1977,7 @@ impl CrowdfundContract {
         };
 
         // Single withdrawal event carrying payout, fee info, and mint count.
-        env.events().publish(
-            ("campaign", "withdrawn"),
-            (creator.clone(), creator_payout, nft_minted_count),
-        );
+        withdraw_event_emission::emit_withdrawn(&env, &creator, creator_payout, nft_minted_count);
 
         Ok(())
     }
