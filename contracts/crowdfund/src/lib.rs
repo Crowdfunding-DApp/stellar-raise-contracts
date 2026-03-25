@@ -153,6 +153,10 @@ pub enum ContractError {
     NothingToRefund = 7,
     /// Returned when the campaign goal is below the minimum allowed threshold.
     GoalTooLow = 8,
+    /// Returned when the contribution amount is below the campaign minimum.
+    AmountTooLow = 9,
+    /// Returned when the contribution amount is zero.
+    ZeroAmount = 10,
 }
 
 /// Interface for an external NFT contract used to mint contributor rewards.
@@ -275,8 +279,18 @@ impl CrowdfundContract {
     ///
     /// The contributor must authorize the call. Contributions are rejected
     /// after the deadline has passed.
+    ///
+    /// # Errors
+    /// * [`ContractError::ZeroAmount`]   – `amount` is zero.
+    /// * [`ContractError::AmountTooLow`] – `amount` is below `min_contribution`.
+    /// * [`ContractError::CampaignEnded`] – current timestamp is past the deadline.
+    /// * [`ContractError::Overflow`]     – contribution would overflow `i128`.
     pub fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError> {
         contributor.require_auth();
+
+        if amount == 0 {
+            return Err(ContractError::ZeroAmount);
+        }
 
         let min_contribution: i128 = env
             .storage()
