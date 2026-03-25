@@ -24,6 +24,10 @@ use refund_single_token::{
 mod refund_single_token_test;
 
 pub mod soroban_sdk_minor;
+pub mod stellar_token_minter;
+#[cfg(test)]
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test;
 
 #[cfg(test)]
 mod auth_tests;
