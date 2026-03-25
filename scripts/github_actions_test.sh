@@ -54,6 +54,10 @@
 #   5. Smoke test initialize call includes required --admin argument.
 #   6. Smoke test WASM build is scoped to -p crowdfund.
 #   7. Smoke test uses stellar-cli, not deprecated soroban-cli.
+#   8. rust_ci.yml job has a timeout-minutes bound.
+#   9. rust_ci.yml WASM build step has a timeout-minutes bound.
+#  10. rust_ci.yml test step has a timeout-minutes bound.
+#  11. rust_ci.yml includes a job elapsed-time logging step.
 #
 # Usage:
 #   bash scripts/github_actions_test.sh
@@ -222,6 +226,39 @@ if ! grep -qE "^  frontend:" "$WORKFLOWS_DIR/rust_ci.yml"; then
   fail "rust_ci.yml is missing a 'frontend' job for UI tests"
 else
   pass "rust_ci.yml includes a 'frontend' job for UI tests"
+# ── Check 8: rust_ci.yml job has a timeout-minutes bound ──────────────────────
+
+if ! grep -qE "^\s+timeout-minutes:" "$WORKFLOWS_DIR/rust_ci.yml"; then
+  fail "rust_ci.yml job is missing 'timeout-minutes' — runaway builds can block the merge queue"
+else
+  pass "rust_ci.yml job has a timeout-minutes bound"
+fi
+
+# ── Check 9: rust_ci.yml WASM build step has a timeout-minutes bound ──────────
+
+# Confirm timeout-minutes appears before the WASM build run line.
+if ! awk '/timeout-minutes/{found=1} found && /cargo build.*wasm32/{print; found=0}' \
+    "$WORKFLOWS_DIR/rust_ci.yml" | grep -q "cargo build"; then
+  fail "rust_ci.yml WASM build step is missing a 'timeout-minutes' bound"
+else
+  pass "rust_ci.yml WASM build step has a timeout-minutes bound"
+fi
+
+# ── Check 10: rust_ci.yml test step has a timeout-minutes bound ───────────────
+
+if ! awk '/timeout-minutes/{found=1} found && /cargo test/{print; found=0}' \
+    "$WORKFLOWS_DIR/rust_ci.yml" | grep -q "cargo test"; then
+  fail "rust_ci.yml test step is missing a 'timeout-minutes' bound"
+else
+  pass "rust_ci.yml test step has a timeout-minutes bound"
+fi
+
+# ── Check 11: rust_ci.yml includes elapsed-time logging step ──────────────────
+
+if ! grep -qF "Log total job elapsed time" "$WORKFLOWS_DIR/rust_ci.yml"; then
+  fail "rust_ci.yml is missing the elapsed-time logging step"
+else
+  pass "rust_ci.yml includes elapsed-time logging step"
 fi
 
 # ── Check 9: rust_ci.yml check job has a timeout-minutes bound ────────────────
