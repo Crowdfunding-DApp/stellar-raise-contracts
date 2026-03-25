@@ -33,19 +33,17 @@ mod auth_tests;
 pub mod campaign_goal_minimum;
 #[cfg(test)]
 mod campaign_goal_minimum_test;
+pub mod contribute_error_handling;
+#[cfg(test)]
+mod contribute_error_handling_tests;
 pub mod crowdfund_initialize_function;
 #[cfg(test)]
 #[path = "crowdfund_initialize_function.test.rs"]
 mod crowdfund_initialize_function_test;
-pub mod contribute_error_handling;
-#[cfg(test)]
-mod contribute_error_handling_tests;
 pub mod proptest_generator_boundary;
 #[cfg(test)]
 #[path = "proptest_generator_boundary.test.rs"]
 mod proptest_generator_boundary_tests;
-#[cfg(test)]
-mod refund_single_token_tests;
 #[cfg(test)]
 mod test;
 

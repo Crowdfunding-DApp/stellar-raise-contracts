@@ -68,10 +68,14 @@ pub fn persist_initialize_state(
     env.storage()
         .instance()
         .set(&DataKey::BonusGoalReachedEmitted, &false);
-    env.storage().instance().set(&DataKey::Status, &Status::Active);
+    env.storage()
+        .instance()
+        .set(&DataKey::Status, &Status::Active);
 
     if let Some(config) = platform_config {
-        env.storage().instance().set(&DataKey::PlatformConfig, config);
+        env.storage()
+            .instance()
+            .set(&DataKey::PlatformConfig, config);
     }
     if let Some(bg) = bonus_goal {
         env.storage().instance().set(&DataKey::BonusGoal, &bg);
@@ -88,5 +92,7 @@ pub fn persist_initialize_state(
         .set(&DataKey::Contributors, &empty_contributors);
 
     let empty_roadmap: Vec<RoadmapItem> = Vec::new(env);
-    env.storage().instance().set(&DataKey::Roadmap, &empty_roadmap);
+    env.storage()
+        .instance()
+        .set(&DataKey::Roadmap, &empty_roadmap);
 }

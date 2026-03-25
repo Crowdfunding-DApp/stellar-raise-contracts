@@ -1,158 +1,105 @@
-# `refund_single` — Pull-Based Token Refund
+# `refund_single_token` Module
 
 ## Overview
 
-`refund_single` is the preferred refund mechanism for the crowdfund contract.
-It replaces the deprecated batch `refund()` function with a pull-based model
-where each contributor independently claims their own refund.
+`refund_single_token.rs` is the security-sensitive core behind the public
+`refund_single()` contract method. It splits the flow into three helpers:
 
-## Why pull-based?
+- `validate_refund_preconditions()`: read-only eligibility checks
+- `execute_refund_single()`: state mutation plus transfer
+- `refund_single_transfer()`: fixed-direction token transfer wrapper
 
-The old `refund()` iterated over every contributor in a single transaction.
-On a campaign with many contributors this is unsafe:
-
-- **Unbounded gas**: iteration cost grows linearly with contributor count.
-- **Denial of service**: a single bad actor could bloat the contributors list
-  to make the batch refund prohibitively expensive.
-- **Poor composability**: scripts and automation cannot easily retry partial
-  failures.
-
-`refund_single` processes exactly one contributor per call, so gas costs are
-constant and predictable regardless of campaign size.
-
-## Function Signature
+The public entrypoint in [`lib.rs`](./lib.rs) remains intentionally small:
 
 ```rust
-pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError>
-```
-
-### Arguments
-
-| Parameter     | Type      | Description                                      |
-|---------------|-----------|--------------------------------------------------|
-| `contributor` | `Address` | The address claiming the refund (must be caller) |
-
-### Return value
-
-`Ok(())` on success, or one of the errors below.
-
-### Errors
-
-| Error                          | Condition                                                    |
-|--------------------------------|--------------------------------------------------------------|
-| `ContractError::CampaignStillActive` | Deadline has not yet passed                            |
-| `ContractError::GoalReached`   | Campaign goal was met — no refunds available                 |
-| `ContractError::NothingToRefund` | Caller has no contribution on record (or already claimed)  |
-
-### Panics
-
-- `"campaign is not active"` — campaign status is `Successful` or `Cancelled`.
-
-## Security Model
-
-1. **Authentication** — `contributor.require_auth()` is called first. Only the
-   contributor themselves can trigger their own refund.
-
-2. **Checks-Effects-Interactions** — The contribution record is zeroed in
-   storage *before* the token transfer is executed. This prevents re-entrancy
-   and double-claim attacks even if the token contract calls back into the
-   crowdfund contract.
-
-3. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
-   panicking on underflow rather than silently wrapping.
-
-4. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
-   rejected. A `Refunded` campaign (set by the deprecated batch path) is
-   allowed so that any contributor not swept by the batch can still claim.
-
-## Events
-
-On success, the following event is emitted:
-
-```
-topic:  ("campaign", "refund_single")
-data:   (contributor: Address, amount: i128)
-```
-
-Off-chain indexers and scripts should listen for this event to track refund
-activity without polling storage.
-
-## Deprecation of `refund()`
-
-The batch `refund()` function is **deprecated** as of contract v3. It remains
-callable for backward compatibility but will be removed in a future upgrade.
-
-Migration checklist for scripts and frontends:
-
-- [ ] Remove any call to `refund()`.
-- [ ] For each contributor, call `refund_single(contributor)` instead.
-- [ ] Handle `NothingToRefund` gracefully (contributor already claimed or
-      was never a contributor).
-- [ ] Listen for `("campaign", "refund_single")` events instead of
-      `("campaign", "refunded")`.
-
-## CLI Usage
-
-```bash
-stellar contract invoke \
-  --id <CONTRACT_ID> \
-  --network testnet \
-  --source <CONTRIBUTOR_SECRET_KEY> \
-  -- refund_single \
-  --contributor <CONTRIBUTOR_ADDRESS>
-```
-
-## Script Example (TypeScript / Stellar SDK)
-
-```typescript
-import { Contract, SorobanRpc, TransactionBuilder, Networks } from "@stellar/stellar-sdk";
-
-async function claimRefund(
-  contractId: string,
-  contributorKeypair: Keypair,
-  server: SorobanRpc.Server
-) {
-  const account = await server.getAccount(contributorKeypair.publicKey());
-  const contract = new Contract(contractId);
-
-  const tx = new TransactionBuilder(account, { fee: "100", networkPassphrase: Networks.TESTNET })
-    .addOperation(
-      contract.call("refund_single", contributorKeypair.publicKey())
-    )
-    .setTimeout(30)
-    .build();
-
-  const prepared = await server.prepareTransaction(tx);
-  prepared.sign(contributorKeypair);
-  const result = await server.sendTransaction(prepared);
-  return result;
+pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
+    contributor.require_auth();
+    let amount = validate_refund_preconditions(&env, &contributor)?;
+    execute_refund_single(&env, &contributor, amount)
 }
 ```
 
-## Storage Layout
+## Why this split exists
 
-| Key                          | Storage    | Type    | Description                          |
-|------------------------------|------------|---------|--------------------------------------|
-| `DataKey::Contribution(addr)`| Persistent | `i128`  | Per-contributor balance; zeroed on claim |
-| `DataKey::TotalRaised`       | Instance   | `i128`  | Global total; decremented on each claim  |
+Separating validation from execution makes the critical refund path easier to
+reason about and easier to test:
 
-## Test Coverage
+- preconditions can be exercised without mutating storage
+- arithmetic can be validated before any effects are committed
+- the token transfer direction is centralized in one helper
 
-See [`refund_single_token_tests.rs`](./refund_single_token_tests.rs) for the
-full test suite. Tests cover:
+## Refund lifecycle
 
-- Basic single-contributor refund
-- Multi-contributor independent claims
-- Incremental `total_raised` accounting
-- Accumulated contributions (multiple `contribute` calls)
-- Double-claim prevention (`NothingToRefund`)
-- Zero-contribution guard
-- Deadline boundary (at deadline vs. past deadline)
-- Goal-reached guard (exact and exceeded)
-- Campaign status guards (`Successful`, `Cancelled`)
-- Auth enforcement
-- Interaction with deprecated batch `refund()`
-- Platform fee isolation (fee does not affect refund amount)
-- Contribution record zeroed after claim
-- Partial claims (other contributors unaffected)
-- Minimum contribution boundary
+1. The contributor authenticates through `refund_single()`.
+2. `validate_refund_preconditions()` checks:
+   - campaign is not `Successful` or `Cancelled`
+   - deadline has passed
+   - funding goal was not reached
+   - contributor has a non-zero recorded balance
+3. `execute_refund_single()`:
+   - rejects `amount > total_raised` and then computes `new_total_raised`
+   - zeroes the contributor record
+   - stores the reduced `total_raised`
+   - transfers tokens from contract to contributor
+   - emits `("campaign", "refund_single")`
+
+## Validated security assumptions
+
+The following assumptions are explicitly covered by
+[`refund_single_token.test.rs`](./refund_single_token.test.rs):
+
+| Assumption | Enforcement | Representative test |
+|------------|-------------|---------------------|
+| Only the contributor can claim | `contributor.require_auth()` in the public entrypoint | `test_refund_single_requires_contributor_auth` |
+| Refunds are unavailable while active | `timestamp <= deadline` returns `CampaignStillActive` | `test_validate_before_deadline_returns_campaign_still_active` |
+| Refunds are unavailable after success | `total_raised >= goal` returns `GoalReached` | `test_validate_goal_met_returns_goal_reached` |
+| No double-claim | contribution storage is zeroed before transfer | `test_refund_single_double_claim_returns_nothing_to_refund` |
+| No partial mutation on arithmetic failure | `amount > total_raised` is rejected before writes | `test_execute_overflow_preserves_state_and_balance` |
+| Contributor isolation | only the targeted balance and `total_raised` change | `test_execute_transfers_tokens_and_updates_state` |
+| Off-chain observability | one refund event per successful claim | `test_execute_emits_refund_event_once` |
+
+## Runtime assumptions
+
+This module still relies on normal Soroban call semantics:
+
+- if the downstream token transfer fails, the enclosing invocation reverts
+- the token configured at initialization is a trustworthy Stellar asset contract
+
+Those are environment-level assumptions rather than logic inside this module.
+
+## Error behavior
+
+| Outcome | Meaning |
+|---------|---------|
+| `CampaignStillActive` | deadline has not passed yet |
+| `GoalReached` | campaign succeeded, so refunds are not allowed |
+| `NothingToRefund` | no stored contribution remains for that contributor |
+| `Overflow` | internal accounting is inconsistent with the contribution amount |
+
+`Successful` and `Cancelled` status states intentionally panic with
+`"campaign is not active"` to match the broader contract behavior.
+
+## Event
+
+Successful refunds emit:
+
+```text
+topics: ("campaign", "refund_single")
+data:   (contributor: Address, amount: i128)
+```
+
+Indexers should prefer this event over storage polling.
+
+## Storage touched
+
+| Key | Storage class | Behavior |
+|-----|---------------|----------|
+| `DataKey::Contribution(addr)` | persistent | set to `0` after a successful claim |
+| `DataKey::TotalRaised` | instance | decremented by the claimed amount |
+| `DataKey::Token` | instance | read to construct the transfer client |
+
+## Relationship to deprecated `refund()`
+
+The batch `refund()` method remains for backward compatibility, but
+`refund_single()` is the preferred path because it avoids unbounded iteration
+across the contributor list.

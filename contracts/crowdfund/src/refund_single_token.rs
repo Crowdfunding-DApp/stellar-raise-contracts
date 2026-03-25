@@ -1,43 +1,38 @@
-//! # `refund_single` Token Transfer Logic
+//! Pull-based refund helpers for a single contributor claim.
 //!
-//! This module centralises every piece of logic needed to execute a single
-//! pull-based contributor refund:
+//! This module keeps the public `refund_single()` entrypoint in `lib.rs` small
+//! and pushes the safety-sensitive logic into focused helpers:
 //!
-//! - **`validate_refund_preconditions`** — pure guard that checks campaign
-//!   status, deadline, goal, and contribution balance before any state change.
-//! - **`execute_refund_single`** — atomic CEI (Checks-Effects-Interactions)
-//!   execution: zero storage first, then transfer, then emit event.
-//! - **`refund_single_transfer`** — thin wrapper around `token::Client::transfer`
-//!   that fixes the direction (contract → contributor) to prevent parameter-order
-//!   typos at call sites.
+//! - `validate_refund_preconditions()` performs all read-only checks and returns
+//!   the exact amount owed to the contributor.
+//! - `execute_refund_single()` applies the refund using a CEI-style flow:
+//!   pre-compute arithmetic, persist effects, then call the token contract.
+//! - `refund_single_transfer()` locks the token transfer direction to
+//!   `contract -> contributor`.
 //!
-//! ## Security Assumptions
+//! ## Validated security invariants
 //!
-//! 1. **Authentication** is the caller's responsibility (`contributor.require_auth()`
-//!    must be called before `execute_refund_single`).
-//! 2. **CEI order** — storage is zeroed *before* the token transfer so that a
-//!    re-entrant call from the token contract cannot double-claim.
-//! 3. **Overflow protection** — `total_raised` is decremented with `checked_sub`;
-//!    the function returns `ContractError::Overflow` rather than wrapping.
-//! 4. **Direction lock** — `refund_single_transfer` always transfers
-//!    `contract → contributor`; the direction cannot be reversed by a caller.
-
-#![allow(missing_docs)]
+//! - The public entrypoint must authenticate `contributor` before calling these
+//!   helpers.
+//! - Refund eligibility is rejected while the campaign is still active or after
+//!   the goal has been met.
+//! - Arithmetic is checked before any storage mutation so an inconsistent
+//!   `total_raised` value cannot strand a contributor or drive accounting
+//!   negative.
+//! - The contributor record is zeroed before the external token transfer.
+//! - Only the targeted contributor record and `total_raised` are mutated.
 
 use soroban_sdk::{token, Address, Env};
 
 use crate::{ContractError, DataKey, Status};
 
-// ── Transfer primitive ────────────────────────────────────────────────────────
-
-/// Transfer `amount` tokens from the contract to `contributor`.
-///
-/// @notice Direction is fixed: contract → contributor.
-/// @dev    Single call site prevents parameter-order typos.
-/// @param token_client Pre-built token client.
-/// @param contract_address The crowdfund contract's own address.
-/// @param contributor Recipient of the refund.
-/// @param amount Token amount to transfer (must be > 0).
+/// @notice Transfer refund tokens from the contract balance to the contributor.
+/// @dev Locks the transfer direction to `contract -> contributor` so call sites
+///      cannot accidentally reverse sender and recipient.
+/// @param token_client Pre-built client for the configured token contract.
+/// @param contract_address The crowdfund contract address that currently holds funds.
+/// @param contributor The contributor receiving the refund.
+/// @param amount The validated refund amount to transfer.
 pub fn refund_single_transfer(
     token_client: &token::Client,
     contract_address: &Address,
@@ -47,25 +42,15 @@ pub fn refund_single_transfer(
     token_client.transfer(contract_address, contributor, &amount);
 }
 
-// ── Precondition guard ────────────────────────────────────────────────────────
-
-/// Validate all preconditions for a `refund_single` call.
-///
-/// Returns the contribution amount owed to `contributor` on success, or the
-/// appropriate `ContractError` variant on failure.
-///
-/// @notice Does **not** mutate any state — safe to call speculatively.
-/// @param env Soroban environment.
-/// @param contributor The address requesting a refund.
-/// @return `Ok(amount)` when the refund is valid, `Err(ContractError)` otherwise.
-///
-/// # Errors
-/// * `ContractError::CampaignStillActive` — deadline has not yet passed.
-/// * `ContractError::GoalReached`         — goal was met; no refunds available.
-/// * `ContractError::NothingToRefund`     — contributor has no balance on record.
-///
-/// # Panics
-/// * `"campaign is not active"` when status is `Successful` or `Cancelled`.
+/// @notice Validate every read-only precondition for a single refund claim.
+/// @dev Returns the stored contribution amount so the caller can pass it
+///      directly into `execute_refund_single()` without re-reading storage.
+/// @param env The current Soroban environment.
+/// @param contributor The contributor requesting the refund.
+/// @return `Ok(amount)` when the refund is allowed, otherwise the precise
+///         `ContractError` explaining why it is blocked.
+/// @security This helper performs no writes and is safe to call speculatively.
+/// @security The public entrypoint must still enforce `contributor.require_auth()`.
 pub fn validate_refund_preconditions(
     env: &Env,
     contributor: &Address,
@@ -102,42 +87,44 @@ pub fn validate_refund_preconditions(
     Ok(amount)
 }
 
-// ── Atomic CEI execution ──────────────────────────────────────────────────────
-
-/// Execute a single contributor refund using the CEI pattern.
-///
-/// Caller **must** have already called `contributor.require_auth()` and
-/// `validate_refund_preconditions` (or be certain preconditions hold).
-///
-/// @notice Storage is zeroed **before** the token transfer (CEI).
-/// @param env Soroban environment.
-/// @param contributor The address to refund.
-/// @param amount The amount returned by `validate_refund_preconditions`.
-/// @return `Ok(())` on success, `Err(ContractError::Overflow)` on underflow.
+/// @notice Execute a validated single-contributor refund.
+/// @dev Applies a CEI-style flow: first validate arithmetic, then persist local
+///      effects, and only then call the token contract.
+/// @param env The current Soroban environment.
+/// @param contributor The contributor to refund.
+/// @param amount The amount returned by `validate_refund_preconditions()`.
+/// @return `Ok(())` when the refund completes, or `Err(ContractError::Overflow)`
+///         if `total_raised` is inconsistent with the refund amount.
+/// @security The caller must authenticate the contributor before invoking this helper.
+/// @security Arithmetic is checked before storage mutation so an inconsistent
+///           total cannot zero contributor state or push accounting negative.
 pub fn execute_refund_single(
     env: &Env,
     contributor: &Address,
     amount: i128,
 ) -> Result<(), ContractError> {
-    let contribution_key = DataKey::Contribution(contributor.clone());
-
-    // ── Effects (zero storage before transfer) ────────────────────────────
-    env.storage().persistent().set(&contribution_key, &0i128);
-    env.storage()
-        .persistent()
-        .extend_ttl(&contribution_key, 100, 100);
-
     let total: i128 = env
         .storage()
         .instance()
         .get(&DataKey::TotalRaised)
         .unwrap_or(0);
+    if amount > total {
+        return Err(ContractError::Overflow);
+    }
     let new_total = total.checked_sub(amount).ok_or(ContractError::Overflow)?;
+
+    let contribution_key = DataKey::Contribution(contributor.clone());
+
+    // Effects: persist state before the external token transfer.
+    env.storage().persistent().set(&contribution_key, &0i128);
+    env.storage()
+        .persistent()
+        .extend_ttl(&contribution_key, 100, 100);
     env.storage()
         .instance()
         .set(&DataKey::TotalRaised, &new_total);
 
-    // ── Interactions (transfer after state is settled) ────────────────────
+    // Interaction: transfer only after local state is settled.
     let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
     let token_client = token::Client::new(env, &token_address);
     refund_single_transfer(

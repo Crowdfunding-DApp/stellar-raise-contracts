@@ -10,7 +10,14 @@ use soroban_sdk::{
 
 use crate::{CrowdfundContract, CrowdfundContractClient};
 
-fn setup_env_simple() -> (Env, CrowdfundContractClient<'static>, Address, Address, Address, Address) {
+fn setup_env_simple() -> (
+    Env,
+    CrowdfundContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -25,7 +32,14 @@ fn setup_env_simple() -> (Env, CrowdfundContractClient<'static>, Address, Addres
     let creator = Address::generate(&env);
     token_admin_client.mint(&creator, &10_000_000);
 
-    (env, client, creator, token_address, token_admin, contract_id)
+    (
+        env,
+        client,
+        creator,
+        token_address,
+        token_admin,
+        contract_id,
+    )
 }
 
 fn mint_to(env: &Env, token_address: &Address, _admin: &Address, to: &Address, amount: i128) {
@@ -71,13 +85,19 @@ fn test_collect_pledges_success_flow() {
 
     // Before deadline: CampaignStillActive
     let early = client.try_collect_pledges();
-    assert_eq!(early.unwrap_err().unwrap(), crate::ContractError::CampaignStillActive);
+    assert_eq!(
+        early.unwrap_err().unwrap(),
+        crate::ContractError::CampaignStillActive
+    );
 
     env.ledger().set_timestamp(deadline + 1);
 
     // After deadline but goal not met (only 500k pledged, goal is 1_000_000): GoalNotReached
     let late = client.try_collect_pledges();
-    assert_eq!(late.unwrap_err().unwrap(), crate::ContractError::GoalNotReached);
+    assert_eq!(
+        late.unwrap_err().unwrap(),
+        crate::ContractError::GoalNotReached
+    );
 }
 
 /// Verify that only the registered admin can call upgrade (requires auth). This
@@ -97,7 +117,10 @@ fn test_upgrade_only_admin_auth_required() {
         invoke: &soroban_sdk::testutils::MockAuthInvoke {
             contract: &contract_id,
             fn_name: "upgrade",
-            args: soroban_sdk::vec![&env, soroban_sdk::BytesN::from_array(&env, &[0u8; 32]).into_val(&env)],
+            args: soroban_sdk::vec![
+                &env,
+                soroban_sdk::BytesN::from_array(&env, &[0u8; 32]).into_val(&env)
+            ],
             sub_invokes: &[],
         },
     }]);

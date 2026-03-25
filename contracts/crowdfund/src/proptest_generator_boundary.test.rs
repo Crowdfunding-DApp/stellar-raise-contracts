@@ -139,4 +139,3 @@ mod edge_case_tests {
         assert_eq!(boundary_log_tag(), "proptest_boundary");
     }
 }
-
