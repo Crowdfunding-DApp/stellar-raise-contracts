@@ -21,6 +21,7 @@ Thumbs.db
 
 # Kiro
 .kiro/
+.soroban/
 
 # Test artifacts
 contracts/*/test_snapshots/
