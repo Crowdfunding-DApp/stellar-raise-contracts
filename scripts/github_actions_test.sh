@@ -216,6 +216,9 @@ fi
 # @performance Frontend job runs in parallel — zero added wall-clock time.
 # =============================================================================
 if ! grep -qE -- "^  frontend:" "$WORKFLOWS_DIR/rust_ci.yml"; then
+# ── Check 8: rust_ci.yml includes a frontend test job ─────────────────────────
+
+if ! grep -qE "^  frontend:" "$WORKFLOWS_DIR/rust_ci.yml"; then
   fail "rust_ci.yml is missing a 'frontend' job for UI tests"
 else
   pass "rust_ci.yml includes a 'frontend' job for UI tests"
