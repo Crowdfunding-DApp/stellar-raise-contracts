@@ -13,6 +13,8 @@ use crate::{
     crowdfund_initialize_function::{
         describe_init_error, execute_initialize, is_init_error_retryable, log_initialize,
         validate_bonus_goal, InitParams,
+        describe_init_error, execute_initialize, is_init_error_retryable, validate_bonus_goal,
+        InitParams,
     },
     ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig,
 };

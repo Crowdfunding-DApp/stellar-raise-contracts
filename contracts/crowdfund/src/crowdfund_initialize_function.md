@@ -1,4 +1,5 @@
 # `crowdfund_initialize_function` — Optimized Initialize Logic
+# `crowdfund_initialize_function` — Refactored Initialize Logic
 
 ## Overview
 
@@ -58,6 +59,15 @@ if env.storage().instance().has(&DataKey::Creator) {
     return Err(ContractError::AlreadyInitialized);
 }
 ```
+logic from `lib.rs` into a single, auditable module.  It provides:
+
+- A named `InitParams` struct replacing nine positional arguments.
+- Pure validation helpers returning typed `ContractError` variants.
+- A deterministic, single-pass `execute_initialize()` function with a strict
+  checks → effects → storage write ordering.
+- An `initialized` event payload for off-chain indexers.
+- Helper functions (`describe_init_error`, `is_init_error_retryable`) for
+  frontend error handling.
 
 ---
 
@@ -68,6 +78,9 @@ if env.storage().instance().has(&DataKey::Creator) {
 The original `initialize()` accepted nine positional arguments. Positional
 lists are fragile: swapping two `i128` parameters compiles silently but
 produces incorrect on-chain state. A named struct makes every field explicit
+The original `initialize()` accepted nine positional arguments.  Positional
+lists are fragile: swapping two `i128` parameters compiles silently but
+produces incorrect on-chain state.  A named struct makes every field explicit
 at the call site and lets the compiler catch type mismatches.
 
 ### Typed errors instead of panics
@@ -75,6 +88,7 @@ at the call site and lets the compiler catch type mismatches.
 The original implementation panicked on invalid platform fee and bonus goal.
 Panics are opaque to the frontend — the Soroban SDK surfaces them as a generic
 host error with no numeric code. Typed `ContractError` variants let the
+host error with no numeric code.  Typed `ContractError` variants let the
 frontend display a specific message without parsing error strings.
 
 | New variant | Code | Trigger |
@@ -91,12 +105,19 @@ frontend display a specific message without parsing error strings.
 The original code interleaved validation and storage writes. If a later
 validation failed after earlier writes had already committed, the contract
 could be left in a partially-initialized state. `execute_initialize()` runs
+
+### Validate-before-write ordering
+
+The original code interleaved validation and storage writes.  If a later
+validation failed after earlier writes had already committed, the contract
+could be left in a partially-initialized state.  `execute_initialize()` runs
 all validations first, then writes atomically within the transaction.
 
 ### `initialized` event
 
 Soroban storage is not directly queryable by off-chain services without an RPC
 call per field. The `initialized` event carries all campaign parameters in a
+call per field.  The `initialized` event carries all campaign parameters in a
 single ledger entry, enabling indexers to bootstrap campaign state from the
 event stream alone.
 
@@ -119,6 +140,7 @@ The single authoritative implementation of campaign initialization.
 ### `validate_init_params(env, params) → Result<(), ContractError>`
 
 Runs all field validations in a single pass. Delegates to the helpers in
+Runs all field validations in a single pass.  Delegates to the helpers in
 `campaign_goal_minimum` for goal, min_contribution, deadline, and platform fee,
 and to `validate_bonus_goal` for the bonus goal ordering constraint.
 
@@ -143,12 +165,16 @@ length, creating a gas griefing vector.
 ### `describe_init_error(code) → &'static str`
 
 Maps a `ContractError` repr value to a human-readable string. Intended for
+### `describe_init_error(code) → &'static str`
+
+Maps a `ContractError` repr value to a human-readable string.  Intended for
 frontend error display.
 
 ### `is_init_error_retryable(code) → bool`
 
 Returns `true` for input validation errors (codes 8–12) that the caller can
 fix and retry. Returns `false` for `AlreadyInitialized` (code 1), which is
+fix and retry.  Returns `false` for `AlreadyInitialized` (code 1), which is
 permanent.
 
 ---
@@ -156,6 +182,7 @@ permanent.
 ## Frontend Interaction
 
 1. Construct the `initialize` transaction with all required parameters.
+1. Construct the `initialize` transaction with all nine parameters.
 2. On success, listen for the `("campaign", "initialized")` event to confirm
    the campaign is live and cache the emitted parameters locally.
 3. On failure, read the returned error code and call `describe_init_error(code)`
@@ -199,6 +226,7 @@ function isInitErrorRetryable(code: number): boolean {
 - `initialize()` is a one-shot function; its gas cost is O(1) regardless of
   future campaign size.
 - The `Contributors` and `Roadmap` lists are seeded as empty vectors. Their
+- The `Contributors` and `Roadmap` lists are seeded as empty vectors.  Their
   TTL is managed by `contribute()` and `add_roadmap_item()` respectively.
 - The `initialized` event payload is bounded: it contains only scalar values
   and optional scalars, never unbounded collections.
@@ -215,6 +243,11 @@ function isInitErrorRetryable(code: number): boolean {
 
 2. **Creator authentication** — `creator.require_auth()` is called before any
    storage write. The Soroban host rejects the transaction if the creator's
+   initialization sentinel.  It is the very first check so no state can be
+   written before it.
+
+2. **Creator authentication** — `creator.require_auth()` is called before any
+   storage write.  The Soroban host rejects the transaction if the creator's
    signature is absent or invalid.
 
 3. **Goal floor** — `goal >= 1` prevents zero-goal campaigns that could be
@@ -241,17 +274,22 @@ function isInitErrorRetryable(code: number): boolean {
    validated to prevent unbounded state growth that could increase storage
    costs and impact contract performance.
 
+   `env.storage().instance().set()` call.  A failed validation leaves the
+   contract in its pre-initialization state.
+
 ---
 
 ## Constraints
 
 - `initialize()` can only be called once per contract instance. The factory
+- `initialize()` can only be called once per contract instance.  The factory
   contract deploys a fresh instance per campaign.
 - The `admin` and `creator` may be the same address or different addresses.
   The contract does not enforce a relationship between them.
 - `bonus_goal_description` has no length limit enforced at the contract level.
   The frontend should enforce a reasonable display limit (e.g. 280 characters).
 - The `initialized` event is emitted after all storage writes. If the
+- The `initialized` event is emitted after all storage writes.  If the
   transaction is rolled back for any reason, the event is not persisted.
 
 ---
@@ -277,6 +315,21 @@ See [`crowdfund_initialize_function_test.rs`](./crowdfund_initialize_function_te
 **Total: 50+ tests covering 95%+ code paths**
 
 ### Run Tests
+Tests cover:
+
+- Normal execution: all fields stored, status Active, empty collections, event emitted
+- Platform config: zero fee, exact max fee, fee over max, u32::MAX fee
+- Bonus goal: stored with description, equal to goal, less than goal, one above goal, without description
+- Re-initialization guard: same params, different params (original values unchanged)
+- Goal validation: minimum (1), zero, negative, i128::MIN, i128::MAX
+- Min contribution validation: minimum (1), zero, negative
+- Deadline validation: exactly 60s, 59s (boundary), equal to now, in past, far future
+- `validate_bonus_goal` unit tests: None, greater, equal, less, zero vs one
+- `describe_init_error`: all known codes, unknown code fallback
+- `is_init_error_retryable`: AlreadyInitialized, all input errors, unknown code
+- Integration: contribute, withdraw, get_stats after initialization
+
+Run with:
 
 ```bash
 cargo test -p crowdfund crowdfund_initialize_function

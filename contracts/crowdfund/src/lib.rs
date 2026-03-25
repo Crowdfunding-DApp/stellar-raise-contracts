@@ -25,6 +25,8 @@ mod cargo_toml_rust_test;
 pub mod contract_state_size;
 #[cfg(test)]
 mod contract_state_size_test;
+pub mod crowdfund_initialize_function;
+use crowdfund_initialize_function::{execute_initialize, InitParams};
 
 pub mod refund_single_token;
 use refund_single_token::{
@@ -109,6 +111,8 @@ mod contribute_error_handling_tests;
 #[cfg(test)]
 #[path = "refund_single_token.test.rs"]
 mod refund_single_token_test;
+mod crowdfund_initialize_function_test;
+#[cfg(test)]
 mod proptest_generator_boundary;
 pub mod proptest_generator_boundary;
 #[cfg(test)]
@@ -532,6 +536,16 @@ pub struct CampaignInfo {
     AmountTooLow = 9,
     /// Returned when the contribution amount is zero.
     ZeroAmount = 10,
+    /// Returned by `initialize` when `goal < MIN_GOAL_AMOUNT`.
+    InvalidGoal = 8,
+    /// Returned by `initialize` when `min_contribution < MIN_CONTRIBUTION_AMOUNT`.
+    InvalidMinContribution = 9,
+    /// Returned by `initialize` when `deadline` is too soon.
+    DeadlineTooSoon = 10,
+    /// Returned by `initialize` when `platform_config.fee_bps > MAX_PLATFORM_FEE_BPS`.
+    InvalidPlatformFee = 11,
+    /// Returned by `initialize` when `bonus_goal <= goal`.
+    InvalidBonusGoal = 12,
 }
 
 /// Interface for an external NFT contract used to mint contributor rewards.
@@ -613,6 +627,24 @@ impl CrowdfundContract {
     /// * `min_contribution`          – The minimum contribution amount.
     /// * `auto_extension_threshold`  – Optional minimum contribution to trigger auto-extension.
     /// * If bonus goal is not greater than the primary goal.
+    /// # Arguments
+    /// * `admin`                  – Address authorized to upgrade the contract.
+    /// * `creator`                – The campaign creator's address (must authorize).
+    /// * `token`                  – The SEP-41 token contract address.
+    /// * `goal`                   – Funding goal in the token's smallest unit (>= 1).
+    /// * `deadline`               – Campaign deadline as a Unix timestamp (>= now + 60s).
+    /// * `min_contribution`       – Minimum contribution amount (>= 1).
+    /// * `platform_config`        – Optional platform fee configuration (fee_bps <= 10_000).
+    /// * `bonus_goal`             – Optional bonus goal threshold (must be > `goal`).
+    /// * `bonus_goal_description` – Optional description for the bonus goal.
+    ///
+    /// # Errors
+    /// * [`ContractError::AlreadyInitialized`]    – Contract was already initialized.
+    /// * [`ContractError::InvalidGoal`]           – `goal < 1`.
+    /// * [`ContractError::InvalidMinContribution`]– `min_contribution < 1`.
+    /// * [`ContractError::DeadlineTooSoon`]       – `deadline < now + 60`.
+    /// * [`ContractError::InvalidPlatformFee`]    – `fee_bps > 10_000`.
+    /// * [`ContractError::InvalidBonusGoal`]      – `bonus_goal <= goal`.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -818,6 +850,20 @@ impl CrowdfundContract {
         );
 
         Ok(())
+        execute_initialize(
+            &env,
+            InitParams {
+                admin,
+                creator,
+                token,
+                goal,
+                deadline,
+                min_contribution,
+                platform_config,
+                bonus_goal,
+                bonus_goal_description,
+            },
+        )
     }
 
     /// Returns the list of all contributor addresses.
