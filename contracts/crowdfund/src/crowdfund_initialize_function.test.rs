@@ -113,4 +113,3 @@ fn initialize_persists_expected_state() {
     assert_eq!(client.bonus_goal(), Some(2_000_000));
     assert_eq!(client.bonus_goal_description(), Some(desc));
 }
-
