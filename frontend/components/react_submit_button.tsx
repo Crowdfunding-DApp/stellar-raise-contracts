@@ -1,22 +1,24 @@
 import React, { useMemo, useState } from "react";
 
 /**
- * @title React Submit Button States
- * @notice Typed submit button state model with secure label handling and reliability guards.
- * @dev The component intentionally prefers safe defaults to reduce accidental double submits.
-import React from "react";
+ * @title React Submit Button Component States
+ * @notice Typed submit button with deterministic state machine, secure label handling,
+ *         double-submit prevention, and accessible ARIA semantics.
+ * @dev    Uses strict union types and a transition allowlist to prevent invalid state jumps.
+ *         Labels from untrusted sources are normalized before rendering.
+ */
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 /**
- * @title React Submit Button Component States
- * @notice Centralized submit-button state model for consistent UX and safe defaults.
- * @dev Uses strict union types and deterministic state mapping to reduce misuse.
+ * @notice All supported visual/interaction states of the submit button.
+ * @dev    Transitions between states are validated by ALLOWED_STATE_TRANSITIONS.
  */
 export type SubmitButtonState = "idle" | "submitting" | "success" | "error" | "disabled";
 
 /**
- * @title Submit Button Labels
- * @notice Optional override labels for each supported state.
- * @notice Optional custom labels for each user-visible state.
+ * @notice Optional per-state label overrides.
+ * @dev    Values are normalized (trimmed, control-chars stripped, length-capped) before use.
  */
 export interface SubmitButtonLabels {
   idle?: string;
@@ -27,8 +29,16 @@ export interface SubmitButtonLabels {
 }
 
 /**
- * @title React Submit Button Props
- * @notice Contract for state, label overrides, and interaction behavior.
+ * @notice Props accepted by the ReactSubmitButton component.
+ * @param state            Current button state from the parent.
+ * @param previousState    Previous state used for transition validation in strict mode.
+ * @param strictTransitions When true, invalid state transitions fall back to previousState.
+ * @param labels           Optional label overrides for each state.
+ * @param onClick          Async-safe click handler; blocked while submitting or disabled.
+ * @param className        Additional CSS class names.
+ * @param id               HTML id attribute.
+ * @param type             HTML button type. Defaults to "button".
+ * @param disabled         External disabled flag; merged with state-derived disabled logic.
  */
 export interface ReactSubmitButtonProps {
   state: SubmitButtonState;
@@ -36,19 +46,15 @@ export interface ReactSubmitButtonProps {
   strictTransitions?: boolean;
   labels?: SubmitButtonLabels;
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
- * @title Submit Button Props
- * @notice Defines behavior, labeling, and accessibility requirements.
- */
-export interface ReactSubmitButtonProps {
-  state: SubmitButtonState;
-  labels?: SubmitButtonLabels;
-  onClick?: () => void | Promise<void>;
   className?: string;
   id?: string;
   type?: "button" | "submit";
   disabled?: boolean;
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/** @notice Fallback labels used when no override is provided or the override is invalid. */
 const DEFAULT_LABELS: Required<SubmitButtonLabels> = {
   idle: "Submit",
   submitting: "Submitting...",
@@ -57,9 +63,17 @@ const DEFAULT_LABELS: Required<SubmitButtonLabels> = {
   disabled: "Submit Disabled",
 };
 
+/** @notice Maximum allowed label length. Labels exceeding this are truncated with an ellipsis. */
 const MAX_LABEL_LENGTH = 80;
+
+/** @notice Matches ASCII control characters (0x00–0x1F, 0x7F) that should not appear in labels. */
 const CONTROL_CHARACTER_REGEX = /[\u0000-\u001F\u007F]/g;
 
+/**
+ * @notice Allowlist of valid state transitions.
+ * @dev    Only transitions listed here are permitted when strictTransitions is enabled.
+ *         Same-state transitions are always allowed (idempotent updates).
+ */
 const ALLOWED_STATE_TRANSITIONS: Record<SubmitButtonState, SubmitButtonState[]> = {
   idle: ["submitting", "disabled"],
   submitting: ["success", "error", "disabled"],
@@ -68,127 +82,7 @@ const ALLOWED_STATE_TRANSITIONS: Record<SubmitButtonState, SubmitButtonState[]> 
   disabled: ["idle"],
 };
 
-/**
- * @title Label Normalizer
- * @notice Enforces string-only, bounded, and readable labels.
- * @dev Removes control characters and normalizes whitespace to reduce rendering abuse vectors.
- */
-export function normalizeSubmitButtonLabel(candidate: unknown, fallback: string): string {
-  if (typeof candidate !== "string") {
-    return fallback;
-  }
-
-  const withoutControlCharacters = candidate.replace(CONTROL_CHARACTER_REGEX, " ");
-  const normalized = withoutControlCharacters.replace(/\s+/g, " ").trim();
-
-  if (!normalized) {
-    return fallback;
-  }
-
-  if (normalized.length <= MAX_LABEL_LENGTH) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, MAX_LABEL_LENGTH - 3)}...`;
-}
-
-/**
- * @title Label Resolver
- * @notice Returns a safe, non-empty label for the current state.
-/**
- * @title Safe Label Resolver
- * @notice Provides a bounded, non-empty label to avoid empty UI text states.
- * @dev React escapes text content by default; this function only normalizes.
- */
-export function resolveSubmitButtonLabel(
-  state: SubmitButtonState,
-  labels?: SubmitButtonLabels,
-): string {
-  return normalizeSubmitButtonLabel(labels?.[state], DEFAULT_LABELS[state]);
-}
-
-/**
- * @title State Transition Validator
- * @notice Validates deterministic transitions between known button states.
- */
-export function isValidSubmitButtonStateTransition(
-  previousState: SubmitButtonState,
-  nextState: SubmitButtonState,
-): boolean {
-  if (previousState === nextState) {
-    return true;
-  }
-
-  return ALLOWED_STATE_TRANSITIONS[previousState].includes(nextState);
-}
-
-/**
- * @title Safe State Resolver
- * @notice Resolves final state and blocks invalid transitions when strict mode is enabled.
- */
-export function resolveSafeSubmitButtonState(
-  state: SubmitButtonState,
-  previousState?: SubmitButtonState,
-  strictTransitions = true,
-): SubmitButtonState {
-  if (!strictTransitions || !previousState) {
-    return state;
-  }
-
-  return isValidSubmitButtonStateTransition(previousState, state) ? state : previousState;
-}
-
-/**
- * @title Interaction Block Guard
- * @notice Disables interaction while submitting, disabled, or during local in-flight execution.
- */
-export function isSubmitButtonInteractionBlocked(
-  state: SubmitButtonState,
-  disabled = false,
-  isLocallySubmitting = false,
-): boolean {
-  return Boolean(disabled) || state === "disabled" || state === "submitting" || isLocallySubmitting;
-}
-
-/**
- * @title Busy State Guard
- * @notice Reflects busy accessibility semantics for submission and in-flight local execution.
- */
-export function isSubmitButtonBusy(
-  state: SubmitButtonState,
-  isLocallySubmitting = false,
-): boolean {
-  return state === "submitting" || isLocallySubmitting;
-  const candidate = labels?.[state];
-
-  if (typeof candidate !== "string") {
-    return DEFAULT_LABELS[state];
-  }
-
-  const normalized = candidate.trim();
-  if (!normalized) {
-    return DEFAULT_LABELS[state];
-  }
-
-  return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
-}
-
-/**
- * @title Disabled Guard
- * @notice Computes final disabled state from explicit disabled flag and workflow state.
- */
-export function isSubmitButtonDisabled(state: SubmitButtonState, disabled?: boolean): boolean {
-  return Boolean(disabled) || state === "disabled" || state === "submitting";
-}
-
-/**
- * @title Aria Busy Guard
- * @notice Announces loading semantics only during active submission.
- */
-export function isSubmitButtonBusy(state: SubmitButtonState): boolean {
-  return state === "submitting";
-}
-
+/** @notice Base inline styles applied to every button instance. */
 const BASE_STYLE: React.CSSProperties = {
   minHeight: "44px",
   minWidth: "120px",
@@ -202,34 +96,132 @@ const BASE_STYLE: React.CSSProperties = {
   backgroundColor: "#4f46e5",
 };
 
+/** @notice Per-state style overrides merged on top of BASE_STYLE. */
 const STATE_STYLE_MAP: Record<SubmitButtonState, React.CSSProperties> = {
   idle: { backgroundColor: "#4f46e5" },
   submitting: { backgroundColor: "#6366f1" },
   success: { backgroundColor: "#16a34a", borderColor: "#15803d" },
   error: { backgroundColor: "#dc2626", borderColor: "#b91c1c" },
-  disabled: {
-    backgroundColor: "#9ca3af",
-    borderColor: "#9ca3af",
-    cursor: "not-allowed",
-    opacity: 0.9,
-  },
   disabled: { backgroundColor: "#9ca3af", borderColor: "#9ca3af", cursor: "not-allowed", opacity: 0.9 },
 };
 
+// ── Pure helper functions (exported for unit testing) ─────────────────────────
+
 /**
- * @title React Submit Button
- * @notice Reusable submit button with secure labels and transition-aware state handling.
- * @dev `onClick` is blocked while in-flight to reduce duplicate submissions.
+ * @notice Sanitizes a candidate label value before it is rendered.
+ * @dev    Rejects non-strings, strips control characters, normalizes whitespace,
+ *         and truncates to MAX_LABEL_LENGTH. Falls back to `fallback` on any failure.
+ * @param candidate  Raw value from the labels prop (may be any type).
+ * @param fallback   Known-safe default returned when candidate is unusable.
+ * @return           A non-empty, bounded, printable string.
+ * @security         Prevents blank UI states and limits layout-abuse via oversized labels.
+ */
+export function normalizeSubmitButtonLabel(candidate: unknown, fallback: string): string {
+  if (typeof candidate !== "string") return fallback;
+
+  const cleaned = candidate.replace(CONTROL_CHARACTER_REGEX, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return fallback;
+
+  return cleaned.length <= MAX_LABEL_LENGTH
+    ? cleaned
+    : `${cleaned.slice(0, MAX_LABEL_LENGTH - 3)}...`;
+}
+
+/**
+ * @notice Returns a safe, non-empty display label for the given state.
+ * @dev    Delegates sanitization to normalizeSubmitButtonLabel; React renders the result
+ *         as a text node, so no dangerouslySetInnerHTML path is exposed.
+ * @param state   Current button state.
+ * @param labels  Optional label overrides from the consumer.
+ * @return        A printable, bounded label string.
+ */
+export function resolveSubmitButtonLabel(
+  state: SubmitButtonState,
+  labels?: SubmitButtonLabels,
+): string {
+  return normalizeSubmitButtonLabel(labels?.[state], DEFAULT_LABELS[state]);
+}
+
+/**
+ * @notice Validates whether a transition from previousState to nextState is permitted.
+ * @dev    Same-state transitions are always valid (idempotent updates).
+ * @param previousState  The state the button is currently in.
+ * @param nextState      The state the button is being asked to move to.
+ * @return               true if the transition is in the allowlist or is a no-op.
+ */
+export function isValidSubmitButtonStateTransition(
+  previousState: SubmitButtonState,
+  nextState: SubmitButtonState,
+): boolean {
+  if (previousState === nextState) return true;
+  return ALLOWED_STATE_TRANSITIONS[previousState].includes(nextState);
+}
+
+/**
+ * @notice Resolves the effective state, blocking invalid transitions in strict mode.
+ * @dev    When strictTransitions is true and the requested transition is invalid,
+ *         the component stays in previousState rather than jumping to an illegal state.
+ * @param state             Requested next state.
+ * @param previousState     Current state (used for transition validation).
+ * @param strictTransitions When false, all transitions are accepted without validation.
+ * @return                  The safe effective state to render.
+ */
+export function resolveSafeSubmitButtonState(
+  state: SubmitButtonState,
+  previousState?: SubmitButtonState,
+  strictTransitions = true,
+): SubmitButtonState {
+  if (!strictTransitions || !previousState) return state;
+  return isValidSubmitButtonStateTransition(previousState, state) ? state : previousState;
+}
+
+/**
+ * @notice Determines whether user interaction should be blocked.
+ * @dev    Interaction is blocked when the button is submitting, externally disabled,
+ *         or a local async click handler is still in-flight.
+ * @param state               Effective button state.
+ * @param disabled            External disabled prop.
+ * @param isLocallySubmitting True while the component's own click handler awaits.
+ * @return                    true if clicks should be suppressed.
+ * @security                  Prevents duplicate blockchain transactions on rapid clicks.
+ */
+export function isSubmitButtonInteractionBlocked(
+  state: SubmitButtonState,
+  disabled = false,
+  isLocallySubmitting = false,
+): boolean {
+  return Boolean(disabled) || state === "disabled" || state === "submitting" || isLocallySubmitting;
+}
+
+/**
+ * @notice Determines whether the button should signal a busy/loading state.
+ * @dev    Maps to the aria-busy attribute; true during active submission.
+ * @param state               Effective button state.
+ * @param isLocallySubmitting True while the component's own click handler awaits.
+ * @return                    true when the button is actively processing.
+ */
+export function isSubmitButtonBusy(
+  state: SubmitButtonState,
+  isLocallySubmitting = false,
+): boolean {
+  return state === "submitting" || isLocallySubmitting;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+/**
+ * @title  ReactSubmitButton
+ * @notice Reusable submit button with typed state machine, secure label rendering,
+ *         double-submit prevention, and ARIA accessibility semantics.
+ * @dev    - Resolves effective state via resolveSafeSubmitButtonState (memoized).
+ *         - Tracks local in-flight execution to block re-entry before parent state updates.
+ *         - Renders labels as React text nodes; no dangerouslySetInnerHTML is used.
+ * @security Clicks are silently ignored while submitting or disabled (double-submit guard).
  */
 const ReactSubmitButton = ({
   state,
   previousState,
   strictTransitions = true,
- * @notice Reusable submit button with typed state machine for scalable workflows.
- * @dev Avoids exposing raw HTML injection paths and enforces accessible semantics.
- */
-const ReactSubmitButton = ({
-  state,
   labels,
   onClick,
   className,
@@ -237,25 +229,35 @@ const ReactSubmitButton = ({
   type = "button",
   disabled,
 }: ReactSubmitButtonProps) => {
+  /** @dev Tracks whether the local onClick handler is still awaiting resolution. */
   const [isLocallySubmitting, setIsLocallySubmitting] = useState(false);
 
+  /**
+   * @dev Memoized to avoid recomputing on every render when state/previousState are stable.
+   *      Falls back to previousState when strictTransitions blocks an invalid jump.
+   */
   const resolvedState = useMemo(
     () => resolveSafeSubmitButtonState(state, previousState, strictTransitions),
     [state, previousState, strictTransitions],
   );
 
+  /** @dev Safe, bounded label for the current resolved state. */
   const label = resolveSubmitButtonLabel(resolvedState, labels);
-  const computedDisabled = isSubmitButtonInteractionBlocked(
-    resolvedState,
-    disabled,
-    isLocallySubmitting,
-  );
+
+  /** @dev True when clicks must be suppressed (submitting, disabled, or in-flight). */
+  const computedDisabled = isSubmitButtonInteractionBlocked(resolvedState, disabled, isLocallySubmitting);
+
+  /** @dev Drives aria-busy; true only during active submission. */
   const ariaBusy = isSubmitButtonBusy(resolvedState, isLocallySubmitting);
 
+  /**
+   * @notice Wraps the consumer's onClick to track local in-flight state.
+   * @dev    setIsLocallySubmitting(false) runs in `finally` to guarantee cleanup
+   *         even when onClick rejects, preventing a permanently blocked button.
+   * @security Guard at the top prevents re-entry while already submitting.
+   */
   const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (computedDisabled || !onClick) {
-      return;
-    }
+    if (computedDisabled || !onClick) return;
 
     setIsLocallySubmitting(true);
     try {
@@ -264,9 +266,6 @@ const ReactSubmitButton = ({
       setIsLocallySubmitting(false);
     }
   };
-  const label = resolveSubmitButtonLabel(state, labels);
-  const computedDisabled = isSubmitButtonDisabled(state, disabled);
-  const ariaBusy = isSubmitButtonBusy(state);
 
   return (
     <button
@@ -281,11 +280,6 @@ const ReactSubmitButton = ({
       style={{
         ...BASE_STYLE,
         ...STATE_STYLE_MAP[resolvedState],
-      onClick={computedDisabled ? undefined : onClick}
-      style={{
-        ...BASE_STYLE,
-        ...STATE_STYLE_MAP[state],
-        ...(computedDisabled ? { cursor: "not-allowed", opacity: 0.7 } : {}),
       }}
     >
       {label}
