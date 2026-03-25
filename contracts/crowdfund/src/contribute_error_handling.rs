@@ -34,6 +34,7 @@
 /// for use in off-chain scripts that inspect raw error codes.
 //! contribute() error handling — reviewed and hardened.
 //! contribute() error handling — deprecates old panic-based logic.
+//! contribute() error handling — typed errors replacing old panic-based logic.
 //!
 //! All previously untyped panics in `contribute()` are now returned as typed
 //! `ContractError` variants, enabling scripts and CI/CD pipelines to handle
@@ -67,10 +68,13 @@
 //! |  6   | `Overflow`       | `checked_add` would wrap on contribution totals  |
 //! |  9   | `AmountTooLow`   | `amount < min_contribution`                      |
 //! | 10   | `ZeroAmount`     | `amount == 0`                                    |
+//! | 11   | `NegativeAmount`     | `amount < 0`                                     |
 //!
 //! # Security assumptions
 //!
 //! - `contributor.require_auth()` is called before any state mutation.
+//! - Negative amounts are rejected before zero/minimum checks to prevent
+//!   token-level panics or unexpected transfer behaviour.
 //! - Token transfer happens before storage writes; failures roll back atomically.
 //! - Overflow is caught with `checked_add` on both per-contributor and global totals.
 //! - The deadline check uses strict `>`, so contributions at exactly the deadline
@@ -121,6 +125,8 @@ pub mod error_codes {
     pub const BELOW_MINIMUM: u32 = 9;
     /// Campaign status is not `Active`.
     pub const CAMPAIGN_NOT_ACTIVE: u32 = 10;
+    /// `amount` was negative.
+    pub const NEGATIVE_AMOUNT: u32 = 11;
 }
 
 /// Returns a human-readable description for a `contribute()` error code.
@@ -148,6 +154,7 @@ pub fn describe_error(code: u32) -> &'static str {
         error_codes::NEGATIVE_AMOUNT => "Contribution amount must not be negative",
         error_codes::AMOUNT_TOO_LOW => "Amount is below the campaign minimum",
         error_codes::ZERO_AMOUNT => "Contribution amount must be greater than zero",
+        error_codes::NEGATIVE_AMOUNT => "Contribution amount must not be negative",
         _ => "Unknown error",
     }
 }
@@ -200,8 +207,11 @@ pub fn log_contribute_error(env: &soroban_sdk::Env, error: crate::ContractError)
     };
     env.events().publish(("contribute_error", variant), code);
 /// Returns `true` if the error code is retryable by the caller.
+/// Returns `true` if the error is transient and the caller may retry without
+/// any state change on their part.
 ///
-/// None of the `contribute()` errors are retryable without a state change.
+/// - `CampaignEnded` and `CampaignNotActive` are permanent for this campaign.
+/// - All other `contribute()` errors require the caller to fix their input.
 pub fn is_retryable(_code: u32) -> bool {
     false
 /// - `AmountTooLow` and `ZeroAmount` are retryable — the caller can submit a
