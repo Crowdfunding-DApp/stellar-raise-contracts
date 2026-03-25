@@ -1,3 +1,4 @@
+//! Tests for contribute() error handling — typed errors replacing old panics.
 //! Tests for contribute() error handling.
 //!
 //! Covers every error path in `contribute()`:
@@ -65,6 +66,17 @@ fn contribute_happy_path() {
     assert_eq!(client.total_raised(), MIN);
 }
 
+#[test]
+fn contribute_accumulates_multiple_contributions() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    client.contribute(&contributor, &MIN);
+    client.contribute(&contributor, &MIN);
+    assert_eq!(client.contribution(&contributor), MIN * 2);
+    assert_eq!(client.total_raised(), MIN * 2);
+}
+
+// ── CampaignEnded ─────────────────────────────────────────────────────────────
 // ── AmountTooLow (code 9) ─────────────────────────────────────────────────────
 
 /// Test: amount one below minimum returns ContractError::AmountTooLow.
@@ -116,10 +128,75 @@ fn contribute_exactly_at_deadline_is_accepted() {
     assert_eq!(client.total_raised(), MIN);
 }
 
+// ── BelowMinimum (typed — replaces old panic) ─────────────────────────────────
 // ── Overflow (code 6) — constant correctness ──────────────────────────────────
 
 /// Test: Overflow error code constant matches ContractError repr.
 #[test]
+fn contribute_below_minimum_returns_typed_error() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let result = client.try_contribute(&contributor, &(MIN - 1));
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::BelowMinimum);
+}
+
+#[test]
+fn contribute_one_below_minimum_returns_below_minimum() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let result = client.try_contribute(&contributor, &1);
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::BelowMinimum);
+}
+
+// ── ZeroAmount (typed — replaces old pass-through) ────────────────────────────
+
+#[test]
+fn contribute_zero_amount_returns_typed_error() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let result = client.try_contribute(&contributor, &0);
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::ZeroAmount);
+}
+
+// ── CampaignNotActive (typed — new guard) ─────────────────────────────────────
+
+#[test]
+fn contribute_to_cancelled_campaign_returns_not_active() {
+    let (env, client, contributor, _) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    client.cancel();
+    let result = client.try_contribute(&contributor, &MIN);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignNotActive
+    );
+}
+
+#[test]
+fn contribute_to_successful_campaign_returns_not_active() {
+    let (env, client, contributor, token_addr) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    // Fund to goal
+    client.contribute(&contributor, &GOAL);
+    // Advance past deadline and withdraw
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + DEADLINE_OFFSET);
+    client.withdraw();
+    // Now try to contribute
+    let result = client.try_contribute(&contributor, &MIN);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignNotActive
+    );
+    let _ = token_addr; // suppress unused warning
+}
+
+// ── Overflow error code constant ──────────────────────────────────────────────
+
+#[test]
+fn overflow_error_code_is_correct() {
+    assert_eq!(contribute_error_handling::error_codes::OVERFLOW, 6);
+    assert_eq!(ContractError::Overflow as u32, 6);
 fn overflow_error_code_matches_contract_error_repr() {
     assert_eq!(contribute_error_handling::error_codes::OVERFLOW, 6);
     assert_eq!(ContractError::Overflow as u32, 6);
@@ -155,6 +232,37 @@ fn describe_error_overflow() {
 }
 
 #[test]
+fn describe_error_zero_amount() {
+    assert_eq!(
+        contribute_error_handling::describe_error(
+            contribute_error_handling::error_codes::ZERO_AMOUNT
+        ),
+        "Contribution amount must be greater than zero"
+    );
+}
+
+#[test]
+fn describe_error_below_minimum() {
+    assert_eq!(
+        contribute_error_handling::describe_error(
+            contribute_error_handling::error_codes::BELOW_MINIMUM
+        ),
+        "Contribution amount is below the minimum required"
+    );
+}
+
+#[test]
+fn describe_error_campaign_not_active() {
+    assert_eq!(
+        contribute_error_handling::describe_error(
+            contribute_error_handling::error_codes::CAMPAIGN_NOT_ACTIVE
+        ),
+        "Campaign is not active"
+    );
+}
+
+#[test]
+fn describe_error_unknown() {
 fn describe_error_amount_too_low() {
     assert_eq!(
         contribute_error_handling::describe_error(
@@ -171,6 +279,15 @@ fn describe_error_unknown() {
 
 #[test]
 fn is_retryable_returns_false_for_all_known_errors() {
+    for code in [
+        contribute_error_handling::error_codes::CAMPAIGN_ENDED,
+        contribute_error_handling::error_codes::OVERFLOW,
+        contribute_error_handling::error_codes::ZERO_AMOUNT,
+        contribute_error_handling::error_codes::BELOW_MINIMUM,
+        contribute_error_handling::error_codes::CAMPAIGN_NOT_ACTIVE,
+    ] {
+        assert!(!contribute_error_handling::is_retryable(code));
+    }
     assert!(!contribute_error_handling::is_retryable(
         contribute_error_handling::error_codes::CAMPAIGN_ENDED
     ));

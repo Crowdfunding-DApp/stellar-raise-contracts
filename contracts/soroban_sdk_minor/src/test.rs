@@ -14,17 +14,12 @@ fn setup() -> (Env, SorobanSdkMinorClient<'static>) {
 }
 
 // ── init ──────────────────────────────────────────────────────────────────────
-    let contract_id = env.register(SorobanSdkMinor, ());
-    let client = SorobanSdkMinorClient::new(&env, &contract_id);
 
 /// Happy path: init stores the admin and get_admin returns it.
 #[test]
 fn test_init_stores_admin() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
-    client.init(&admin);
-
-    // Test initialization
     client.init(&admin);
 
     assert_eq!(client.get_admin(), admin);
@@ -42,17 +37,12 @@ fn test_init_different_admins() {
     client.init(&admin2);
     assert_eq!(client.get_admin(), admin2);
 }
-fn test_check_auth() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let contract_id = env.register(SorobanSdkMinor, ());
-    let client = SorobanSdkMinorClient::new(&env, &contract_id);
 
 // ── check_auth ────────────────────────────────────────────────────────────────
 
 /// check_auth returns true when auth is mocked.
 #[test]
-fn test_check_auth_returns_true() {
+fn test_check_auth_returns_true_via_mock() {
     let (env, client) = setup();
     let user = Address::generate(&env);
 
