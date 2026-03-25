@@ -78,37 +78,6 @@ pub fn perform_upgrade(env: &Env, new_wasm_hash: BytesN<32>) {
 
 #![allow(unused)]
 
-use soroban_sdk::{Address, BytesN, Env};
-
-/// Events emitted by the admin upgrade mechanism.
-mod events {
-    use soroban_sdk::{Env, vec::Vec};
-
-    /// Emitted when the contract is upgraded.
-    pub fn emit_upgraded(env: &Env, admin: &Address, old_wasm_hash: &[u8; 32], new_wasm_hash: &[u8; 32]) {
-        env.events().publish(
-            ("upgrade", "admin", "new_wasm_hash"),
-            vec![env, admin.clone().into(), (*old_wasm_hash).into(), (*new_wasm_hash).into()],
-        );
-    }
-
-    /// Emitted when the admin address is changed.
-    pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address, initiator: &Address) {
-        env.events().publish(
-            ("upgrade", "admin_change", "from_to"),
-            vec![env, old_admin.clone().into(), new_admin.clone().into(), initiator.clone().into()],
-        );
-    }
-
-    /// Emitted when an upgrade is attempted by a non-admin.
-    pub fn emit_unauthorized_upgrade_attempt(env: &Env, caller: &Address, wasm_hash: &[u8; 32]) {
-        env.events().publish(
-            ("upgrade", "unauthorized_attempt", "caller"),
-            vec![env, caller.clone().into(), (*wasm_hash).into()],
-        );
-    }
-}
-
 /// Storage keys for admin upgrade mechanism.
 #[derive(Clone)]
 pub enum DataKey {
@@ -147,12 +116,11 @@ impl AdminUpgradeHelper {
     /// A valid WASM hash must not be all zeros.
     ///
     /// # Arguments
-    /// * `env` - The Soroban environment
     /// * `wasm_hash` - The WASM hash to validate
     ///
     /// # Returns
     /// * `Result<(), UpgradeError>` - Ok if valid, error otherwise
-    pub fn validate_wasm_hash(env: &Env, wasm_hash: &BytesN<32>) -> Result<(), UpgradeError> {
+    pub fn validate_wasm_hash(wasm_hash: &soroban_sdk::BytesN<32>) -> Result<(), UpgradeError> {
         // Check for zero hash (all zeros)
         let hash_array = wasm_hash.to_array();
         let is_zero = hash_array.iter().all(|&b| b == 0);
@@ -166,37 +134,34 @@ impl AdminUpgradeHelper {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use soroban_sdk::BytesN;
 
-    /// Test helper to generate a dummy WASM hash for testing.
-    pub fn generate_dummy_wasm_hash(env: &Env) -> BytesN<32> {
-        BytesN::from_array(env, &[0xAB; 32])
-    }
+    use super::AdminUpgradeHelper;
 
     /// Test that valid WASM hash passes validation.
     #[test]
     fn test_validate_wasm_hash_valid() {
-        let env = Env::default();
+        let env = soroban_sdk::Env::default();
         let valid_hash = BytesN::from_array(&env, &[0xAB; 32]);
-        assert!(AdminUpgradeHelper::validate_wasm_hash(&env, &valid_hash).is_ok());
+        assert!(AdminUpgradeHelper::validate_wasm_hash(&valid_hash).is_ok());
     }
 
     /// Test that zero WASM hash is rejected.
     #[test]
     fn test_validate_wasm_hash_zero_rejected() {
-        let env = Env::default();
+        let env = soroban_sdk::Env::default();
         let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
         assert_eq!(
-            AdminUpgradeHelper::validate_wasm_hash(&env, &zero_hash),
-            Err(UpgradeError::InvalidWasmHash)
+            AdminUpgradeHelper::validate_wasm_hash(&zero_hash),
+            Err(super::UpgradeError::InvalidWasmHash)
         );
     }
 
     /// Test that max value WASM hash is valid.
     #[test]
     fn test_max_value_wasm_hash_valid() {
-        let env = Env::default();
+        let env = soroban_sdk::Env::default();
         let max_value = BytesN::from_array(&env, &[0xFF; 32]);
-        assert!(AdminUpgradeHelper::validate_wasm_hash(&env, &max_value).is_ok());
+        assert!(AdminUpgradeHelper::validate_wasm_hash(&max_value).is_ok());
     }
 }

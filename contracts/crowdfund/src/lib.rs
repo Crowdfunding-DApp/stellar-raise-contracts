@@ -111,6 +111,7 @@ pub mod crowdfund_initialize_function;
 #[cfg(test)]
 #[path = "crowdfund_initialize_function.test.rs"]
 mod crowdfund_initialize_function_test;
+
 pub mod contribute_error_handling;
 #[cfg(test)]
 mod contribute_error_handling_tests;
@@ -770,7 +771,7 @@ impl CrowdfundContract {
         if let Some(bg_description) = bonus_goal_description {
             if let Err(err) = contract_state_size::validate_bonus_goal_description(&bg_description)
             {
-                panic!("{}", err);
+                panic!("state size limit exceeded");
             }
             env.storage()
                 .instance()
@@ -1209,7 +1210,7 @@ impl CrowdfundContract {
         if is_new_contributor {
             if let Err(err) = contract_state_size::validate_contributor_capacity(contributors.len())
             {
-                panic!("{}", err);
+                panic!("state size limit exceeded");
             }
         }
 
@@ -1424,7 +1425,7 @@ impl CrowdfundContract {
         let is_new_pledger = !pledgers.contains(&pledger);
         if is_new_pledger {
             if let Err(err) = contract_state_size::validate_pledger_capacity(pledgers.len()) {
-                panic!("{}", err);
+                panic!("state size limit exceeded");
             }
         }
 
@@ -2645,7 +2646,7 @@ impl CrowdfundContract {
             panic!("{}", err);
         }
         if let Err(err) = contract_state_size::validate_roadmap_description(&description) {
-            panic!("{}", err);
+            panic!("state size limit exceeded");
         }
 
         roadmap.push_back(RoadmapItem {
