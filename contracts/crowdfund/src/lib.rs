@@ -42,6 +42,7 @@ pub mod contribute_error_handling;
 mod contribute_error_handling_tests;
 pub mod proptest_generator_boundary;
 #[cfg(test)]
+#[path = "proptest_generator_boundary.test.rs"]
 mod proptest_generator_boundary_tests;
 #[cfg(test)]
 mod refund_single_token_tests;
