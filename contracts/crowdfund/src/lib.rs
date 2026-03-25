@@ -444,6 +444,8 @@ use soroban_sdk::contracterror;
 }
     /// Optional NFT contract used for contributor reward minting.
     NFTContract,
+    /// Decimal precision of the campaign token (e.g. 7 for XLM, 6 for USDC).
+    TokenDecimals,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -549,6 +551,8 @@ pub struct CampaignInfo {
     InvalidPlatformFee = 11,
     /// Returned by `initialize` when `bonus_goal <= goal`.
     InvalidBonusGoal = 12,
+    /// Returned by `initialize` when the token address is not a valid SEP-41 contract.
+    InvalidToken = 11,
 }
 
 /// Interface for an external NFT contract used to mint contributor rewards.
@@ -702,6 +706,11 @@ impl CrowdfundContract {
         if category.len() == 0 {
             panic!("category must not be empty");
         }
+        // Validate that `token` is a real SEP-41 contract by reading its decimals.
+        // This call will trap if the address does not implement the token interface,
+        // preventing campaigns from being initialized with arbitrary/invalid addresses.
+        let token_client = token::Client::new(&env, &token);
+        let token_decimals: u32 = token_client.decimals();
 
         creator.require_auth();
 
@@ -802,6 +811,9 @@ impl CrowdfundContract {
         }
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
         env.storage().instance().set(&DataKey::TotalRaised, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenDecimals, &token_decimals);
         env.storage()
             .instance()
             .set(&DataKey::BonusGoalReachedEmitted, &false);
@@ -3423,6 +3435,18 @@ impl CrowdfundContract {
         let total_raised: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap_or(0);
         if goal > total_raised { goal - total_raised } else { 0 }
         contributors.len()
+    /// Returns the decimal precision of the campaign token.
+    ///
+    /// All goal and contribution amounts are expressed in the token's smallest
+    /// unit (e.g. stroops for XLM, micro-USDC for USDC). Use this value to
+    /// convert raw amounts to human-readable form: `amount / 10^decimals`.
+    pub fn token_decimals(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TokenDecimals)
+            .unwrap()
+    }
+
     /// Returns the configured NFT contract address, if any.
     pub fn nft_contract(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::NFTContract)
