@@ -48,6 +48,7 @@ contract upgrade:
    ```
 3. Upload and upgrade via the admin mechanism (see
    `contracts/crowdfund/admin_upgrade_mechanism.md`).
+   `docs/admin_upgrade_mechanism.md`).
 
 > **Governance note** — If the project adopts on-chain governance, the minimum
 > threshold can be moved to contract storage (a `DataKey::MinGoalAmount` entry)

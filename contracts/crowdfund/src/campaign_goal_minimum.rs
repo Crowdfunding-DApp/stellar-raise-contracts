@@ -136,7 +136,29 @@ pub fn validate_goal_amount(
     Ok(())
 }
 
-/// Validates that `min_contribution` meets the minimum floor.
+/// Validates that `goal_amount` meets the minimum threshold, returning a typed
+/// [`crate::ContractError::GoalTooLow`] on failure.
+///
+/// @notice  On-chain enforcement entry point. Call inside `initialize()` before
+///          any state is written so a rejected goal leaves no partial storage.
+///
+/// @dev     The `_env` parameter is reserved for future governance-controlled
+///          thresholds stored in contract storage, without a breaking signature change.
+///
+/// @param  _env         The Soroban environment (reserved for future use).
+/// @param  goal_amount  The proposed campaign goal in token units.
+/// @return              `Ok(())` if `goal_amount >= MIN_GOAL_AMOUNT`,
+///                      `Err(ContractError::GoalTooLow)` otherwise.
+///
+/// ## Security rationale
+///
+/// A goal below `MIN_GOAL_AMOUNT` would:
+/// - Allow a zero-goal campaign to be immediately "successful" after any
+///   contribution, letting the creator drain funds with no real commitment.
+/// - Create "dust" campaigns that consume a ledger entry for negligible value,
+///   wasting network resources and increasing state bloat.
+/// - Undermine platform credibility by permitting economically meaningless
+///   campaigns usable for spam or griefing.
 ///
 /// ## Integer-overflow safety
 ///

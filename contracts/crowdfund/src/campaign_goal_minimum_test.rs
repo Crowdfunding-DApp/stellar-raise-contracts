@@ -274,6 +274,17 @@ fn validate_goal_amount_rejects_below_threshold_with_goal_too_low() {
 }
 
 /// Test Case 4 (Edge Case): zero goal returns Error::GoalTooLow.
+/// Test Case 3 (Failure): goal below threshold returns ContractError::GoalTooLow.
+#[test]
+fn validate_goal_amount_rejects_below_threshold_with_goal_too_low() {
+    let env = Env::default();
+    assert_eq!(
+        validate_goal_amount(&env, MIN_GOAL_AMOUNT - 1),
+        Err(ContractError::GoalTooLow)
+    );
+}
+
+/// Test Case 4 (Edge Case): zero goal returns ContractError::GoalTooLow.
 #[test]
 fn validate_goal_amount_rejects_zero() {
     let env = Env::default();
@@ -281,6 +292,7 @@ fn validate_goal_amount_rejects_zero() {
 }
 
 /// Test Case 4 (Edge Case): negative goal returns Error::GoalTooLow.
+/// Test Case 4 (Edge Case): negative goal returns ContractError::GoalTooLow.
 #[test]
 fn validate_goal_amount_rejects_negative() {
     let env = Env::default();
