@@ -15,7 +15,7 @@ use soroban_sdk::{
     token, Address, Env, String, TryFromVal,
 };
 
-use crate::{CrowdfundContract, CrowdfundContractClient, MAX_NFT_MINT_BATCH};
+use crate::{withdraw_event_emission, CrowdfundContract, CrowdfundContractClient, MAX_NFT_MINT_BATCH};
 
 // ── Minimal mock NFT contract ────────────────────────────────────────────────
 
@@ -225,4 +225,45 @@ fn test_withdraw_no_batch_event_when_no_eligible_contributors() {
         count_events_with_topic(&env, "campaign", "nft_batch_minted"),
         1
     );
+}
+
+// ── withdraw_event_emission module helpers ────────────────────────────────────
+
+#[test]
+fn is_withdraw_event_matches_all_three_topics() {
+    use withdraw_event_emission::topics;
+    assert!(withdraw_event_emission::is_withdraw_event(
+        topics::CAMPAIGN,
+        topics::FEE_TRANSFERRED
+    ));
+    assert!(withdraw_event_emission::is_withdraw_event(
+        topics::CAMPAIGN,
+        topics::NFT_BATCH_MINTED
+    ));
+    assert!(withdraw_event_emission::is_withdraw_event(
+        topics::CAMPAIGN,
+        topics::WITHDRAWN
+    ));
+}
+
+#[test]
+fn is_withdraw_event_rejects_unrelated_topics() {
+    assert!(!withdraw_event_emission::is_withdraw_event(
+        "campaign",
+        "contributed"
+    ));
+    assert!(!withdraw_event_emission::is_withdraw_event(
+        "other",
+        "withdrawn"
+    ));
+    assert!(!withdraw_event_emission::is_withdraw_event("", ""));
+}
+
+#[test]
+fn topic_constants_have_correct_values() {
+    use withdraw_event_emission::topics;
+    assert_eq!(topics::CAMPAIGN, "campaign");
+    assert_eq!(topics::FEE_TRANSFERRED, "fee_transferred");
+    assert_eq!(topics::NFT_BATCH_MINTED, "nft_batch_minted");
+    assert_eq!(topics::WITHDRAWN, "withdrawn");
 }
