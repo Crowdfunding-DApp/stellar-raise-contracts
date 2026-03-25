@@ -811,7 +811,7 @@ impl CrowdfundContract {
                 bonus_goal,
                 bonus_goal_description,
             },
-        )
+        );
 
         if env.storage().instance().has(&DataKey::Creator) {
             return Err(ContractError::AlreadyInitialized);
@@ -2496,6 +2496,8 @@ impl CrowdfundContract {
             .publish(("campaign", "refund_single"), (contributor, amount));
 
         Ok(())
+    }
+
     pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
         contributor.require_auth();
         let amount = validate_refund_preconditions(&env, &contributor)?;
