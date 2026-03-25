@@ -185,6 +185,12 @@ pub mod proptest_generator_boundary;
 #[cfg(test)]
 #[path = "proptest_generator_boundary.test.rs"]
 mod proptest_generator_boundary_tests;
+
+#[cfg(test)]
+pub mod proptest_generator_boundary;
+#[cfg(test)]
+#[path = "proptest_generator_boundary.test.rs"]
+mod proptest_generator_boundary_test;
 pub mod stellar_token_minter;
 mod cargo_toml_rust_test;
 #[cfg(test)]

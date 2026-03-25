@@ -436,34 +436,31 @@ fn validate_string_length(
 //!     // ... store title
 //! }
 //! ```
+//! Contract State Size Limits
+//!
+//! This contract defines and exposes the maximum size limits for all campaign-related data
+//! stored in the Stellar Raise platform's on-chain state. These limits ensure:
+//!
+//! - **Resource Efficiency**: Prevents ledger state bloat by capping entry sizes.
+//! - **Frontend Reliability**: The UI can validate inputs locally against these known limits.
+//! - **Predictable Fees**: State-rent (storage) costs remain within predictable bounds.
+//!
+//! All constants are measured in bytes (for strings) or item counts (for vectors).
+
 #![no_std]
-use soroban_sdk::{Env, String, Vec, contracterror};
 
-#[allow(missing_docs)]
+use soroban_sdk::{contract, contractimpl, Env, String};
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum StateSizeError {
-    ContributorLimitExceeded = 1,
-    RoadmapLimitExceeded = 2,
-    StretchGoalLimitExceeded = 3,
-    StringTooLong = 4,
-}
+// ── State Limits ─────────────────────────────────────────────────────────────
 
-// ── Limits ───────────────────────────────────────────────────────────────────
-
-pub const MAX_CONTRIBUTORS: u32 = 128;
-pub const MAX_PLEDGERS: u32 = 128;
-pub const MAX_ROADMAP_ITEMS: u32 = 32;
-pub const MAX_STRETCH_GOALS: u32 = 32;
+/// Maximum campaign title length in bytes.
 pub const MAX_TITLE_LENGTH: u32 = 128;
-pub const MAX_DESCRIPTION_LENGTH: u32 = 2048;
+
+/// Maximum campaign description length in bytes.
+pub const MAX_DESCRIPTION_LENGTH: u32 = 2_048;
+
+/// Maximum social-links string length in bytes.
 pub const MAX_SOCIAL_LINKS_LENGTH: u32 = 512;
-pub const MAX_BONUS_GOAL_DESCRIPTION_LENGTH: u32 = 280;
-pub const MAX_ROADMAP_DESCRIPTION_LENGTH: u32 = 280;
-pub const MAX_METADATA_TOTAL_LENGTH: u32 = 2304;
-pub const MAX_STRING_LEN: u32 = 256;
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
@@ -536,13 +533,28 @@ pub const MAX_METADATA_TOTAL_LENGTH: u32 = 2304;
 ///             This constant is kept for backwards compatibility.
 pub const MAX_STRING_LEN: u32 = 256;
 // ── Validation helpers ────────────────────────────────────────────────────────
+/// Maximum number of unique contributors tracked per campaign.
+pub const MAX_CONTRIBUTORS: u32 = 1_000;
 
-pub fn validate_title(title: &String) -> Result<(), &'static str> {
-    if title.len() > MAX_TITLE_LENGTH {
-        return Err("title exceeds MAX_TITLE_LENGTH bytes");
+/// Maximum number of roadmap items stored for a campaign.
+pub const MAX_ROADMAP_ITEMS: u32 = 32;
+
+/// Maximum number of stretch goals (milestones).
+pub const MAX_STRETCH_GOALS: u32 = 32;
+
+/// Minimum allowed campaign goal in token units.
+pub const MIN_GOAL_AMOUNT: i128 = 100;
+
+#[contract]
+pub struct ContractStateSize;
+
+#[contractimpl]
+impl ContractStateSize {
+    /// Returns the maximum allowed title length in bytes.
+    /// @dev Used by frontend UI to set input field `maxlength`.
+    pub fn max_title_length(_env: Env) -> u32 {
+        MAX_TITLE_LENGTH
     }
-    Ok(())
-}
 
 impl core::fmt::Display for StateSizeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -611,9 +623,10 @@ pub fn validate_title(title: &String) -> Result<(), &'static str> {
 pub fn validate_description(description: &String) -> Result<(), &'static str> {
     if description.len() > MAX_DESCRIPTION_LENGTH {
         return Err("description exceeds MAX_DESCRIPTION_LENGTH bytes");
+    /// Returns the maximum allowed description length in bytes.
+    pub fn max_description_length(_env: Env) -> u32 {
+        MAX_DESCRIPTION_LENGTH
     }
-    Ok(())
-}
 
 /// Validate description length.
 pub fn validate_description(value: &String) -> Result<(), &'static str> {
@@ -702,9 +715,10 @@ pub fn validate_metadata_total_length(
     let total = title_len.saturating_add(description_len).saturating_add(socials_len);
     if total > MAX_METADATA_TOTAL_LENGTH {
         return Err("metadata exceeds MAX_METADATA_TOTAL_LENGTH bytes");
+    /// Returns the maximum allowed social links length in bytes.
+    pub fn max_social_links_length(_env: Env) -> u32 {
+        MAX_SOCIAL_LINKS_LENGTH
     }
-    Ok(())
-}
 
 pub fn validate_contributor_capacity(len: u32) -> Result<(), &'static str> {
     if len >= MAX_CONTRIBUTORS {
@@ -718,9 +732,10 @@ pub fn validate_contributor_capacity(len: u32) -> Result<(), &'static str> {
 pub fn validate_contributor_capacity(current_count: u32) -> Result<(), &'static str> {
     if current_count >= MAX_CONTRIBUTORS {
         return Err("contributors exceed MAX_CONTRIBUTORS");
+    /// Returns the maximum number of contributors per campaign.
+    pub fn max_contributors(_env: Env) -> u32 {
+        MAX_CONTRIBUTORS
     }
-    Ok(())
-}
 
 pub fn validate_pledger_capacity(len: u32) -> Result<(), &'static str> {
     if len >= MAX_PLEDGERS {
@@ -734,9 +749,10 @@ pub fn validate_pledger_capacity(len: u32) -> Result<(), &'static str> {
 pub fn validate_pledger_capacity(current_count: u32) -> Result<(), &'static str> {
     if current_count >= MAX_PLEDGERS {
         return Err("pledgers exceed MAX_PLEDGERS");
+    /// Returns the maximum number of roadmap items.
+    pub fn max_roadmap_items(_env: Env) -> u32 {
+        MAX_ROADMAP_ITEMS
     }
-    Ok(())
-}
 
 /// Validate roadmap capacity before append.
 pub fn validate_roadmap_capacity(len: u32) -> Result<(), &'static str> {
@@ -823,9 +839,10 @@ pub fn check_contributor_limit(env: &Env) -> Result<(), StateSizeError> {
 
     if contributors.len() >= MAX_CONTRIBUTORS {
         return Err(StateSizeError::ContributorLimitExceeded);
+    /// Returns the maximum number of stretch goals.
+    pub fn max_stretch_goals(_env: Env) -> u32 {
+        MAX_STRETCH_GOALS
     }
-    Ok(())
-}
 
 /// Validates the campaign title length.
 ///
@@ -967,8 +984,27 @@ pub fn check_pledger_limit(env: &Env) -> Result<(), StateSizeError> {
 
     if pledgers.len() >= MAX_PLEDGERS {
         return Err(StateSizeError::ContributorLimitExceeded);
+    /// Validates that a string does not exceed the platform's title limit.
+    /// @param title The campaign title to validate.
+    /// @return `true` if length <= MAX_TITLE_LENGTH.
+    pub fn validate_title(_env: Env, title: String) -> bool {
+        title.len() <= MAX_TITLE_LENGTH
     }
-    Ok(())
+
+    /// Validates that a description does not exceed the platform limit.
+    /// @param description The campaign description to validate.
+    /// @return `true` if length <= MAX_DESCRIPTION_LENGTH.
+    pub fn validate_description(_env: Env, description: String) -> bool {
+        description.len() <= MAX_DESCRIPTION_LENGTH
+    }
+
+    /// Validates that an aggregate metadata length is within bounds.
+    /// @param total_len The combined length of all metadata strings.
+    /// @return `true` if within safe limits to prevent state-rent spikes.
+    pub fn validate_metadata_aggregate(_env: Env, total_len: u32) -> bool {
+        const AGGREGATE_LIMIT: u32 = MAX_TITLE_LENGTH + MAX_DESCRIPTION_LENGTH + MAX_SOCIAL_LINKS_LENGTH;
+        total_len <= AGGREGATE_LIMIT
+    }
 }
 
 /// Legacy function for checking roadmap limit.

@@ -82,116 +82,45 @@ pub const GENERATOR_BATCH_MAX: u32 = 512;
 /// @security Rejects values < 1 000 that cause timing races and values that
 ///           could overflow a `u64` timestamp when added to `now`.
 //! Proptest generator boundary conditions for the crowdfund contract.
+//! Proptest Generator Boundary Contract
 //!
-//! This module is the single source of truth for all boundary constants and
-//! validation helpers consumed by property-based tests. Correct boundaries
-//! ensure:
+//! This contract provides the source of truth for all boundary conditions and validation
+//! constants used by the crowdfunding platform's property-based tests. Exposing these
+//! via a contract allows off-chain scripts and other contracts to dynamically query
+//! current safe operating limits.
 //!
-//! - Frontend UI displays progress, deadlines, and amounts reliably.
-//! - Tests avoid known regression seeds (e.g., extremely short deadlines).
-//! - Security assumptions (overflow, division-by-zero) are validated early.
-//! - CI runtime stays bounded via capped proptest case counts.
+//! ## Security
 //!
-//! # Typo Fix (Frontend UI)
-//!
-//! The minimum deadline offset was previously documented as **100 seconds**,
-//! which caused proptest regressions and poor frontend UX (flaky countdown
-//! display). It is now **1_000** seconds (~17 min) for stability.
-//!
-//! # NatSpec-style module notice
-//!
-//! @notice All constants in this module are used exclusively by test
-//!         infrastructure. They are not enforced at the contract runtime level.
-//! @dev    Changing any constant here may invalidate existing regression seeds
-//!         stored in `proptest-regressions/test.txt`.
+//! - **Immutable Boundaries**: Constants are defined at compile-time to ensure test stability.
+//! - **Public Transparency**: All limits are publicly readable.
+//! - **Safety Guards**: Includes logic to clamp and validate inputs against platform-wide floors and caps.
 
-// ── Deadline constants ────────────────────────────────────────────────────────
+#![no_std]
 
-/// @notice Minimum deadline offset in seconds (`now + offset`).
-///
-/// @dev Fixed typo: was 100, causing regression seeds and flaky frontend
-///      countdown display. 1_000 (~17 min) provides stable tests and a
-///      meaningful campaign duration for UI rendering.
+use soroban_sdk::{contract, contractimpl, Env, Symbol};
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
 pub const DEADLINE_OFFSET_MIN: u64 = 1_000;
-
-/// @notice Maximum deadline offset in seconds.
-///
-/// @dev ~11.5 days. Keeps generated deadlines within a realistic campaign
-///      window and avoids u64 overflow when added to a ledger timestamp.
 pub const DEADLINE_OFFSET_MAX: u64 = 1_000_000;
-
-// ── Goal constants ────────────────────────────────────────────────────────────
-
-/// @notice Minimum valid goal amount in stroops.
-///
-/// @dev Avoids zero/negative goals which break `progress_bps` display
-///      (division-by-zero) in the frontend.
 pub const GOAL_MIN: i128 = 1_000;
-
-/// @notice Maximum goal for proptest (100 M stroops = 10 XLM).
-///
-/// @dev Keeps property tests fast while covering large-campaign scenarios.
-///      Values above this are not representative of real-world campaigns.
 pub const GOAL_MAX: i128 = 100_000_000;
-
-// ── Contribution constants ────────────────────────────────────────────────────
-
-/// @notice Minimum contribution amount in stroops.
-///
-/// @dev Floor of 1 stroop prevents zero-value contributions that would
-///      pollute ledger state without meaningful economic effect.
 pub const MIN_CONTRIBUTION_FLOOR: i128 = 1;
-
-// ── Basis-points constants ────────────────────────────────────────────────────
-
-/// @notice Progress basis points cap (100 %).
-///
-/// @dev Clamping to 10_000 prevents the frontend from displaying >100 %
-///      funded, which can occur when contributions exceed the goal.
 pub const PROGRESS_BPS_CAP: u32 = 10_000;
-
-/// @notice Platform fee basis points cap (100 %).
-///
-/// @dev A fee above 10_000 bps would exceed the full contribution amount,
-///      which is economically invalid and a potential exploit vector.
 pub const FEE_BPS_CAP: u32 = 10_000;
-
-// ── Proptest runtime constants ────────────────────────────────────────────────
-
-/// @notice Minimum proptest case count to retain useful boundary coverage.
-///
-/// @dev Below 32 cases, boundary-adjacent values are rarely sampled,
-///      reducing the value of property tests.
 pub const PROPTEST_CASES_MIN: u32 = 32;
-
-/// @notice Maximum proptest case count to cap gas/runtime overhead.
-///
-/// @dev 256 cases balances coverage with CI execution time. Exceeding this
-///      can cause timeouts in resource-constrained environments.
 pub const PROPTEST_CASES_MAX: u32 = 256;
-
-/// @notice Maximum synthetic batch size used by boundary generators.
-///
-/// @dev Bounded batches prevent worst-case memory/gas spikes in test
-///      scaffolds that iterate over generated inputs.
 pub const GENERATOR_BATCH_MAX: u32 = 512;
 
-// ── Validation helpers ────────────────────────────────────────────────────────
+#[contract]
+pub struct ProptestGeneratorBoundary;
 
-/// @notice Validates that a deadline offset is within the accepted range.
-///
-/// @dev Rejects values that cause timestamp overflow or campaigns too short
-///      to be meaningful for frontend display.
-///
-/// # Arguments
-/// * `offset` – Seconds from `now` to deadline.
-///
-/// # Returns
-/// `true` if `offset` is in `[DEADLINE_OFFSET_MIN, DEADLINE_OFFSET_MAX]`.
-#[inline]
-pub fn is_valid_deadline_offset(offset: u64) -> bool {
-    (DEADLINE_OFFSET_MIN..=DEADLINE_OFFSET_MAX).contains(&offset)
-}
+#[contractimpl]
+impl ProptestGeneratorBoundary {
+    /// Returns the minimum deadline offset in seconds.
+    pub fn deadline_offset_min(_env: Env) -> u64 {
+        DEADLINE_OFFSET_MIN
+    }
 
 /// Returns `true` if `goal` is within `[GOAL_MIN, GOAL_MAX]`.
 ///
@@ -228,22 +157,15 @@ pub fn is_valid_goal(goal: i128) -> bool {
 pub fn is_valid_goal(goal: i128) -> bool {
     (GOAL_MIN..=GOAL_MAX).contains(&goal)
 }
+    /// Returns the maximum deadline offset in seconds.
+    pub fn deadline_offset_max(_env: Env) -> u64 {
+        DEADLINE_OFFSET_MAX
+    }
 
-/// @notice Validates that `min_contribution` is valid for a given `goal`.
-///
-/// @dev `min_contribution` must be at least `MIN_CONTRIBUTION_FLOOR` and
-///      must not exceed `goal` (otherwise no contribution could ever succeed).
-///
-/// # Arguments
-/// * `min_contribution` – Minimum contribution amount in stroops.
-/// * `goal` – Campaign goal in stroops.
-///
-/// # Returns
-/// `true` if `min_contribution` is in `[MIN_CONTRIBUTION_FLOOR, goal]`.
-#[inline]
-pub fn is_valid_min_contribution(min_contribution: i128, goal: i128) -> bool {
-    (MIN_CONTRIBUTION_FLOOR..=goal).contains(&min_contribution)
-}
+    /// Returns the minimum valid goal amount.
+    pub fn goal_min(_env: Env) -> i128 {
+        GOAL_MIN
+    }
 
 /// Returns `true` if `amount >= min_contribution`.
 ///
@@ -286,8 +208,20 @@ pub fn is_valid_contribution_amount(amount: i128, min_contribution: i128) -> boo
 pub fn is_valid_fee_bps(fee_bps: u32) -> bool {
     fee_bps <= FEE_BPS_CAP
 }
+    /// Returns the maximum goal amount for test generations.
+    pub fn goal_max(_env: Env) -> i128 {
+        GOAL_MAX
+    }
 
-// ── Clamping helpers ──────────────────────────────────────────────────────────
+    /// Returns the absolute floor for contribution amounts.
+    pub fn min_contribution_floor(_env: Env) -> i128 {
+        MIN_CONTRIBUTION_FLOOR
+    }
+
+    /// Validates that an offset is within the [min, max] range.
+    pub fn is_valid_deadline_offset(_env: Env, offset: u64) -> bool {
+        (DEADLINE_OFFSET_MIN..=DEADLINE_OFFSET_MAX).contains(&offset)
+    }
 
 /// @notice Clamps raw progress basis points to `[0, PROGRESS_BPS_CAP]`.
 ///
@@ -540,6 +474,22 @@ impl ProptestGeneratorBoundary {
     /// @param raw The raw progress value to clamp.
     /// @return Clamped value in [0, PROGRESS_BPS_CAP].
     pub fn clamp_progress_bps(_env: Env, raw: i128) -> u32 {
+    /// Validates that a goal is within the [min, max] range.
+    pub fn is_valid_goal(_env: Env, goal: i128) -> bool {
+        (GOAL_MIN..=GOAL_MAX).contains(&goal)
+    }
+
+    /// Clamps a requested proptest case count into safe operating bounds.
+    pub fn clamp_proptest_cases(_env: Env, requested: u32) -> u32 {
+        requested.clamp(PROPTEST_CASES_MIN, PROPTEST_CASES_MAX)
+    }
+
+    /// Computes progress in basis points, capped at 10,000.
+    pub fn compute_progress_bps(_env: Env, raised: i128, goal: i128) -> u32 {
+        if goal <= 0 {
+            return 0;
+        }
+        let raw = raised.saturating_mul(10_000) / goal;
         if raw <= 0 {
             0
         } else if raw >= PROGRESS_BPS_CAP as i128 {
@@ -924,5 +874,8 @@ mod unit_tests {
     #[test]
     fn compute_fee_amount_100_percent() {
         assert_eq!(compute_fee_amount(1_000_000, 10_000), 1_000_000);
+    /// Returns a diagnostic tag for boundary log events.
+    pub fn log_tag(_env: Env) -> Symbol {
+        Symbol::new(&_env, "boundary")
     }
 }

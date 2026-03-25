@@ -124,15 +124,17 @@ mod tests {
     }
 //! Comprehensive tests for `contract_state_size` limits and contract wiring.
 //!
-//! Coverage:
-//!   - Constant stability and invariants
-//!   - String-length validators across exact-boundary and overflow cases
-//!   - Collection-capacity validators across exact-boundary and full cases
-//!   - Metadata aggregate-budget validation, including overflow hardening
-//!   - Contract-level rejection of oversized metadata and full indexed lists
-//!   - Contract-level acceptance when an update stays within budget
+//! @title   ContractStateSize Tests
+//! @notice  Validates each constant exposure through the contract interface and validation logic.
+//! @dev     Uses soroban-sdk's test utilities to mock the environment.
 
-extern crate alloc;
+#[cfg(test)]
+mod tests {
+    use soroban_sdk::{Env, String};
+    use crate::contract_state_size::{
+        ContractStateSize, ContractStateSizeClient,
+        MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_CONTRIBUTORS,
+    };
 
 use crate::contract_state_size::{
     validate_bonus_goal_description, validate_contributor_capacity, validate_description,
@@ -205,25 +207,52 @@ fn filled_addresses(env: &Env, count: u32) -> Vec<Address> {
     let mut values = Vec::new(env);
     for _ in 0..count {
         values.push_back(Address::generate(env));
+    /// Setup a fresh test environment with the state size contract registered.
+    fn setup() -> (Env, ContractStateSizeClient<'static>) {
+        let env = Env::default();
+        let contract_id = env.register(ContractStateSize, ());
+        let client = ContractStateSizeClient::new(&env, &contract_id);
+        (env, client)
     }
-    values
-}
 
-fn filled_roadmap(env: &Env, count: u32) -> Vec<RoadmapItem> {
-    let mut roadmap = Vec::new(env);
-    for idx in 0..count {
-        roadmap.push_back(RoadmapItem {
-            date: 10_000 + idx as u64,
-            description: soroban_string(env, 8, 'r'),
-        });
+    #[test]
+    fn test_constants_return_correct_values() {
+        let (_env, client) = setup();
+        assert_eq!(client.max_title_length(), MAX_TITLE_LENGTH);
+        assert_eq!(client.max_description_length(), MAX_DESCRIPTION_LENGTH);
+        assert_eq!(client.max_contributors(), MAX_CONTRIBUTORS);
+        assert_eq!(client.max_roadmap_items(), 32);
+        assert_eq!(client.max_stretch_goals(), 32);
+        assert_eq!(client.max_social_links_length(), 512);
     }
-    roadmap
-}
 
-fn filled_stretch_goals(env: &Env, count: u32) -> Vec<i128> {
-    let mut stretch_goals = Vec::new(env);
-    for idx in 0..count {
-        stretch_goals.push_back(2_000_000 + idx as i128);
+    #[test]
+    fn test_validate_title() {
+        let (env, client) = setup();
+        let valid_title = String::from_str(&env, "A valid project title");
+        let too_long_title = String::from_str(&env, &"A".repeat((MAX_TITLE_LENGTH + 1) as usize));
+
+        assert!(client.validate_title(&valid_title));
+        assert!(!client.validate_title(&too_long_title));
+    }
+
+    #[test]
+    fn test_validate_description() {
+        let (env, client) = setup();
+        let valid_desc = String::from_str(&env, "A valid project description");
+        let too_long_desc = String::from_str(&env, &"A".repeat((MAX_DESCRIPTION_LENGTH + 1) as usize));
+
+        assert!(client.validate_description(&valid_desc));
+        assert!(!client.validate_description(&too_long_desc));
+    }
+
+    #[test]
+    fn test_validate_metadata_aggregate() {
+        let (_env, client) = setup();
+        let limit = 128 + 2048 + 512;
+        assert!(client.validate_metadata_aggregate(&100));
+        assert!(client.validate_metadata_aggregate(&limit));
+        assert!(!client.validate_metadata_aggregate(&(limit + 1)));
     }
     stretch_goals
 }
