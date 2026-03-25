@@ -24,6 +24,7 @@ mod cargo_toml_rust_test;
 
 pub mod contract_state_size;
 #[cfg(test)]
+#[path = "contract_state_size.test.rs"]
 mod contract_state_size_test;
 pub mod crowdfund_initialize_function;
 use crowdfund_initialize_function::{execute_initialize, InitParams};
