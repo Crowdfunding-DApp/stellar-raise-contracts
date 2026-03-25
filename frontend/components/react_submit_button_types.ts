@@ -10,27 +10,28 @@
 
 /**
  * @notice All possible visual/interaction states of the submit button.
- * @dev State transitions: idle → loading → success | error → idle (auto-reset)
+ * @dev State transitions:
+ *      idle → submitting → success | error → idle (auto-reset)
+ *      Any state → disabled (via external prop)
  */
-export type ButtonState = "idle" | "loading" | "success" | "error" | "disabled";
+export type ButtonState = "idle" | "submitting" | "success" | "error" | "disabled";
 
 /**
- * @notice Props accepted by the SubmitButton component.
- * @dev `style` is typed as a plain object to avoid importing React here.
+ * @notice Props accepted by the ReactSubmitButton component.
  */
 export interface SubmitButtonProps {
-  /** Text shown in the idle state. */
+  /** Text shown in the idle and disabled states. */
   label: string;
-  /** Called when the button is clicked in the idle state. Must return a Promise. */
+  /** Async click handler; rejection triggers the error state. */
   onClick: () => Promise<void>;
-  /** Externally controlled disabled flag (maps to the `disabled` state). */
+  /** Externally controlled disabled flag (maps to the disabled state). */
   disabled?: boolean;
   /** Milliseconds before auto-resetting from success/error back to idle. Default: 2500. */
   resetDelay?: number;
   /** Override the button's HTML type attribute. Default: "submit". */
   type?: "submit" | "button" | "reset";
   /** Additional inline styles merged onto the button element. */
-  style?: Record<string, string | number>;
+  style?: React.CSSProperties;
   /** Optional test id for targeting in tests. */
   "data-testid"?: string;
 }
@@ -38,7 +39,7 @@ export interface SubmitButtonProps {
 // ── State configuration ───────────────────────────────────────────────────────
 
 /**
- * @notice Visual configuration for each button state.
+ * @notice Visual and accessibility configuration for each button state.
  * @dev Centralising colours here makes security review straightforward —
  *      no dynamic style injection from user input.
  */
@@ -52,7 +53,7 @@ export const STATE_CONFIG: Record<
     cursor: "pointer",
     ariaLabel: "",
   },
-  loading: {
+  submitting: {
     label: "Processing\u2026",
     backgroundColor: "#6366f1",
     cursor: "not-allowed",
@@ -77,3 +78,42 @@ export const STATE_CONFIG: Record<
     ariaLabel: "Button disabled",
   },
 };
+
+// ── Allowed state transitions ─────────────────────────────────────────────────
+
+/**
+ * @notice Defines valid next states for each current state.
+ * @dev Used by isValidStateTransition to guard against invalid jumps.
+ */
+export const ALLOWED_TRANSITIONS: Record<ButtonState, ButtonState[]> = {
+  idle: ["submitting", "disabled"],
+  submitting: ["success", "error", "disabled"],
+  success: ["idle", "disabled"],
+  error: ["idle", "submitting", "disabled"],
+  disabled: ["idle"],
+};
+
+// ── Pure helper functions ─────────────────────────────────────────────────────
+
+/**
+ * @notice Returns true if the transition from `from` to `to` is allowed.
+ * @dev Same-state transitions are always allowed (idempotent updates).
+ */
+export function isValidStateTransition(from: ButtonState, to: ButtonState): boolean {
+  if (from === to) return true;
+  return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * @notice Returns true when the button should be non-interactive.
+ */
+export function isInteractionBlocked(state: ButtonState, disabled = false): boolean {
+  return Boolean(disabled) || state === "submitting" || state === "success" || state === "disabled";
+}
+
+/**
+ * @notice Returns true when aria-busy should be set.
+ */
+export function isBusy(state: ButtonState): boolean {
+  return state === "submitting";
+}

@@ -1,8 +1,8 @@
-# SubmitButton Component
+# ReactSubmitButton
 
-Addresses [GitHub Issue #359](https://github.com/Crowdfunding-DApp/stellar-raise-contracts/issues/359).
-
-A robust, accessible React submit button with full state management for crowdfunding transaction flows.
+Refactored React submit button component with a deterministic state machine,
+double-submit prevention, and full accessibility support for crowdfunding
+transaction flows (contribute, withdraw, refund).
 
 ---
 
@@ -11,48 +11,66 @@ A robust, accessible React submit button with full state management for crowdfun
 | File | Purpose |
 |------|---------|
 | `react_submit_button.tsx` | Component implementation |
-| `react_submit_button.test.tsx` | Test suite (≥ 95% coverage) |
+| `react_submit_button_types.ts` | Types, STATE_CONFIG, pure helper functions |
+| `react_submit_button.test.tsx` | Test suite (≥ 95 % coverage) |
 | `react_submit_button.md` | This document |
 
 ---
 
-## States
-
-The button moves through a deterministic state machine:
+## State Machine
 
 ```
-idle ──click──► loading ──resolve──► success ──resetDelay──► idle
-                        └──reject──► error   ──resetDelay──► idle
+idle ──click──► submitting ──resolve──► success ──(resetDelay)──► idle
+                           └──reject──► error   ──(resetDelay)──► idle
+Any state ──disabled=true──► disabled
 ```
 
-| State | Visual | Interaction | Native `disabled` |
-|-------|--------|-------------|-------------------|
-| `idle` | Indigo | Clickable | No |
-| `loading` | Light indigo + spinner | Blocked | Yes |
-| `success` | Green + ✓ | Blocked | Yes |
-| `error` | Red + retry label | Clickable (retry) | No |
-| `disabled` | Grey, 60% opacity | Blocked | Yes |
+| State | Visual | `disabled` | `aria-busy` | Clickable |
+|-------|--------|-----------|-------------|-----------|
+| `idle` | Indigo | No | No | Yes |
+| `submitting` | Light indigo | Yes | Yes | No |
+| `success` | Green + ✓ | Yes | No | No |
+| `error` | Red + retry | No | No | Yes (retry) |
+| `disabled` | Grey, 60 % opacity | Yes | No | No |
+
+---
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | required | Text shown in idle and disabled states |
+| `onClick` | `() => Promise<void>` | required | Async handler; rejection triggers error state |
+| `disabled` | `boolean` | `false` | External disabled flag (maps to disabled state) |
+| `resetDelay` | `number` | `2500` | ms before auto-reset from success/error to idle |
+| `type` | `"submit" \| "button" \| "reset"` | `"submit"` | HTML button type |
+| `style` | `React.CSSProperties` | — | Extra inline styles merged onto the button |
+| `data-testid` | `string` | — | Test selector |
 
 ---
 
 ## Usage
 
 ```tsx
-import SubmitButton from "../components/react_submit_button";
+import ReactSubmitButton from "../components/react_submit_button";
 
-<SubmitButton
-  label="Fund Campaign"
-  onClick={async () => {
-    await submitTransaction();
-  }}
-/>
+function ContributeForm() {
+  return (
+    <ReactSubmitButton
+      label="Contribute"
+      onClick={async () => {
+        await invokeContractContribute(/* ... */);
+      }}
+    />
+  );
+}
 ```
 
 ### With all options
 
 ```tsx
-<SubmitButton
-  label="Contribute"
+<ReactSubmitButton
+  label="Fund Campaign"
   onClick={handleContribute}
   disabled={!walletConnected}
   resetDelay={3000}
@@ -63,43 +81,10 @@ import SubmitButton from "../components/react_submit_button";
 
 ---
 
-## Props
+## NatSpec-Style Reference
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `label` | `string` | required | Button text in idle/disabled states |
-| `onClick` | `() => Promise<void>` | required | Async handler; rejection triggers error state |
-| `disabled` | `boolean` | `false` | External disabled flag |
-| `resetDelay` | `number` | `2500` | ms before auto-reset from success/error |
-| `type` | `"submit" \| "button" \| "reset"` | `"submit"` | HTML button type |
-| `style` | `React.CSSProperties` | — | Extra inline styles |
-| `data-testid` | `string` | — | Test selector |
-
----
-
-## Security Assumptions
-
-### Double-submit prevention
-Clicks are silently ignored in `loading`, `success`, and `disabled` states. This prevents duplicate blockchain transactions (double-spend) when a user clicks repeatedly while a transaction is in-flight.
-
-### No HTML injection
-The `label` prop and all state labels are rendered as React text nodes, never via `dangerouslySetInnerHTML`. XSS via the label prop is not possible.
-
-### No user-controlled styles
-Background colours and cursors are sourced exclusively from the `STATE_CONFIG` constant. No user-supplied strings are interpolated into CSS values.
-
-### Timer cleanup
-The reset timer is cleared on component unmount via a `useEffect` cleanup function, preventing state updates on unmounted components and potential memory leaks.
-
-### Negative `resetDelay` clamped
-`Math.max(0, resetDelay)` ensures a negative value cannot cause unexpected behaviour.
-
----
-
-## NatSpec-style Reference
-
-### `SubmitButton`
-- **@notice** Accessible submit button with idle / loading / success / error / disabled states.
+### `ReactSubmitButton`
+- **@notice** Accessible submit button with idle / submitting / success / error / disabled states.
 - **@param** `label` — Text shown in idle and disabled states.
 - **@param** `onClick` — Async handler; must return `Promise<void>`. Rejection triggers error state.
 - **@param** `disabled` — When `true`, maps to the `disabled` state and blocks interaction.
@@ -108,11 +93,33 @@ The reset timer is cleared on component unmount via a `useEffect` cleanup functi
 - **@security** Timer is cleaned up on unmount (memory-leak protection).
 
 ### `STATE_CONFIG`
-- **@notice** Centralised visual configuration for each button state.
-- **@dev** All colours are hardcoded hex values — no dynamic CSS injection.
+- **@notice** Centralised visual and accessibility configuration for each button state.
+- **@dev** All colours are hardcoded hex values — no dynamic CSS injection from user input.
 
-### `ButtonState`
-- **@notice** Union type: `"idle" | "loading" | "success" | "error" | "disabled"`.
+### `isValidStateTransition(from, to)`
+- **@notice** Returns `true` if the transition from `from` to `to` is allowed.
+- **@dev** Same-state transitions are always allowed (idempotent updates).
+
+### `isInteractionBlocked(state, disabled?)`
+- **@notice** Returns `true` when the button should be non-interactive.
+
+### `isBusy(state)`
+- **@notice** Returns `true` when `aria-busy` should be set (submitting only).
+
+---
+
+## Security Assumptions
+
+1. **No HTML injection** — `label` and all state labels are rendered as React text nodes,
+   never via `dangerouslySetInnerHTML`. XSS via the label prop is not possible.
+2. **Double-submit prevention** — Clicks are silently ignored in `submitting`, `success`,
+   and `disabled` states, preventing duplicate blockchain transactions.
+3. **No dynamic CSS injection** — All background colours are sourced from `STATE_CONFIG`
+   constants. No user-supplied strings are interpolated into CSS values.
+4. **Timer cleanup** — The reset timer is cleared on unmount via `useEffect` cleanup,
+   preventing state updates on unmounted components and potential memory leaks.
+5. **Negative resetDelay clamped** — `Math.max(0, resetDelay)` ensures a negative value
+   cannot cause unexpected behaviour.
 
 ---
 
@@ -124,15 +131,20 @@ Run with:
 npm test -- --testPathPattern=react_submit_button --coverage
 ```
 
-The suite covers:
+| Category | Tests |
+|----------|-------|
+| STATE_CONFIG completeness | 12 |
+| isValidStateTransition | 14 |
+| isInteractionBlocked | 7 |
+| isBusy | 5 |
+| Component rendering (idle) | 7 |
+| Component rendering (disabled) | 4 |
+| Click handler — success path | 2 |
+| Click handler — error path | 4 |
+| Double-submit prevention | 3 |
+| Auto-reset timer | 4 |
+| Accessibility | 7 |
+| Security edge cases | 5 |
+| Style merging | 2 |
 
-- `STATE_CONFIG` completeness and correctness (14 tests)
-- `ButtonState` type validation (3 tests)
-- `SubmitButtonProps` interface (6 tests)
-- State transition logic — all paths (8 tests)
-- Security: double-submit prevention (3 tests)
-- Accessibility attributes (5 tests)
-- Display label logic including XSS edge case (6 tests)
-- `resetDelay` edge cases (3 tests)
-- Style configuration (3 tests)
-- Integration: full lifecycle simulations (2 tests)
+Target: ≥ 95 % line coverage.
