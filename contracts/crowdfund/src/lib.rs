@@ -6,6 +6,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Str
 #[cfg(test)]
 mod test;
 
+pub mod admin_upgrade_mechanism;
+
+#[cfg(test)]
+mod admin_upgrade_mechanism_test;
+
 // ── Version ─────────────────────────────────────────────────────────────────
 
 /// Contract version constant.
