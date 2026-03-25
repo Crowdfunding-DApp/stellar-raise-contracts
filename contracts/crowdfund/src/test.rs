@@ -311,6 +311,7 @@ fn test_withdraw_skips_nft_minting_when_nft_contract_not_set() {
     client.contribute(&contributor, &goal);
 
     env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
 
     let token_client = token::Client::new(&env, &token_address);
     let before = token_client.balance(&creator);
@@ -319,7 +320,7 @@ fn test_withdraw_skips_nft_minting_when_nft_contract_not_set() {
     assert_eq!(client.total_raised(), 0);
 }
 
-/// Withdraw before deadline must return CampaignStillActive.
+/// Withdraw before finalize (deadline not passed) must return CampaignStillActive.
 #[test]
 fn test_withdraw_before_deadline_returns_error() {
     let (env, client, creator, token_address, admin) = setup_env();
@@ -331,15 +332,17 @@ fn test_withdraw_before_deadline_returns_error() {
     mint_to(&env, &token_address, &admin, &contributor, goal);
     client.contribute(&contributor, &goal);
 
-    let result = client.try_withdraw();
+    // finalize() before deadline returns CampaignStillActive
+    let result = client.try_finalize();
     assert_eq!(
         result.unwrap_err().unwrap(),
         crate::ContractError::CampaignStillActive
     );
 }
 
-/// Withdraw when goal not met must return GoalNotReached.
+/// Withdraw when goal not met: finalize transitions to Expired, withdraw panics.
 #[test]
+#[should_panic(expected = "campaign must be in Succeeded state to withdraw")]
 fn test_withdraw_goal_not_reached_returns_error() {
     let (env, client, creator, token_address, admin) = setup_env();
     let deadline = env.ledger().timestamp() + 3600;
@@ -350,11 +353,8 @@ fn test_withdraw_goal_not_reached_returns_error() {
     client.contribute(&contributor, &500_000);
 
     env.ledger().set_timestamp(deadline + 1);
-    let result = client.try_withdraw();
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        crate::ContractError::GoalNotReached
-    );
+    client.finalize(); // transitions to Expired
+    client.withdraw(); // panics — not Succeeded
 }
 
 /// Withdraw with platform fee deducts fee and sends remainder to creator.
@@ -386,6 +386,7 @@ fn test_withdraw_with_platform_fee() {
     client.contribute(&contributor, &goal);
 
     env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
     client.withdraw();
 
     let token_client = token::Client::new(&env, &token_address);
@@ -416,6 +417,7 @@ fn test_withdraw_mints_nft_for_each_contributor() {
     client.contribute(&bob, &400_000);
 
     env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
     client.withdraw();
 
     // Both contributors should have received an NFT.
@@ -438,6 +440,7 @@ fn test_withdraw_skips_nft_mint_when_contract_not_set() {
 
     env.ledger().set_timestamp(deadline + 1);
     // Should not panic — no NFT contract set.
+    client.finalize();
     client.withdraw();
     assert_eq!(client.nft_contract(), None);
 }
@@ -456,6 +459,7 @@ fn test_refund_returns_tokens() {
     client.contribute(&alice, &500_000);
 
     env.ledger().set_timestamp(deadline + 1);
+    client.finalize(); // transitions to Expired
     client.refund();
 
     let token_client = token::Client::new(&env, &token_address);
@@ -463,9 +467,9 @@ fn test_refund_returns_tokens() {
     assert_eq!(client.total_raised(), 0);
 }
 
-/// Second refund call must panic — status is already Refunded.
+/// Second refund call must panic — status is already Expired (not Active).
 #[test]
-#[should_panic(expected = "campaign is not active")]
+#[should_panic(expected = "campaign must be in Expired state to refund")]
 fn test_double_refund_panics() {
     let (env, client, creator, token_address, admin) = setup_env();
     let deadline = env.ledger().timestamp() + 3600;
@@ -476,12 +480,14 @@ fn test_double_refund_panics() {
     client.contribute(&alice, &500_000);
 
     env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
     client.refund();
-    client.refund(); // panics
+    client.refund(); // panics — already Expired, not Active
 }
 
-/// Refund when goal is reached must return GoalReached.
+/// Refund when goal is reached: finalize transitions to Succeeded, refund panics.
 #[test]
+#[should_panic(expected = "campaign must be in Expired state to refund")]
 fn test_refund_when_goal_reached_returns_error() {
     let (env, client, creator, token_address, admin) = setup_env();
     let deadline = env.ledger().timestamp() + 3600;
@@ -493,11 +499,9 @@ fn test_refund_when_goal_reached_returns_error() {
     client.contribute(&contributor, &goal);
 
     env.ledger().set_timestamp(deadline + 1);
-    let result = client.try_refund();
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        crate::ContractError::GoalReached
-    );
+    client.finalize(); // transitions to Succeeded
+    client.refund(); // panics — not Expired
+}
 }
 
 // ── cancel ───────────────────────────────────────────────────────────────────
