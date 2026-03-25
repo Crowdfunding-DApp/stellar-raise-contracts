@@ -13,6 +13,7 @@ use soroban_sdk::{
     String, Symbol, Vec,
     contract, contractimpl, contracttype, token, Address, Env, IntoVal, String, Symbol, Vec,
     contract, contractclient, contractimpl, contracttype, token, Address, Env, IntoVal, String,
+    contract, contractclient, contractimpl, contracttype, token, Address, Env, String,
     Symbol, Vec,
 };
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, token, Address, Env, String, Symbol, Vec};
@@ -52,6 +53,9 @@ use refund_single_token::{
 #[cfg(test)]
 #[path = "refund_single_token.test.rs"]
 mod refund_single_token_test;
+pub mod withdraw_event_emission;
+use refund_single_token::refund_single_transfer;
+use withdraw_event_emission::{emit_withdrawal_event, mint_nfts_in_batch};
 
 pub mod access_control;
 pub mod admin_upgrade_mechanism;
@@ -1962,7 +1966,7 @@ impl CrowdfundContract {
                     token_id += 1;
         // Bounded NFT minting: process at most MAX_NFT_MINT_BATCH contributors
         // per withdraw() call to cap event emission and gas consumption.
-        let nft_minted_count: u32 = if let Some(nft_contract) = env
+        let nft_contract: Option<Address> = env
             .storage()
             .instance()
             .get::<_, Address>(&DataKey::NFTContract)
@@ -2013,6 +2017,11 @@ impl CrowdfundContract {
 
         // Single withdrawal event carrying payout, fee info, and mint count.
         withdraw_event_emission::emit_withdrawn(&env, &creator, creator_payout, nft_minted_count);
+            .get(&DataKey::NFTContract);
+        let nft_minted_count = mint_nfts_in_batch(&env, &nft_contract);
+
+        // Single withdrawal event carrying payout, fee info, and mint count.
+        emit_withdrawal_event(&env, &creator, creator_payout, nft_minted_count);
 
         Ok(())
     }
@@ -2277,6 +2286,8 @@ impl CrowdfundContract {
     pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
         contributor.require_auth();
 
+    /// Claim a refund for a single contributor (pull-based).
+    ///
     /// # Errors
     /// * [`ContractError::CampaignStillActive`] when deadline has not passed.
     /// * [`ContractError::GoalReached`] when the funding goal was met.
