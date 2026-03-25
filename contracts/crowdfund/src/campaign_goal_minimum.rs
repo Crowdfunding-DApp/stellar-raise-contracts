@@ -216,11 +216,16 @@ pub fn validate_platform_fee(fee_bps: u32) -> Result<(), &'static str> {
 ///         should ensure `goal >= MIN_GOAL_AMOUNT` before calling.
 #[inline]
 pub fn compute_progress_bps(total_raised: i128, goal: i128) -> u32 {
-    if goal <= 0 {
+    if goal <= 0 || total_raised <= 0 {
         return 0;
     }
-    let raw = (total_raised * PROGRESS_BPS_SCALE) / goal;
-    if raw > PROGRESS_BPS_SCALE {
+
+    let scaled = total_raised
+        .checked_mul(PROGRESS_BPS_SCALE)
+        .unwrap_or(i128::MAX);
+    let raw = scaled / goal;
+
+    if raw >= PROGRESS_BPS_SCALE {
         MAX_PROGRESS_BPS
     } else {
         raw as u32
