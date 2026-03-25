@@ -6,6 +6,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Str
 #[cfg(test)]
 mod test;
 
+pub mod batch_contribute;
+
+#[cfg(test)]
+mod batch_contribute_test;
+
 // ── Version ─────────────────────────────────────────────────────────────────
 
 /// Contract version constant.
