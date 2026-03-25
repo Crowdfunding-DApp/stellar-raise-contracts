@@ -37,6 +37,10 @@ mod contract_state_size_test;
 pub mod contribute_error_handling;
 #[cfg(test)]
 mod contribute_error_handling_tests;
+pub mod withdraw_event_emission;
+#[cfg(test)]
+#[path = "withdraw_event_emission_test.rs"]
+mod withdraw_event_emission_test;
 pub mod proptest_generator_boundary;
 #[cfg(test)]
 mod proptest_generator_boundary_tests;
@@ -153,6 +157,8 @@ pub enum ContractError {
     BelowMinimum = 9,
     /// Returned by `contribute` when the campaign is not active.
     CampaignNotActive = 10,
+    /// Returned by `contribute` when `amount` is negative.
+    NegativeAmount = 11,
 }
 
 #[contractclient(name = "NftContractClient")]
@@ -273,6 +279,10 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        if amount < 0 {
+            return Err(ContractError::NegativeAmount);
         }
 
         if amount == 0 {
@@ -575,6 +585,10 @@ impl CrowdfundContract {
                 .expect("fee division by zero");
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
+            // @event campaign::fee_transferred
+            // @param address  platform address receiving the fee
+            // @param fee      fee amount in token's smallest unit (fee_bps / 10_000 * total)
+            // @ci-signal      presence confirms platform fee was deducted before creator payout
             env.events()
                 .publish(("campaign", "fee_transferred"), (&config.address, fee));
             total.checked_sub(fee).expect("creator payout underflow")
@@ -627,6 +641,9 @@ impl CrowdfundContract {
             }
             // Single summary event instead of one event per contributor.
             if minted > 0 {
+                // @event campaign::nft_batch_minted
+                // @param minted  number of NFT rewards minted in this batch (≤ MAX_NFT_MINT_BATCH)
+                // @ci-signal     absence means NFT contract not set or no eligible contributors
                 env.events()
                     .publish(("campaign", "nft_batch_minted"), minted);
             }
@@ -635,7 +652,12 @@ impl CrowdfundContract {
             0
         };
 
-        // Single withdrawal event carrying payout, fee info, and mint count.
+        // @event campaign::withdrawn
+        // @param creator           address that received the payout
+        // @param creator_payout    amount transferred to creator (total minus platform fee)
+        // @param nft_minted_count  number of NFT rewards minted (0 if no NFT contract set)
+        // @ci-signal               always the final event of a successful withdraw(); use as
+        //                          success sentinel in CI/CD pipelines and event indexers
         env.events().publish(
             ("campaign", "withdrawn"),
             (creator.clone(), creator_payout, nft_minted_count),
