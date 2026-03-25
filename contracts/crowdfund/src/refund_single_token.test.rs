@@ -15,6 +15,8 @@
 //! - Direction lock: The token transfer explicitly uses the contract's address
 //!   as the sender and the contributor as the recipient; the balance assertions
 //!   confirm direction.
+//! - Direction lock: `refund_single_transfer` always transfers contract →
+//!   contributor; balance assertions confirm direction.
 //! - Overflow protection: `execute_refund_single` uses `checked_sub` on
 //!   `total_raised`; the large-amount test exercises this path.
 
@@ -98,6 +100,8 @@ fn test_validate_before_deadline_returns_campaign_still_active() {
     // Do NOT advance past deadline — campaign stays Active
     env.as_contract(&client.address, || {
         validate_refund_preconditions(&env, &alice).unwrap();
+    let result = env.as_contract(&client.address, || {
+        validate_refund_preconditions(&env, &alice)
     });
 }
 
@@ -548,6 +552,7 @@ fn test_validate_after_refund_returns_nothing_to_refund() {
 
     // First refund via the contract method (zeroes storage)
     client.refund_single(&alice);
+    client.refund_single(&alice); // zeroes storage
 
     let result = env.as_contract(&client.address, || {
         validate_refund_preconditions(&env, &alice)
@@ -622,7 +627,7 @@ fn test_execute_transfers_correct_amount() {
     assert_eq!(tc.balance(&alice), before + 75_000);
 }
 
-/// @test Zeroes the contribution record before the transfer (CEI).
+/// @test Zeroes the contribution record (CEI — effects before interactions).
 #[test]
 fn test_execute_zeroes_storage_before_transfer() {
     let (env, client, creator, token) = setup();
@@ -667,7 +672,7 @@ fn test_execute_decrements_total_raised() {
     assert_eq!(client.total_raised(), 20_000);
 }
 
-/// @test A second execute call for the same contributor transfers 0 (double-refund prevention).
+/// @test A second execute call with amount=0 is a no-op (double-refund prevention).
 #[test]
 fn test_execute_double_refund_prevention() {
     let (env, client, creator, token) = setup();
@@ -682,19 +687,16 @@ fn test_execute_double_refund_prevention() {
 
     let tc = token::Client::new(&env, &token);
 
-    // First execute — valid
     env.as_contract(&client.address, || {
         execute_refund_single(&env, &alice, 25_000).unwrap();
     });
     assert_eq!(tc.balance(&alice), 25_000);
 
-    // Second execute with amount=0 — no-op (storage already zeroed)
+    // amount=0 — no transfer, no state change
     env.as_contract(&client.address, || {
-        // amount=0 would be caught by validate before reaching execute in
-        // production; here we confirm execute itself handles it gracefully.
         execute_refund_single(&env, &alice, 0).unwrap();
     });
-    assert_eq!(tc.balance(&alice), 25_000); // unchanged
+    assert_eq!(tc.balance(&alice), 25_000);
 }
 
 /// @test execute_refund_single handles a large amount without overflow.
@@ -739,6 +741,5 @@ fn test_execute_does_not_affect_other_contributors() {
         execute_refund_single(&env, &alice, 10_000).unwrap();
     });
 
-    // Bob's record must be untouched
     assert_eq!(client.contribution(&bob), 15_000);
 }
