@@ -1718,6 +1718,19 @@ describe("ReactSubmitButton click handling", () => {
     act(() => {
       fireEvent.click(renderBtn({ state: "error", onClick }));
     });
+  it("fires onClick in idle state", async () => {
+    const onClick = jest.fn().mockResolvedValue(undefined);
+    const { container } = render(<ReactSubmitButton state="idle" onClick={onClick} />);
+    const btn = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => { fireEvent.click(btn); });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires onClick in error state (retry)", async () => {
+    const onClick = jest.fn().mockResolvedValue(undefined);
+    const { container } = render(<ReactSubmitButton state="error" onClick={onClick} />);
+    const btn = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => { fireEvent.click(btn); });
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
