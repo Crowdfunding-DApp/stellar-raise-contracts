@@ -228,6 +228,8 @@ pub fn create_campaign(env: Env, creator: Address, goal: u64) {
 //! | Fee overflow | `MAX_PLATFORM_FEE_BPS = 10_000` caps fee at 100% |
 //! | Deadline bypass | `MIN_DEADLINE_OFFSET` ensures campaigns run for at least 60 s |
 //! | Progress overflow | `compute_progress_bps` uses `saturating_mul` and caps at `MAX_PROGRESS_BPS` |
+/// Minimum contribution amount in token units.
+pub const MIN_CONTRIBUTION_AMOUNT: i128 = 1;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -645,6 +647,12 @@ pub fn validate_goal_amount(
 /// Computes campaign funding progress in basis points (0-10 000).
 /// Returns 0 when goal <= 0 (division-by-zero guard).
 /// Returns MAX_PROGRESS_BPS when total_raised >= goal (over-funded cap).
+// ── Progress computation ─────────────────────────────────────────────────────
+
+/// Computes campaign progress in basis points (0–10 000).
+/// Returns 0 if goal <= 0.
+/// Caps at MAX_PROGRESS_BPS even when total_raised > goal (over-funded).
+/// Uses integer division; precision loss is acceptable for UI display.
 #[inline]
 pub fn compute_progress_bps(total_raised: i128, goal: i128) -> u32 {
     if goal <= 0 {
@@ -657,3 +665,28 @@ pub fn compute_progress_bps(total_raised: i128, goal: i128) -> u32 {
     let bps = (total_raised * PROGRESS_BPS_SCALE) / goal;
     bps as u32
 }
+    let progress = (total_raised * PROGRESS_BPS_SCALE) / goal;
+    if progress > MAX_PROGRESS_BPS as i128 {
+        MAX_PROGRESS_BPS
+    } else {
+        progress as u32
+    }
+}
+
+/// Creates a new campaign with goal validation.
+///
+/// # Parameters
+/// - creator: campaign owner
+/// - goal: funding target
+///
+/// # Security
+/// Ensures goal meets minimum threshold and creator is authenticated.
+pub fn create_campaign(env: soroban_sdk::Env, creator: soroban_sdk::Address, goal: u64) {
+    creator.require_auth();
+    if goal < MIN_CAMPAIGN_GOAL {
+        panic!("Goal too low");
+    }
+    env.events().publish(("campaign", "created"), (creator, goal));
+}
+
+const MIN_CAMPAIGN_GOAL: u64 = 1;
