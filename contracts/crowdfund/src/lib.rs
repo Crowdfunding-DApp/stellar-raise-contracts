@@ -8,7 +8,6 @@ use soroban_sdk::{
 
 pub mod access_control;
 pub mod admin_upgrade_mechanism;
-pub mod access_control;
 pub mod campaign_goal_minimum;
 pub mod cargo_toml_rust;
 pub mod contract_state_size;
@@ -16,8 +15,7 @@ pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
 #[cfg(test)]
 pub mod npm_package_lock;
-pub mod proptest_generator_boundary;
-pub mod refund_single_token;
+pub mod proptest_generator_boundary;pub mod refund_single_token;
 pub mod soroban_sdk_minor;
 pub mod stellar_token_minter;
 pub mod stream_processing_optimization;
@@ -37,8 +35,6 @@ use withdraw_event_emission::{emit_fee_transferred, emit_withdrawn, mint_nfts_in
 
 // ── Test Modules ─────────────────────────────────────────────────────────────
 
-#[cfg(test)]
-mod access_control_tests;
 #[cfg(test)]
 mod access_control_tests;
 #[cfg(test)]
@@ -62,8 +58,6 @@ mod contribute_error_handling_tests;
 mod npm_package_lock_test;
 
 #[cfg(test)]
-pub mod proptest_generator_boundary;
-#[cfg(test)]
 #[path = "proptest_generator_boundary.test.rs"]
 mod proptest_generator_boundary_test;
 #[cfg(test)]
@@ -78,6 +72,8 @@ mod stellar_token_minter_test_comprehensive;
 #[cfg(test)]
 #[path = "stream_processing_optimization.test.rs"]
 mod stream_processing_optimization_test;
+#[cfg(test)]
+mod withdraw_event_emission_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
@@ -221,16 +217,12 @@ pub enum ContractError {
     /// Returned by `initialize` when `goal < MIN_GOAL_AMOUNT`.
     GoalTooLow = 13,
 
-    /// Returned by `validate_goal_amount` when `goal_amount < MIN_GOAL_AMOUNT`.
-    GoalTooLow = 18,
-
     /// Returned by `contribute` when `amount` is zero.
-    ZeroAmount = 13,
-    BelowMinimum = 14,
-    CampaignNotActive = 15,
+    ZeroAmount = 14,
+    BelowMinimum = 15,
+    CampaignNotActive = 16,
     /// Returned by `contribute` when `amount` is negative.
-    NegativeAmount = 16,
-    NegativeAmount = 11,
+    NegativeAmount = 17,
 }
 
 /// Interface for an external NFT contract used to mint contributor rewards.
@@ -659,12 +651,7 @@ impl CrowdfundContract {
                 .expect("fee division by zero");
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
-            withdraw_event_emission::emit_fee_transferred(
-                &env,
-                &config.address,
-                fee,
-                config.fee_bps,
-            );
+            emit_fee_transferred(&env, &config.address, fee);
             total.checked_sub(fee).expect("creator payout underflow")
         } else {
             total
@@ -1135,5 +1122,4 @@ impl CrowdfundContract {
     pub fn nft_contract(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::NFTContract)
     }
-}
 }
