@@ -15,10 +15,10 @@ import React, { useState, useCallback, useMemo } from 'react';
  *     - Tablet+ : ≥ 768 px  → nav links always rendered inline (`md:flex`)
  *
  * @custom:efficiency
- *   `useCallback` memoises `handleToggleMenu` so its reference stays stable
+ *   `useCallback` memoizes `handleToggleMenu` so its reference stays stable
  *   between renders, preventing unnecessary re-renders of child elements that
  *   receive it as a prop.
- *   `useMemo` memoises the `navLinks` array so a new array object is not
+ *   `useMemo` memoizes the `navLinks` array so a new array object is not
  *   allocated on every render pass.
  *
  * @custom:security
@@ -49,7 +49,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 export interface FrontendHeaderResponsiveProps {
   /**
    * @notice Reflects whether the user's Stellar wallet is currently connected.
-   * @dev Controls the colour and text label of the wallet status badge.
+   * @dev Controls the color and text label of the wallet status badge.
    *      `true`  → green badge, label "Connected"
    *      `false` → red badge,   label "Disconnected"
    */
@@ -100,7 +100,7 @@ export const FrontendHeaderResponsive: React.FC<FrontendHeaderResponsiveProps> =
    * @dev Toggles `isMobileMenuOpen` and notifies the optional parent callback.
    *      The functional form of `setState` is used so `onToggleMenu` receives
    *      the correct *next* value regardless of render timing or batching.
-   *      Memoised with `useCallback` to keep the reference stable and avoid
+   *      Memoized with `useCallback` to keep the reference stable and avoid
    *      unnecessary re-renders of consumers that depend on this handler.
    */
   const handleToggleMenu = useCallback(() => {
@@ -119,7 +119,7 @@ export const FrontendHeaderResponsive: React.FC<FrontendHeaderResponsiveProps> =
 
   /**
    * @dev Static navigation link definitions.
-   *      Memoised with `useMemo` so the array reference is stable and React
+   *      Memoized with `useMemo` so the array reference is stable and React
    *      does not recreate it on every render, keeping reconciliation cheap.
    */
   const navLinks = useMemo(() => [
@@ -202,7 +202,7 @@ export const FrontendHeaderResponsive: React.FC<FrontendHeaderResponsiveProps> =
         ))}
 
         {/* Wallet Status Badge ---------------------------------------------
-            Background and border colours are derived entirely from the
+          Background and border colors are derived entirely from the
             `isWalletConnected` prop; no user input reaches these values. */}
         <div
           className="wallet-status"

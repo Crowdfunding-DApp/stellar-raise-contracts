@@ -12,7 +12,7 @@
 1. [Overview](#1-overview)
 2. [File Locations](#2-file-locations)
 3. [Props API](#3-props-api)
-4. [Responsive Behaviour](#4-responsive-behaviour)
+4. [Responsive Behavior](#4-responsive-behavior)
 5. [CSS Classes Used](#5-css-classes-used)
 6. [Accessibility](#6-accessibility)
 7. [Security Assumptions](#7-security-assumptions)
@@ -53,7 +53,7 @@ stellar-raise-contracts/
 | File | Role |
 |------|------|
 | `frontend/styles/responsive.css` | Provides breakpoint tokens and `md:hidden` / `md:flex` utilities consumed by the component |
-| `frontend/styles/utilities.css` | Provides `hidden`, `block`, spacing, and colour utility classes |
+| `frontend/styles/utilities.css` | Provides `hidden`, `block`, spacing, and color utility classes |
 | `frontend/docs/RESPONSIVE_DESIGN_GUIDE.md` | Project-wide responsive design reference |
 
 ---
@@ -73,9 +73,9 @@ export interface FrontendHeaderResponsiveProps {
 |------|----------|
 | `boolean` | Yes |
 
-Controls the wallet status badge colour and label.
+Controls the wallet status badge color and label.
 
-| Value | Border / dot colour | Label text |
+| Value | Border / dot color | Label text |
 |-------|---------------------|-----------|
 | `true` | `#00C853` (green) | "Connected" |
 | `false` | `#FF3B30` (red) | "Disconnected" |
@@ -112,11 +112,11 @@ const handleMenuToggle = (isOpen: boolean) => {
 
 ---
 
-## 4. Responsive Behaviour
+## 4. Responsive Behavior
 
 Breakpoints follow the design-system tokens defined in `frontend/styles/responsive.css`:
 
-| Breakpoint | Viewport | Header behaviour |
+| Breakpoint | Viewport | Header behavior |
 |-----------|----------|-----------------|
 | Mobile | < 768 px | Hamburger button visible; nav links hidden until toggled open |
 | Tablet | 768 – 1023 px | Hamburger hidden (`md:hidden`); nav links always visible inline (`md:flex`) |
@@ -320,7 +320,7 @@ npm test -- --run frontend_header_responsive
 | Group | # Tests | What is covered |
 |-------|---------|----------------|
 | 1. Rendering | 5 | Logo, nav links, toggle button, wallet badge, href values |
-| 2. Wallet Status Badge | 6 | Both label branches, border colour, background tint |
+| 2. Wallet Status Badge | 6 | Both label branches, border color, background tint |
 | 3. Mobile Menu Toggle – State | 8 | Open/close aria-expanded, icon swap, nav class names |
 | 4. onToggleMenu Callback | 5 | Fires with correct value, stale-closure safety, no-op when undefined |
 | 5. Accessibility Attributes | 3 | aria-label, aria-expanded both states |
