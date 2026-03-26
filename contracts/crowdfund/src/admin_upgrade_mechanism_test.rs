@@ -12,8 +12,12 @@
 //! - Admin address is stored correctly during `initialize()`.
 //! - Only the admin can call `upgrade()` (auth guard enforced).
 //! - A non-admin caller is rejected by `upgrade()`.
+//! - Creator (distinct from admin) cannot call `upgrade()`.
 //! - `upgrade()` panics when called before `initialize()` (no admin stored).
-//! - Admin distinct from creator: creator cannot call `upgrade()`.
+//! - Admin auth is required: no-auth call is rejected.
+//! - Zero WASM hash is rejected (edge case: all-zero hash).
+//! - Non-zero WASM hash passes validation.
+//! - Storage is untouched after a rejected upgrade call.
 
 extern crate std;
 
@@ -39,18 +43,20 @@ fn setup() -> (
     token, Address, BytesN, Env,
 };
 
-use crate::{CrowdfundContract, CrowdfundContractClient};
+use crate::{
+    admin_upgrade_mechanism::{validate_wasm_hash},
+    CrowdfundContract, CrowdfundContractClient,
+};
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
-fn setup(
-) -> (
+fn setup() -> (
     Env,
-    Address, // contract_id
+    Address,
     CrowdfundContractClient<'static>,
-    Address, // admin
-    Address, // creator
-    Address, // token
+    Address,
+    Address,
+    Address,
 ) {
     let env = Env::default();
     env.mock_all_auths();
@@ -201,48 +207,22 @@ fn upgrade_rejects_non_admin() {
     (env, contract_id, client, admin, creator, token_addr)
 }
 
-/// Dummy 32-byte hash — used where we only need to reach the auth check,
-/// not actually execute the WASM swap.
 fn dummy_hash(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[1u8; 32])
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
-/// Admin address is stored and readable after initialize().
-/// Verified indirectly: upgrade() succeeds only when admin auth is provided.
-#[test]
-fn test_admin_stored_on_initialize() {
-    // If admin were not stored, upgrade() would panic with unwrap() on None.
-    // The fact that try_upgrade reaches the auth check (not a storage panic)
-    // confirms admin was stored.
-    let (env, contract_id, client, admin, _creator, _token) = setup();
-
-    // Provide auth for a non-admin — should be rejected (not a storage error).
-    let non_admin = Address::generate(&env);
-    env.set_auths(&[]);
-    let result = client.mock_auths(&[MockAuth {
-        address: &non_admin,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "upgrade",
-            args: soroban_sdk::vec![&env, dummy_hash(&env).into()],
-            sub_invokes: &[],
-        },
-    }])
-    .try_upgrade(&dummy_hash(&env));
-
-    // Auth error — not a storage/unwrap panic — confirms admin was stored.
-    assert!(result.is_err());
-    let _ = admin; // admin was used in initialize
+fn zero_hash(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[0u8; 32])
 }
 
-/// Non-admin caller is rejected by upgrade().
+// ── Auth / access control tests ───────────────────────────────────────────────
+
+/// Admin address is stored on initialize — confirmed by upgrade() reaching
+/// the auth check rather than panicking on a missing-storage unwrap.
 #[test]
-fn test_non_admin_cannot_upgrade() {
+fn test_admin_stored_on_initialize() {
     let (env, contract_id, client, _admin, _creator, _token) = setup();
     let non_admin = Address::generate(&env);
-
     env.set_auths(&[]);
     let result = client
         .mock_auths(&[MockAuth {
@@ -260,7 +240,27 @@ fn test_non_admin_cannot_upgrade() {
             },
         }])
         .try_upgrade(&dummy_hash(&env));
+    // Auth error (not a storage panic) confirms admin was stored.
+    assert!(result.is_err());
+}
 
+/// Non-admin caller is rejected.
+#[test]
+fn test_non_admin_cannot_upgrade() {
+    let (env, contract_id, client, _admin, _creator, _token) = setup();
+    let non_admin = Address::generate(&env);
+    env.set_auths(&[]);
+    let result = client
+        .mock_auths(&[MockAuth {
+            address: &non_admin,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "upgrade",
+                args: soroban_sdk::vec![&env, dummy_hash(&env).into()],
+                sub_invokes: &[],
+            },
+        }])
+        .try_upgrade(&dummy_hash(&env));
     assert!(result.is_err());
 }
 
@@ -272,7 +272,6 @@ fn upgrade_rejects_creator() {
 #[test]
 fn test_creator_cannot_upgrade() {
     let (env, contract_id, client, _admin, creator, _token) = setup();
-
     env.set_auths(&[]);
     let result = client
         .mock_auths(&[MockAuth {
@@ -290,7 +289,6 @@ fn test_creator_cannot_upgrade() {
             },
         }])
         .try_upgrade(&dummy_hash(&env));
-
     assert!(result.is_err());
 }
 
@@ -377,60 +375,81 @@ fn storage_unchanged_after_zero_hash_rejection() {
     assert_eq!(client.goal(), goal_before);
     assert_eq!(client.total_raised(), raised_before);
     client.upgrade(&dummy_hash(&env)); // unwrap() on None → panic
+    client.upgrade(&dummy_hash(&env));
 }
 
-/// Admin auth is required: calling upgrade() with no auths set is rejected.
+/// upgrade() with no auths set is rejected.
 #[test]
 fn test_upgrade_requires_auth() {
     let (env, _contract_id, client, _admin, _creator, _token) = setup();
-
     env.set_auths(&[]);
     let result = client.try_upgrade(&dummy_hash(&env));
     assert!(result.is_err());
 }
 
-/// Admin can successfully call upgrade() with a valid uploaded WASM hash.
-/// Uses the pre-built crowdfund WASM from the release target directory.
+// ── WASM hash validation edge cases ──────────────────────────────────────────
+
+/// All-zero WASM hash is rejected — edge case for missing/unset upload.
 #[test]
-#[ignore = "requires wasm-opt: run `cargo build --target wasm32-unknown-unknown --release` first"]
+#[should_panic(expected = "upgrade: wasm_hash must not be zero")]
+fn test_zero_wasm_hash_rejected() {
+    let env = Env::default();
+    validate_wasm_hash(&zero_hash(&env));
+}
+
+/// Non-zero WASM hash passes validation without panic.
+#[test]
+fn test_nonzero_wasm_hash_accepted() {
+    let env = Env::default();
+    validate_wasm_hash(&dummy_hash(&env)); // must not panic
+}
+
+/// Minimum non-zero hash (only last byte set) passes validation.
+#[test]
+fn test_minimal_nonzero_wasm_hash_accepted() {
+    let env = Env::default();
+    let mut bytes = [0u8; 32];
+    bytes[31] = 1;
+    validate_wasm_hash(&BytesN::from_array(&env, &bytes));
+}
+
+/// Admin calling upgrade() with a zero hash is rejected before WASM swap.
+#[test]
+fn test_admin_upgrade_with_zero_hash_rejected() {
+    let (env, _contract_id, client, _admin, _creator, _token) = setup();
+    // mock_all_auths is active from setup — admin auth passes, hash check fails.
+    let result = client.try_upgrade(&zero_hash(&env));
+    assert!(result.is_err());
+}
+
+// ── State persistence ─────────────────────────────────────────────────────────
+
+/// Contract storage is untouched after a rejected upgrade call.
+#[test]
+fn test_storage_persists_after_rejected_upgrade() {
+    let (env, _contract_id, client, _admin, _creator, _token) = setup();
+    let goal_before = client.goal();
+    let deadline_before = client.deadline();
+    let raised_before = client.total_raised();
+
+    env.set_auths(&[]);
+    let _ = client.try_upgrade(&dummy_hash(&env));
+
+    assert_eq!(client.goal(), goal_before);
+    assert_eq!(client.deadline(), deadline_before);
+    assert_eq!(client.total_raised(), raised_before);
+}
+
+/// Admin-only upgrade: valid WASM binary test (requires compiled WASM).
+#[test]
+#[ignore = "requires: cargo build --target wasm32-unknown-unknown --release"]
 fn test_admin_can_upgrade_with_valid_wasm() {
     mod crowdfund_wasm {
         soroban_sdk::contractimport!(
             file = "../../target/wasm32-unknown-unknown/release/crowdfund.wasm"
         );
     }
-
     let (env, _contract_id, client, _admin, _creator, _token) = setup();
-    let wasm_hash = env
-        .deployer()
-        .upload_contract_wasm(crowdfund_wasm::WASM);
-    // Admin auth is mocked via mock_all_auths in setup — should succeed.
+    let wasm_hash = env.deployer().upload_contract_wasm(crowdfund_wasm::WASM);
     client.upgrade(&wasm_hash);
-}
-
-/// State Persistence: contract storage (goal, deadline, total_raised) is
-/// intact and readable after a simulated upgrade.
-///
-/// A real WASM swap is not possible without a compiled binary, so we simulate
-/// the "post-upgrade" state by verifying that all storage written during
-/// `initialize()` is still accessible immediately after the auth check that
-/// `upgrade()` performs — i.e. the auth mechanism itself does not mutate or
-/// clear any campaign data.
-#[test]
-fn test_storage_persists_after_upgrade_auth() {
-    let (env, _contract_id, client, _admin, _creator, _token) = setup();
-
-    // Capture state before the upgrade auth check.
-    let goal_before = client.goal();
-    let deadline_before = client.deadline();
-    let raised_before = client.total_raised();
-
-    // Attempt upgrade with no auth — rejected, but storage must be untouched.
-    env.set_auths(&[]);
-    let _ = client.try_upgrade(&dummy_hash(&env));
-
-    // State is identical after the rejected call.
-    assert_eq!(client.goal(), goal_before);
-    assert_eq!(client.deadline(), deadline_before);
-    assert_eq!(client.total_raised(), raised_before);
 }
