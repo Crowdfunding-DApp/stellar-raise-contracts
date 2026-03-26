@@ -140,6 +140,74 @@ Desktop:  > 1024px   (Full-screen management interface)
 
 ---
 
+### Header (Mobile < 768px)
+
+**Location**: Fixed at top of screen  
+**Height**: 48px (mobile), token-driven via `--header-height`  
+**Visibility**: Mobile only — hidden at ≥ 768px (sidebar provides brand identity)
+
+**Breakpoint behaviour**:
+
+| Viewport | Header | BottomNav | Sidebar |
+|----------|--------|-----------|---------|
+| < 768px (mobile) | ✓ visible | ✓ visible | ✗ hidden |
+| 768–1023px (tablet) | ✗ hidden | ✗ hidden | ✓ 240px |
+| ≥ 1024px (desktop) | ✗ hidden | ✗ hidden | ✓ 280px |
+
+**CSS custom properties consumed**:
+
+| Token | Usage |
+|-------|-------|
+| `--header-height-mobile` | Height at < 768px (48px) |
+| `--header-height-tablet` | Height at 768–1023px (56px) |
+| `--header-height-desktop` | Height at ≥ 1024px (64px) |
+| `--header-height` | Per-breakpoint alias for layout offsets |
+| `--color-neutral-100` | Header background |
+| `--color-deep-navy` | Brand name text |
+| `--color-primary-blue` | Focus indicator, logo fill |
+| `--font-family-primary` | All header text |
+| `--font-size-lg` | Brand name font size |
+| `--shadow-sm` | Resting shadow |
+| `--shadow-md` | Scrolled shadow (`.site-header--scrolled`) |
+| `--transition-fast` | Shadow transition |
+| `--z-fixed` | z-index (same layer as BottomNav/Sidebar) |
+| `--safe-area-inset-top` | Top padding for notched devices |
+| `--space-4` | Horizontal padding |
+
+**Implementation**:
+```html
+<header class="site-header" role="banner">
+  <a href="#main-content" class="site-header__skip-link">Skip to main content</a>
+  <div class="site-header__inner">
+    <a href="/" class="site-header__brand" aria-label="Stellar Raise — home">
+      <svg class="site-header__logo" aria-hidden="true" focusable="false"><!-- logo --></svg>
+      <span class="site-header__brand-name">Stellar Raise</span>
+    </a>
+    <div class="site-header__actions"><!-- wallet button etc. --></div>
+  </div>
+</header>
+
+<!-- Main content offset on mobile -->
+<main id="main-content" class="has-header has-bottom-nav">
+  <!-- content -->
+</main>
+```
+
+**Content adjustment**:
+```html
+<!-- Mobile: offset for both header (top) and BottomNav (bottom) -->
+<main class="has-header has-bottom-nav">...</main>
+
+<!-- Tablet+: sidebar layout, no header offset needed -->
+<main class="has-sidebar">...</main>
+```
+
+> **Edge case — `.has-header` + `.has-sidebar` on the same element**: Both classes can coexist without harm. On tablet/desktop `.has-header` resets `padding-top` to `0`, so only the sidebar `margin-left` applies. On mobile `.has-sidebar` has no effect (sidebar is hidden). No conflict occurs.
+
+**Scroll shadow**: A small passive `scroll` listener toggles `.site-header--scrolled` to elevate the shadow from `--shadow-sm` to `--shadow-md`. See `Header.html` for the reference implementation.
+
+---
+
 ## Modal Patterns
 
 ### Mobile Modal (< 768px)
@@ -629,6 +697,8 @@ frontend/
 │   ├── navigation/
 │   │   ├── BottomNav.css
 │   │   ├── BottomNav.html
+│   │   ├── Header.css          # Site-level header (mobile only)
+│   │   ├── Header.html         # Self-contained demo page
 │   │   ├── Sidebar.css
 │   │   └── Sidebar.html
 │   ├── modals/

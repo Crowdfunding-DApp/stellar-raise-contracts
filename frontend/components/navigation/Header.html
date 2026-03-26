@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    viewport-fit=cover enables safe-area-inset-* env() values on notched devices.
+    Requirement 1.7 / Design spec §4.1
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Header Component — Stellar Raise Demo</title>
+
+  <!-- 1. Design tokens and utilities must load before component CSS -->
+  <link rel="stylesheet" href="../../styles/responsive.css" />
+  <!-- 2. Component-specific styles -->
+  <link rel="stylesheet" href="Header.css" />
+
+  <style>
+    /* Demo-page chrome only — not part of the component */
+    body {
+      font-family: var(--font-family-primary);
+      color: var(--color-neutral-900);
+      background-color: var(--color-neutral-200);
+    }
+
+    .demo-content {
+      padding: var(--space-8) var(--space-4);
+    }
+
+    .demo-content h1 {
+      font-size: var(--font-size-2xl);
+      color: var(--color-deep-navy);
+      margin-bottom: var(--space-4);
+    }
+
+    .demo-content p {
+      font-size: var(--font-size-base);
+      line-height: 1.6;
+      max-width: 60ch;
+      margin-bottom: var(--space-4);
+    }
+  </style>
+</head>
+<body>
+
+  <!--
+    site-header: role="banner" satisfies WCAG 4.1.2 landmark requirement.
+    Requirement 4.1
+  -->
+  <header class="site-header" role="banner">
+
+    <!--
+      Skip link: first focusable child.
+      Visually hidden until focused; moves keyboard focus to #main-content.
+      Requirement 4.2 / Property 8
+    -->
+    <a href="#main-content" class="site-header__skip-link">Skip to main content</a>
+
+    <div class="site-header__inner">
+
+      <!-- Brand identity: logo SVG + "Stellar Raise" name -->
+      <a href="/" class="site-header__brand" aria-label="Stellar Raise — home">
+        <!--
+          Decorative SVG logo; aria-hidden prevents screen-reader duplication
+          since the parent <a> already has an aria-label.
+        -->
+        <svg
+          class="site-header__logo"
+          width="32"
+          height="32"
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="16" cy="16" r="16" fill="var(--color-primary-blue)" />
+          <path d="M16 8L20 16L16 24L12 16L16 8Z" fill="var(--color-neutral-100)" />
+        </svg>
+        <span class="site-header__brand-name">Stellar Raise</span>
+      </a>
+
+      <!--
+        Actions slot: contextual elements (e.g. wallet connect button).
+        Empty in this demo; populated by the consuming application.
+      -->
+      <div class="site-header__actions">
+        <!-- Slot for wallet connect button or other contextual actions -->
+      </div>
+
+    </div>
+  </header>
+
+  <!--
+    Main content:
+      .has-header   → padding-top = header height + safe-area-inset-top (mobile)
+      .has-bottom-nav → padding-bottom = 72px + safe-area-inset-bottom (mobile)
+    Both classes reset to 0 at ≥ 768px (sidebar layout takes over).
+  -->
+  <main id="main-content" class="has-header has-bottom-nav" tabindex="-1">
+    <div class="demo-content container">
+      <h1>Header Component Demo</h1>
+      <p>
+        Resize the viewport below 768 px to see the fixed header.
+        At 768 px and above the header hides and the sidebar provides brand identity.
+      </p>
+      <p>
+        Press <kbd>Tab</kbd> to reach the skip link, then <kbd>Enter</kbd> to jump
+        directly to this content area.
+      </p>
+      <p>
+        Scroll down to observe the <code>.site-header--scrolled</code> shadow
+        elevation change (driven by the inline script below).
+      </p>
+      <!-- Filler content to enable scroll testing -->
+      <p style="margin-top: var(--space-16);">— end of demo content —</p>
+    </div>
+  </main>
+
+  <!--
+    Scroll shadow toggle.
+    Passive listener for performance; toggles .site-header--scrolled
+    which switches box-shadow from --shadow-sm to --shadow-md.
+    Requirement 3.4 / Design spec §Data Models
+  -->
+  <script>
+    (function () {
+      var header = document.querySelector('.site-header');
+      if (!header) return;
+      window.addEventListener('scroll', function () {
+        header.classList.toggle('site-header--scrolled', window.scrollY > 0);
+      }, { passive: true });
+    }());
+  </script>
+
+</body>
+</html>

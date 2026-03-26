@@ -135,6 +135,29 @@ This document provides comprehensive testing procedures for the Stellar Raise re
 
 ### Navigation Testing
 
+#### Header Component (Mobile < 768px)
+
+**Test Steps:**
+1. Open `Header.html` at 375px viewport
+2. Verify `.site-header` is visible and fixed at top
+3. Measure computed height — must be 48px (`--header-height-mobile`)
+4. Verify `box-shadow` equals `var(--shadow-sm)` at `scrollY = 0`
+5. Scroll page to `scrollY = 1`; assert `.site-header--scrolled` class is present and shadow equals `var(--shadow-md)`
+6. Resize to 768px; assert `.site-header` has `display: none`
+7. Resize to 1280px; assert `.site-header` has `display: none`
+8. Press Tab; assert first focused element is `.site-header__skip-link`
+9. Press Enter on skip link; assert `document.activeElement.id === 'main-content'`
+10. Simulate `env(safe-area-inset-top) = 44px`; assert header `padding-top` is `44px`
+11. Run axe-core at 375px, 768px, 1280px; assert zero WCAG 2.1 AA violations
+
+**Expected Results:**
+- Header visible and fixed on mobile; hidden on tablet/desktop
+- Height within spec: [48px, 64px] mobile, [56px, 72px] tablet, [64px, 80px] desktop
+- Shadow elevates on scroll; resets when back at top
+- Skip link is first focusable element and navigates to `#main-content`
+- Safe area inset applied correctly on notched devices
+- Zero accessibility violations
+
 #### Bottom Navigation (Mobile)
 
 **Test Steps:**
