@@ -146,6 +146,9 @@ mod soroban_sdk_minor_test;
 pub mod withdraw_event_emission;
 use withdraw_event_emission::{emit_withdrawal_event, mint_nfts_in_batch};
 use withdraw_event_emission::{emit_fee_transferred, emit_withdrawn, mint_nfts_in_batch};
+use withdraw_event_emission::{emit_fee_transferred, emit_withdrawn, mint_nfts_in_batch};
+#[cfg(test)]
+mod withdraw_event_emission_test;
 
 #[cfg(test)]
 #[path = "stellar_token_minter_test.rs"]
@@ -2533,6 +2536,7 @@ impl CrowdfundContract {
             (contributor.clone(), amount),
         );
             .set(&DataKey::Status, &Status::Refunded);
+        emit_withdrawn(&env, &creator, creator_payout, nft_minted_count);
 
         Ok(())
     }
