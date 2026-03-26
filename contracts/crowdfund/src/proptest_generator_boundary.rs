@@ -26,8 +26,8 @@
 use soroban_sdk::{contract, contractimpl, Env, Symbol};
 
 // ── Constants ────────────────────────────────────────────────────────────────
-// @notice All constants are immutable and define the safe operating boundaries
-//         for the crowdfunding platform and its property-based tests.
+//! @notice All constants are immutable and define the safe operating boundaries
+//!         for the crowdfunding platform and its property-based tests.
 
 /// Minimum deadline offset in seconds (~17 minutes).
 /// @dev Prevents flaky tests due to timing races and ensures meaningful campaign duration.
@@ -75,8 +75,8 @@ pub struct ProptestGeneratorBoundary;
 #[contractimpl]
 impl ProptestGeneratorBoundary {
     // ── Getter Functions ──────────────────────────────────────────────────────
-    // @notice These functions return immutable boundary constants.
-    //         Used by off-chain scripts and other contracts to query safe limits.
+    /// @notice These functions return immutable boundary constants.
+    ///         Used by off-chain scripts and other contracts to query safe limits.
 
     /// Returns the minimum deadline offset in seconds.
     /// @notice ~17 minutes; prevents flaky tests and ensures meaningful campaigns.
@@ -139,8 +139,8 @@ impl ProptestGeneratorBoundary {
     }
 
     // ── Validation Functions ──────────────────────────────────────────────────
-    // @notice These functions validate inputs against boundary constants.
-    //         Used by tests and off-chain scripts to ensure safe values.
+    /// @notice These functions validate inputs against boundary constants.
+    ///         Used by tests and off-chain scripts to ensure safe values.
 
     /// Validates that a deadline offset is within [min, max] range.
     /// @notice Rejects values that cause timestamp overflow or campaigns too short.
@@ -193,8 +193,8 @@ impl ProptestGeneratorBoundary {
     }
 
     // ── Clamping Functions ────────────────────────────────────────────────────
-    // @notice These functions clamp values into safe operating bounds.
-    //         Used by tests to ensure values stay within limits.
+    /// @notice These functions clamp values into safe operating bounds.
+    ///         Used by tests to ensure values stay within limits.
 
     /// Clamps a requested proptest case count into safe operating bounds.
     /// @notice Protects CI runtime cost while preserving boundary signal.
@@ -220,8 +220,8 @@ impl ProptestGeneratorBoundary {
     }
 
     // ── Derived Calculation Functions ─────────────────────────────────────────
-    // @notice These functions compute derived values using boundary constants.
-    //         All arithmetic is guarded against overflow and division-by-zero.
+    /// @notice These functions compute derived values using boundary constants.
+    ///         All arithmetic is guarded against overflow and division-by-zero.
 
     /// Computes progress in basis points, capped at 10,000.
     /// @notice Returns 0 when goal <= 0 to avoid division-by-zero.
