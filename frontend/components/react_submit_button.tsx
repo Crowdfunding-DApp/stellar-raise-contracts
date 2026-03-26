@@ -194,6 +194,10 @@ const ReactSubmitButton = ({
     setIsLocallySubmitting(true);
     try {
       await Promise.resolve(onClick(event));
+    } catch {
+      // Rejection is intentionally swallowed here; callers surface errors via
+      // the `state` prop (e.g. transitioning to "error"). Re-throwing would
+      // produce an unhandled rejection in the browser.
     } finally {
       setIsLocallySubmitting(false);
     }

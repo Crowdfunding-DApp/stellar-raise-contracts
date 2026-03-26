@@ -360,4 +360,21 @@ describe("ReactSubmitButton", () => {
     );
     expect(screen.getByRole("button")).toHaveTextContent("Submitted");
   });
+
+  it("does not throw when clicked with no onClick handler", () => {
+    // Covers the `!onClick` early-return branch in handleClick.
+    render(<ReactSubmitButton state="idle" />);
+    expect(() => fireEvent.click(screen.getByRole("button"))).not.toThrow();
+  });
+
+  it("resets local submitting flag after a rejected onClick promise", async () => {
+    // Covers the catch+finally branch when onClick rejects (component swallows the error).
+    const handler = jest.fn().mockRejectedValue(new Error("tx failed"));
+    render(<ReactSubmitButton state="idle" onClick={handler} />);
+    const btn = screen.getByRole("button");
+    fireEvent.click(btn);
+    await waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+    // After the finally block the button is no longer locally-submitting.
+    await waitFor(() => expect(btn).not.toBeDisabled());
+  });
 });

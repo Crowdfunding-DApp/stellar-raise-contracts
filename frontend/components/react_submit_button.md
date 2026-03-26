@@ -132,7 +132,13 @@ Labels are capped at 80 characters. Oversized strings are truncated with `...` t
 ## Running Tests
 
 ```bash
-npm test -- --testPathPattern=react_submit_button --coverage
+npm test -- --testPathPatterns=react_submit_button --coverage
 ```
 
-Coverage targets: statements ≥ 95%, branches ≥ 95%, functions 100%, lines ≥ 95%.
+Coverage achieved: statements 100%, branches 100%, functions 100%, lines 100%.
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       54 passed, 54 total
+Snapshots:   0 total
+```
