@@ -120,12 +120,7 @@ pub fn mint_nfts_in_batch(env: &Env, nft_contract: &Option<Address>) -> u32 {
             .get(&DataKey::Contribution(contributor.clone()))
             .unwrap_or(0);
         if contribution > 0 {
-            env.invoke_contract::<()>(
-                nft_contract,
-                &Symbol::new(env, "mint"),
-                Vec::from_array(env, [contributor.into_val(env), token_id.into_val(env)]),
-            );
-            token_id += 1;
+            client.mint(&contributor);
             minted += 1;
         }
     }
@@ -141,6 +136,7 @@ pub fn mint_nfts_in_batch(env: &Env, nft_contract: &Option<Address>) -> u32 {
 ///
 /// @notice Delegates to `emit_withdrawn`. Prefer calling `emit_withdrawn`
 ///         directly in new code.
+/// @deprecated Use `emit_withdrawn` directly in new code.
 pub fn emit_withdrawal_event(env: &Env, creator: &Address, payout: i128, nft_minted_count: u32) {
     emit_withdrawn(env, creator, payout, nft_minted_count);
 }

@@ -1,6 +1,6 @@
 //! Tests for bounded `withdraw()` event emission.
 //!
-//! Covers:
+//! # Coverage
 //! - NFT minting cap (below, at, and above `MAX_NFT_MINT_BATCH`)
 //! - Single `nft_batch_minted` summary event (not one per contributor)
 //! - `withdrawn` event emitted exactly once with correct payload
@@ -11,6 +11,13 @@
 //! - Security: `emit_fee_transferred` panics on zero/negative fee
 //! - Security: `emit_nft_batch_minted` panics on zero count
 //! - Security: `emit_withdrawn` panics on zero/negative payout
+//!
+//! # Security Notes
+//! - All emit helpers assert valid inputs before publishing to prevent
+//!   misleading events reaching off-chain indexers.
+//! - The double-withdraw guard relies on the `Status` transition from
+//!   `Succeeded` to a consumed state after `withdraw()` completes.
+//! - NFT minting is capped at `MAX_NFT_MINT_BATCH` to bound gas usage.
 
 extern crate std;
 
@@ -38,14 +45,17 @@ struct MockNft;
 
 #[contractimpl]
 impl MockNft {
-    pub fn mint(env: Env, _to: Address, _token_id: u64) {
+    /// Mint an NFT to `_to`; increments the internal counter for test assertions.
+    pub fn mint(env: Env, _to: Address) -> u128 {
         let n: u32 = env
             .storage()
             .instance()
             .get(&MockNftKey::Count)
             .unwrap_or(0);
         env.storage().instance().set(&MockNftKey::Count, &(n + 1));
+        n as u128
     }
+
     pub fn count(env: Env) -> u32 {
         env.storage()
             .instance()
@@ -54,18 +64,18 @@ impl MockNft {
     }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Test helpers ──────────────────────────────────────────────────────────────
 
-/// Set up a campaign with `contributor_count` contributors and an NFT contract.
+/// Build a campaign with `contributor_count` contributors and an NFT contract.
 /// Advances past the deadline and calls `finalize()` so `withdraw()` is ready.
 fn setup_with_nft(
     contributor_count: u32,
 ) -> (
     Env,
     CrowdfundContractClient<'static>,
-    Address,
-    Address,
-    Address,
+    Address, // creator
+    Address, // token
+    Address, // nft contract
 ) {
     let env = Env::default();
     env.mock_all_auths();
@@ -90,6 +100,7 @@ fn setup_with_nft(
         &goal,
         &deadline,
         &1,
+        &None, // max_individual_contribution
         &None,
         &None,
         &None,
@@ -108,7 +119,7 @@ fn setup_with_nft(
     (env, client, creator, token_addr, nft_id)
 }
 
-/// Set up a campaign without an NFT contract.
+/// Build a campaign without an NFT contract.
 fn setup_no_nft(contribution: i128) -> (Env, CrowdfundContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -131,6 +142,7 @@ fn setup_no_nft(contribution: i128) -> (Env, CrowdfundContractClient<'static>, A
         &contribution,
         &deadline,
         &1,
+        &None, // max_individual_contribution
         &None,
         &None,
         &None,
@@ -148,38 +160,30 @@ fn setup_no_nft(contribution: i128) -> (Env, CrowdfundContractClient<'static>, A
 
 /// Count events whose first two topics match the given string pair.
 fn count_events(env: &Env, t1: &str, t2: &str) -> usize {
+    let sym1: Val = soroban_sdk::Symbol::new(env, t1).into();
+    let sym2: Val = soroban_sdk::Symbol::new(env, t2).into();
     env.events()
         .all()
         .iter()
         .filter(|(_, topics, _)| {
             topics.len() >= 2
-                && topics
-                    .get(0)
-                    .map(|v| v == soroban_sdk::Symbol::new(env, t1).into())
-                    .unwrap_or(false)
-                && topics
-                    .get(1)
-                    .map(|v| v == soroban_sdk::Symbol::new(env, t2).into())
-                    .unwrap_or(false)
+                && topics.get(0).map(|v| v.shallow_eq(&sym1)).unwrap_or(false)
+                && topics.get(1).map(|v| v.shallow_eq(&sym2)).unwrap_or(false)
         })
         .count()
 }
 
-/// Return the data Val of the first matching event.
+/// Return the data `Val` of the first matching event.
 fn event_data(env: &Env, t1: &str, t2: &str) -> Option<Val> {
+    let sym1: Val = soroban_sdk::Symbol::new(env, t1).into();
+    let sym2: Val = soroban_sdk::Symbol::new(env, t2).into();
     env.events()
         .all()
         .iter()
         .find(|(_, topics, _)| {
             topics.len() >= 2
-                && topics
-                    .get(0)
-                    .map(|v| v == soroban_sdk::Symbol::new(env, t1).into())
-                    .unwrap_or(false)
-                && topics
-                    .get(1)
-                    .map(|v| v == soroban_sdk::Symbol::new(env, t2).into())
-                    .unwrap_or(false)
+                && topics.get(0).map(|v| v.shallow_eq(&sym1)).unwrap_or(false)
+                && topics.get(1).map(|v| v.shallow_eq(&sym2)).unwrap_or(false)
         })
         .map(|(_, _, data)| data)
 }
@@ -199,20 +203,14 @@ fn test_withdraw_caps_minting_at_max_batch() {
     let count = MAX_NFT_MINT_BATCH + 5;
     let (env, client, _creator, _token, nft_id) = setup_with_nft(count);
     client.withdraw();
-    assert_eq!(
-        MockNftClient::new(&env, &nft_id).count(),
-        MAX_NFT_MINT_BATCH
-    );
+    assert_eq!(MockNftClient::new(&env, &nft_id).count(), MAX_NFT_MINT_BATCH);
 }
 
 #[test]
 fn test_withdraw_mints_exactly_at_cap_boundary() {
     let (env, client, _creator, _token, nft_id) = setup_with_nft(MAX_NFT_MINT_BATCH);
     client.withdraw();
-    assert_eq!(
-        MockNftClient::new(&env, &nft_id).count(),
-        MAX_NFT_MINT_BATCH
-    );
+    assert_eq!(MockNftClient::new(&env, &nft_id).count(), MAX_NFT_MINT_BATCH);
 }
 
 #[test]
@@ -322,10 +320,11 @@ fn test_withdrawn_event_payout_reflects_fee_deduction() {
         &goal,
         &deadline,
         &1,
+        &None, // max_individual_contribution
         &Some(PlatformConfig {
             address: platform_addr,
-            fee_bps: 500,
-        }), // 5%
+            fee_bps: 500, // 5%
+        }),
         &None,
         &None,
     );
@@ -371,10 +370,11 @@ fn test_withdraw_emits_fee_transferred_event() {
         &goal,
         &deadline,
         &1,
+        &None, // max_individual_contribution
         &Some(PlatformConfig {
             address: platform_addr,
-            fee_bps: 200,
-        }), // 2%
+            fee_bps: 200, // 2%
+        }),
         &None,
         &None,
     );
@@ -396,15 +396,116 @@ fn test_withdraw_no_fee_event_without_platform_config() {
     assert_eq!(count_events(&env, "campaign", "fee_transferred"), 0);
 }
 
+/// `fee_transferred` event data carries the correct fee amount.
+#[test]
+fn test_fee_transferred_event_data_includes_fee_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = token_id.address();
+    let sac = token::StellarAssetClient::new(&env, &token_addr);
+
+    let creator = Address::generate(&env);
+    let platform_addr = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3_600;
+    let goal: i128 = 1_000_000;
+
+    client.initialize(
+        &creator,
+        &creator,
+        &token_addr,
+        &goal,
+        &deadline,
+        &1,
+        &None, // max_individual_contribution
+        &Some(PlatformConfig {
+            address: platform_addr.clone(),
+            fee_bps: 300, // 3%
+        }),
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    sac.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+    env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
+    client.withdraw();
+
+    // fee = 1_000_000 * 300 / 10_000 = 30_000
+    let data =
+        event_data(&env, "campaign", "fee_transferred").expect("fee_transferred event not found");
+    let (addr, fee): (Address, i128) =
+        <(Address, i128)>::try_from_val(&env, &data).expect("data shape mismatch");
+    assert_eq!(fee, 30_000, "fee amount mismatch");
+    assert_eq!(addr, platform_addr);
+}
+
+/// `fee_transferred` event fee matches a different fee_bps configuration.
+#[test]
+fn test_fee_transferred_event_fee_amount_matches_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = token_id.address();
+    let sac = token::StellarAssetClient::new(&env, &token_addr);
+
+    let creator = Address::generate(&env);
+    let platform_addr = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3_600;
+    let goal: i128 = 500_000;
+
+    client.initialize(
+        &creator,
+        &creator,
+        &token_addr,
+        &goal,
+        &deadline,
+        &1,
+        &None, // max_individual_contribution
+        &Some(PlatformConfig {
+            address: platform_addr.clone(),
+            fee_bps: 100, // 1%
+        }),
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    sac.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+    env.ledger().set_timestamp(deadline + 1);
+    client.finalize();
+    client.withdraw();
+
+    // fee = 500_000 * 100 / 10_000 = 5_000
+    let data =
+        event_data(&env, "campaign", "fee_transferred").expect("fee_transferred event not found");
+    let (_, fee): (Address, i128) =
+        <(Address, i128)>::try_from_val(&env, &data).expect("data shape mismatch");
+    assert_eq!(fee, 5_000);
+}
+
 // ── Double-withdraw guard ─────────────────────────────────────────────────────
 
-/// Second withdraw() call panics because status is no longer Succeeded.
+/// Second `withdraw()` call must panic because status is no longer `Succeeded`.
 #[test]
 #[should_panic]
 fn test_double_withdraw_panics() {
     let (_, client, _creator, _token) = setup_no_nft(1_000);
     client.withdraw();
-    client.withdraw(); // must panic — status is no longer Succeeded
+    client.withdraw(); // must panic — TotalRaised is 0, status consumed
 }
 
 // ── Security unit tests for emit helpers ──────────────────────────────────────
@@ -427,6 +528,7 @@ fn test_emit_fee_transferred_panics_on_negative_fee() {
 fn test_emit_fee_transferred_succeeds_with_positive_fee() {
     let env = Env::default();
     emit_fee_transferred(&env, &Address::generate(&env), 1);
+    assert_eq!(count_events(&env, "campaign", "fee_transferred"), 1);
 }
 
 #[test]
@@ -440,6 +542,7 @@ fn test_emit_nft_batch_minted_panics_on_zero_count() {
 fn test_emit_nft_batch_minted_succeeds_with_positive_count() {
     let env = Env::default();
     emit_nft_batch_minted(&env, 1);
+    assert_eq!(count_events(&env, "campaign", "nft_batch_minted"), 1);
 }
 
 #[test]
@@ -460,133 +563,12 @@ fn test_emit_withdrawn_panics_on_negative_payout() {
 fn test_emit_withdrawn_succeeds_with_valid_args() {
     let env = Env::default();
     emit_withdrawn(&env, &Address::generate(&env), 1_000, 5);
+    assert_eq!(count_events(&env, "campaign", "withdrawn"), 1);
 }
 
 #[test]
 fn test_emit_withdrawn_allows_zero_nft_count() {
     let env = Env::default();
     emit_withdrawn(&env, &Address::generate(&env), 500, 0);
-}
-
-// ── Security: fee_bps in fee_transferred event ───────────────────────────────
-
-/// `fee_transferred` event data includes fee amount for independent verification.
-#[test]
-fn test_fee_transferred_event_data_includes_fee_amount() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register(CrowdfundContract, ());
-    let client = CrowdfundContractClient::new(&env, &contract_id);
-
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_addr = token_id.address();
-    let sac = token::StellarAssetClient::new(&env, &token_addr);
-
-    let creator = Address::generate(&env);
-    let platform_addr = Address::generate(&env);
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 1_000_000;
-    let fee_bps: u32 = 300; // 3%
-
-    let config = PlatformConfig {
-        address: platform_addr.clone(),
-        fee_bps,
-    };
-
-    client.initialize(
-        &creator,
-        &creator,
-        &token_addr,
-        &goal,
-        &deadline,
-        &1,
-        &Some(config),
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    sac.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-    env.ledger().set_timestamp(deadline + 1);
-    client.finalize();
-    client.withdraw();
-
-    // fee = 1_000_000 * 300 / 10_000 = 30_000
-    let data =
-        event_data(&env, "campaign", "fee_transferred").expect("fee_transferred event not found");
-    let fee: i128 = i128::try_from_val(&env, &data).expect("data shape mismatch");
-    assert_eq!(fee, 30_000, "fee amount mismatch");
-}
-
-/// `fee_transferred` event is emitted with the correct fee amount.
-#[test]
-fn test_fee_transferred_event_fee_amount_matches_config() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register(CrowdfundContract, ());
-    let client = CrowdfundContractClient::new(&env, &contract_id);
-
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_addr = token_id.address();
-    let sac = token::StellarAssetClient::new(&env, &token_addr);
-
-    let creator = Address::generate(&env);
-    let platform_addr = Address::generate(&env);
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal: i128 = 500_000;
-    let fee_bps: u32 = 100; // 1%
-
-    let config = PlatformConfig {
-        address: platform_addr.clone(),
-        fee_bps,
-    };
-
-    client.initialize(
-        &creator,
-        &creator,
-        &token_addr,
-        &goal,
-        &deadline,
-        &1,
-        &Some(config),
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    sac.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-    env.ledger().set_timestamp(deadline + 1);
-    client.finalize();
-    client.withdraw();
-
-    // fee = 500_000 * 100 / 10_000 = 5_000
-    let data =
-        event_data(&env, "campaign", "fee_transferred").expect("fee_transferred event not found");
-    let fee: i128 = i128::try_from_val(&env, &data).expect("data shape mismatch");
-    assert_eq!(fee, 5_000);
-}
-
-// ── Security: emit helper — fee_bps boundary ─────────────────────────────────
-
-/// `emit_fee_transferred` panics on zero fee.
-#[test]
-#[should_panic(expected = "fee_transferred: fee must be positive")]
-fn test_emit_fee_transferred_panics_on_fee_bps_above_max() {
-    let env = Env::default();
-    let addr = Address::generate(&env);
-    emit_fee_transferred(&env, &addr, 0);
-}
-
-/// `emit_fee_transferred` accepts a positive fee (boundary).
-#[test]
-fn test_emit_fee_transferred_accepts_positive_fee() {
-    let env = Env::default();
-    let addr = Address::generate(&env);
-    emit_fee_transferred(&env, &addr, 1_000);
+    assert_eq!(count_events(&env, "campaign", "withdrawn"), 1);
 }
