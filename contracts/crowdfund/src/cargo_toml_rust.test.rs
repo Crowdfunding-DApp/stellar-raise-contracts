@@ -9,13 +9,12 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{Env, String, Vec, Map};
 use crate::cargo_toml_rust::{
-    all_deprecated_versions_replaced, audited_dependencies, DepRecord,
-    PROPTEST_VERSION, PROPTEST_VERSION_DEPRECATED, SOROBAN_SDK_VERSION,
-    SOROBAN_SDK_VERSION_DEPRECATED, CargoTomlRust, DataKey, DependencyInfo,
-    SecurityPolicy, ComplianceRule,
+    all_deprecated_versions_replaced, audited_dependencies, CargoTomlRust, ComplianceRule, DataKey,
+    DepRecord, DependencyInfo, SecurityPolicy, PROPTEST_VERSION, PROPTEST_VERSION_DEPRECATED,
+    SOROBAN_SDK_VERSION, SOROBAN_SDK_VERSION_DEPRECATED,
 };
+use soroban_sdk::{Env, Map, String, Vec};
 
 // ── Version constant stability ────────────────────────────────────────────────
 
@@ -322,7 +321,9 @@ fn block_dependency_functionality() {
     assert_eq!(deps.len(), 0);
 
     let policy = CargoTomlRust::get_security_policy(env.clone());
-    assert!(policy.blocked_crates.contains(&String::from_str(&env, "test-crate")));
+    assert!(policy
+        .blocked_crates
+        .contains(&String::from_str(&env, "test-crate")));
 }
 
 #[test]
@@ -333,10 +334,13 @@ fn update_security_policy() {
     let new_policy = SecurityPolicy {
         max_security_level: 2,
         require_audit: false,
-        allowed_licenses: Vec::from_array(&env, [
-            String::from_str(&env, "MIT"),
-            String::from_str(&env, "Apache-2.0"),
-        ]),
+        allowed_licenses: Vec::from_array(
+            &env,
+            [
+                String::from_str(&env, "MIT"),
+                String::from_str(&env, "Apache-2.0"),
+            ],
+        ),
         blocked_crates: Vec::new(&env),
         auto_update_dev_deps: false,
     };
@@ -368,7 +372,10 @@ fn add_compliance_rule() {
     let rules = CargoTomlRust::get_compliance_rules(env.clone());
     assert_eq!(rules.len(), 3);
 
-    let added_rule = rules.iter().find(|r| r.rule_name == String::from_str(&env, "license_check")).unwrap();
+    let added_rule = rules
+        .iter()
+        .find(|r| r.rule_name == String::from_str(&env, "license_check"))
+        .unwrap();
     assert_eq!(added_rule.check_type, String::from_str(&env, "license"));
     assert_eq!(added_rule.severity, String::from_str(&env, "warning"));
 }
@@ -391,7 +398,10 @@ fn update_existing_compliance_rule() {
     let rules = CargoTomlRust::get_compliance_rules(env.clone());
     assert_eq!(rules.len(), 2); // still 2, not duplicated
 
-    let version_rule = rules.iter().find(|r| r.rule_name == String::from_str(&env, "version_check")).unwrap();
+    let version_rule = rules
+        .iter()
+        .find(|r| r.rule_name == String::from_str(&env, "version_check"))
+        .unwrap();
     assert!(!version_rule.enabled);
     assert_eq!(version_rule.severity, String::from_str(&env, "warning"));
 }
@@ -470,9 +480,7 @@ fn run_compliance_check_security_failure() {
     let permissive_policy = SecurityPolicy {
         max_security_level: 5,
         require_audit: true,
-        allowed_licenses: Vec::from_array(&env, [
-            String::from_str(&env, "MIT"),
-        ]),
+        allowed_licenses: Vec::from_array(&env, [String::from_str(&env, "MIT")]),
         blocked_crates: Vec::new(&env),
         auto_update_dev_deps: true,
     };
@@ -491,9 +499,7 @@ fn run_compliance_check_security_failure() {
     let strict_policy = SecurityPolicy {
         max_security_level: 3,
         require_audit: true,
-        allowed_licenses: Vec::from_array(&env, [
-            String::from_str(&env, "MIT"),
-        ]),
+        allowed_licenses: Vec::from_array(&env, [String::from_str(&env, "MIT")]),
         blocked_crates: Vec::new(&env),
         auto_update_dev_deps: true,
     };
@@ -502,12 +508,15 @@ fn run_compliance_check_security_failure() {
     let results = CargoTomlRust::run_compliance_check(env.clone());
     assert_eq!(results.len(), 2);
 
-    let security_result = results.iter()
+    let security_result = results
+        .iter()
         .find(|(name, _, _)| name == &String::from_str(&env, "security_validation"))
         .unwrap();
 
     assert!(!security_result.1);
-    assert!(security_result.2.contains("dependencies exceed maximum security level"));
+    assert!(security_result
+        .2
+        .contains("dependencies exceed maximum security level"));
 }
 
 #[test]
@@ -561,7 +570,8 @@ fn edge_case_empty_dependency_lists() {
     let results = CargoTomlRust::run_compliance_check(env.clone());
     assert_eq!(results.len(), 2);
 
-    let version_result = results.iter()
+    let version_result = results
+        .iter()
         .find(|(name, _, _)| name == &String::from_str(&env, "version_check"))
         .unwrap();
     assert!(version_result.1);
@@ -607,7 +617,8 @@ fn compliance_rule_edge_cases() {
 
     let results = CargoTomlRust::run_compliance_check(env.clone());
 
-    let unknown_result = results.iter()
+    let unknown_result = results
+        .iter()
         .find(|(name, _, _)| name == &String::from_str(&env, "unknown_check"))
         .unwrap();
 

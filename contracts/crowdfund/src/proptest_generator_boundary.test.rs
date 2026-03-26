@@ -18,14 +18,13 @@
 
 #[cfg(test)]
 mod tests {
-    use soroban_sdk::{Env, Symbol};
-    use proptest::prelude::*;
     use crate::proptest_generator_boundary::{
-        ProptestGeneratorBoundary, ProptestGeneratorBoundaryClient,
-        DEADLINE_OFFSET_MIN, DEADLINE_OFFSET_MAX, GOAL_MIN, GOAL_MAX,
-        MIN_CONTRIBUTION_FLOOR, PROGRESS_BPS_CAP, FEE_BPS_CAP,
-        PROPTEST_CASES_MIN, PROPTEST_CASES_MAX, GENERATOR_BATCH_MAX,
+        ProptestGeneratorBoundary, ProptestGeneratorBoundaryClient, DEADLINE_OFFSET_MAX,
+        DEADLINE_OFFSET_MIN, FEE_BPS_CAP, GENERATOR_BATCH_MAX, GOAL_MAX, GOAL_MIN,
+        MIN_CONTRIBUTION_FLOOR, PROGRESS_BPS_CAP, PROPTEST_CASES_MAX, PROPTEST_CASES_MIN,
     };
+    use proptest::prelude::*;
+    use soroban_sdk::{Env, Symbol};
 
     // ── Setup Helper ──────────────────────────────────────────────────────────
 
@@ -446,7 +445,10 @@ mod tests {
     fn regression_progress_bps_never_exceeds_cap() {
         let (_env, client) = setup();
         // Even with extreme values, should cap at 10,000
-        assert_eq!(client.compute_progress_bps(&i128::MAX, &1), PROGRESS_BPS_CAP);
+        assert_eq!(
+            client.compute_progress_bps(&i128::MAX, &1),
+            PROGRESS_BPS_CAP
+        );
     }
 
     #[test]

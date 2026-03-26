@@ -1,15 +1,13 @@
 #![no_std]
 #[allow(clippy::too_many_arguments)]
-
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, token, Address, Env, String,
-    Symbol, Vec,
+    contract, contractclient, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
 };
 
 // ── Modules ──────────────────────────────────────────────────────────────────
 
-pub mod admin_upgrade_mechanism;
 pub mod access_control;
+pub mod admin_upgrade_mechanism;
 pub mod campaign_goal_minimum;
 pub mod cargo_toml_rust;
 pub mod contract_state_size;
@@ -33,14 +31,12 @@ use withdraw_event_emission::{emit_fee_transferred, emit_withdrawn, mint_nfts_in
 // ── Test Modules ─────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod test;
-#[cfg(test)]
-mod auth_tests;
-#[cfg(test)]
 mod access_control_tests;
 #[cfg(test)]
 #[path = "admin_upgrade_mechanism.test.rs"]
 mod admin_upgrade_mechanism_test;
+#[cfg(test)]
+mod auth_tests;
 #[cfg(test)]
 #[path = "campaign_goal_minimum.test.rs"]
 mod campaign_goal_minimum_test;
@@ -55,6 +51,8 @@ mod contribute_error_handling_tests;
 #[cfg(test)]
 #[path = "npm_package_lock_test.rs"]
 mod npm_package_lock_test;
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 pub mod proptest_generator_boundary;
@@ -65,11 +63,11 @@ mod proptest_generator_boundary_test;
 #[path = "soroban_sdk_minor_test.rs"]
 mod soroban_sdk_minor_test;
 #[cfg(test)]
-#[path = "stellar_token_minter_test.rs"]
-mod stellar_token_minter_test_original;
-#[cfg(test)]
 #[path = "stellar_token_minter.test.rs"]
 mod stellar_token_minter_test_comprehensive;
+#[cfg(test)]
+#[path = "stellar_token_minter_test.rs"]
+mod stellar_token_minter_test_original;
 #[cfg(test)]
 mod withdraw_event_emission_test;
 
@@ -363,12 +361,10 @@ impl CrowdfundContract {
             .get(&contribution_key)
             .unwrap_or(0);
 
-        let new_contribution = previous_amount
-            .checked_add(amount)
-            .ok_or_else(|| {
-                contribute_error_handling::log_contribute_error(&env, ContractError::Overflow);
-                ContractError::Overflow
-            })?;
+        let new_contribution = previous_amount.checked_add(amount).ok_or_else(|| {
+            contribute_error_handling::log_contribute_error(&env, ContractError::Overflow);
+            ContractError::Overflow
+        })?;
 
         env.storage()
             .persistent()
@@ -611,7 +607,11 @@ impl CrowdfundContract {
         }
 
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
-        let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap_or(0);
+        let total: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalRaised)
+            .unwrap_or(0);
 
         let new_status = if total >= goal {
             Status::Succeeded
@@ -620,7 +620,8 @@ impl CrowdfundContract {
         };
 
         env.storage().instance().set(&DataKey::Status, &new_status);
-        env.events().publish(("campaign", "finalized"), new_status.clone());
+        env.events()
+            .publish(("campaign", "finalized"), new_status.clone());
 
         Ok(new_status)
     }
@@ -664,7 +665,12 @@ impl CrowdfundContract {
                 .expect("fee division by zero");
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
-            withdraw_event_emission::emit_fee_transferred(&env, &config.address, fee, config.fee_bps);
+            withdraw_event_emission::emit_fee_transferred(
+                &env,
+                &config.address,
+                fee,
+                config.fee_bps,
+            );
             total.checked_sub(fee).expect("creator payout underflow")
         } else {
             total
@@ -714,7 +720,6 @@ impl CrowdfundContract {
     pub fn refund_available(env: Env, contributor: Address) -> Result<i128, ContractError> {
         validate_refund_preconditions(&env, &contributor)
     }
-
 
     /// Cancel the campaign and refund all contributors — callable only by
     /// the creator while the campaign is still Active.
@@ -783,7 +788,7 @@ impl CrowdfundContract {
 
         env.events().publish(
             (soroban_sdk::Symbol::new(&env, "upgrade"), admin),
-            new_wasm_hash
+            new_wasm_hash,
         );
     }
 

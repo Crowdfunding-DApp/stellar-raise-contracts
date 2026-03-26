@@ -239,7 +239,10 @@ fn describe_error_unknown() {
 
 #[test]
 fn describe_error_unknown() {
-    assert_eq!(contribute_error_handling::describe_error(99), "Unknown error");
+    assert_eq!(
+        contribute_error_handling::describe_error(99),
+        "Unknown error"
+    );
 }
 
 #[test]
@@ -258,7 +261,6 @@ fn is_retryable_returns_false_for_all_known_errors() {
 
 // ── logging bounds: error events are emitted ─────────────────────────────────
 
-=======
 // ── happy path ───────────────────────────────────────────────────────────────
 
 #[test]
@@ -424,7 +426,6 @@ fn is_retryable_returns_false_for_all_known_errors() {
 
 // ── logging bounds: error events are emitted ─────────────────────────────────
 
->>>>>>> develop
 /// Returns the last `contribute_error` event as `(variant_symbol, error_code)`.
 fn last_contribute_error_event(env: &Env) -> Option<(Symbol, u32)> {
     let topic0_str = soroban_sdk::String::from_str(env, "contribute_error");
@@ -546,11 +547,20 @@ fn contribute_exactly_at_deadline_is_accepted() {
 #[test]
 fn error_code_constants_match_contract_error_repr() {
     use contribute_error_handling::error_codes;
-    assert_eq!(error_codes::CAMPAIGN_ENDED, ContractError::CampaignEnded as u32);
+    assert_eq!(
+        error_codes::CAMPAIGN_ENDED,
+        ContractError::CampaignEnded as u32
+    );
     assert_eq!(error_codes::OVERFLOW, ContractError::Overflow as u32);
     assert_eq!(error_codes::ZERO_AMOUNT, ContractError::ZeroAmount as u32);
-    assert_eq!(error_codes::BELOW_MINIMUM, ContractError::BelowMinimum as u32);
-    assert_eq!(error_codes::CAMPAIGN_NOT_ACTIVE, ContractError::CampaignNotActive as u32);
+    assert_eq!(
+        error_codes::BELOW_MINIMUM,
+        ContractError::BelowMinimum as u32
+    );
+    assert_eq!(
+        error_codes::CAMPAIGN_NOT_ACTIVE,
+        ContractError::CampaignNotActive as u32
+    );
 }
 
 // ── describe_error ────────────────────────────────────────────────────────────
@@ -558,7 +568,10 @@ fn error_code_constants_match_contract_error_repr() {
 #[test]
 fn describe_error_all_known_codes() {
     use contribute_error_handling::{describe_error, error_codes};
-    assert_eq!(describe_error(error_codes::CAMPAIGN_ENDED), "Campaign has ended");
+    assert_eq!(
+        describe_error(error_codes::CAMPAIGN_ENDED),
+        "Campaign has ended"
+    );
     assert_eq!(
         describe_error(error_codes::OVERFLOW),
         "Arithmetic overflow — contribution amount too large"
@@ -571,7 +584,10 @@ fn describe_error_all_known_codes() {
         describe_error(error_codes::BELOW_MINIMUM),
         "Contribution amount is below the minimum required"
     );
-    assert_eq!(describe_error(error_codes::CAMPAIGN_NOT_ACTIVE), "Campaign is not active");
+    assert_eq!(
+        describe_error(error_codes::CAMPAIGN_NOT_ACTIVE),
+        "Campaign is not active"
+    );
     assert_eq!(
         describe_error(error_codes::NEGATIVE_AMOUNT),
         "Contribution amount must not be negative"
@@ -639,7 +655,10 @@ fn error_event_emitted_on_campaign_not_active() {
     let _ = client.try_contribute(&contributor, &MIN);
     let (variant, code) = last_contribute_error_event(&env).expect("no event emitted");
     assert_eq!(variant, Symbol::new(&env, "CampaignNotActive"));
-    assert_eq!(code, contribute_error_handling::error_codes::CAMPAIGN_NOT_ACTIVE);
+    assert_eq!(
+        code,
+        contribute_error_handling::error_codes::CAMPAIGN_NOT_ACTIVE
+    );
 }
 
 #[test]
