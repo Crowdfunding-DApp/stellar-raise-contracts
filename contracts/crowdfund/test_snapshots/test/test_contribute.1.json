@@ -62,9 +62,6 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
                   "address": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF"
                 },
                 {
@@ -81,10 +78,7 @@
                     "hi": 0,
                     "lo": 1000
                   }
-                },
-                "void",
-                "void",
-                "void"
+                }
               ]
             }
           },
@@ -107,7 +101,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 10000
+                    "lo": 500000
                   }
                 }
               ]
@@ -132,7 +126,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 5000
+                    "lo": 500000
                   }
                 }
               ]
@@ -154,7 +148,7 @@
                     {
                       "i128": {
                         "hi": 0,
-                        "lo": 5000
+                        "lo": 500000
                       }
                     }
                   ]
@@ -244,97 +238,6 @@
         {
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-                  "symbol": "Contribution"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "Contribution"
-                    },
-                    {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 5000
-                  }
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-                  "symbol": "Contributors"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "Contributors"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "vec": [
-                    {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                    }
-                  ]
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
             "key": "ledger_key_contract_instance",
             "durability": "persistent"
           }
@@ -358,24 +261,34 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "Admin"
+                              "symbol": "Contribution"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                             }
                           ]
                         },
                         "val": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                          "i128": {
+                            "hi": 0,
+                            "lo": 500000
+                          }
                         }
                       },
                       {
                         "key": {
                           "vec": [
                             {
-                              "symbol": "BonusGoalReachedEmitted"
+                              "symbol": "Contributors"
                             }
                           ]
                         },
                         "val": {
-                          "bool": false
+                          "vec": [
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                            }
+                          ]
                         }
                       },
                       {
@@ -436,18 +349,6 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "Roadmap"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "vec": []
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
                               "symbol": "Status"
                             }
                           ]
@@ -483,7 +384,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 5000
+                            "lo": 500000
                           }
                         }
                       }
@@ -673,7 +574,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 5000
+                          "lo": 500000
                         }
                       }
                     },
@@ -819,7 +720,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 5000
+                          "lo": 0
                         }
                       }
                     },

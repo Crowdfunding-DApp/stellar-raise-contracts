@@ -34,9 +34,6 @@
               "function_name": "initialize",
               "args": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
@@ -56,10 +53,7 @@
                     "hi": 0,
                     "lo": 1000
                   }
-                },
-                "void",
-                "void",
-                "void"
+                }
               ]
             }
           },
@@ -144,45 +138,6 @@
         {
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-                  "symbol": "Contributors"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "Contributors"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "vec": []
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
             "key": "ledger_key_contract_instance",
             "durability": "persistent"
           }
@@ -206,24 +161,12 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "Admin"
+                              "symbol": "Contributors"
                             }
                           ]
                         },
                         "val": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
-                              "symbol": "BonusGoalReachedEmitted"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "bool": false
+                          "vec": []
                         }
                       },
                       {
@@ -278,18 +221,6 @@
                             "hi": 0,
                             "lo": 1000
                           }
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
-                              "symbol": "Roadmap"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "vec": []
                         }
                       },
                       {
