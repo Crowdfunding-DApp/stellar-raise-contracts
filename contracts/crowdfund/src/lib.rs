@@ -331,6 +331,8 @@ mod soroban_sdk_minor_test;
 mod stellar_token_minter_test;
 #[cfg(test)]
 mod withdraw_event_emission_test;
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test_comprehensive;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
