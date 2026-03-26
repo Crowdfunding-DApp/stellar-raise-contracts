@@ -24,6 +24,8 @@ use crate::soroban_sdk_minor::{
     FRONTEND_PAGE_SIZE_MIN, SDK_VERSION_BASELINE, SDK_VERSION_TARGET, UPGRADE_NOTE_MAX_LEN,
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 fn make_env() -> Env {
     let env = Env::default();
     env.mock_all_auths();
@@ -32,8 +34,6 @@ fn make_env() -> Env {
 
 /// Build a Soroban String of `len` bytes filled with `byte`.
 fn make_string(env: &Env, len: u32, byte: u8) -> String {
-    // Build a byte slice of the requested length filled with `byte`.
-    // Soroban String::from_bytes accepts a &[u8] slice.
     let bytes = [byte; 512];
     String::from_bytes(env, &bytes[..len as usize])
 }
@@ -267,7 +267,7 @@ fn compatibility_empty_from_version_is_incompatible() {
     );
 }
 
-/// Edge case: empty `to_version` → Incompatible.
+/// Empty `to_version` → Incompatible.
 #[test]
 fn compatibility_empty_to_version_is_incompatible() {
     let env = make_env();
@@ -277,7 +277,7 @@ fn compatibility_empty_to_version_is_incompatible() {
     );
 }
 
-/// Edge case: both empty → Incompatible.
+/// Both empty → Incompatible.
 #[test]
 fn compatibility_both_empty_is_incompatible() {
     let env = make_env();
@@ -356,7 +356,7 @@ fn is_minor_bump_downgrade_is_false() {
     assert!(!is_minor_bump("22.2.0", "22.1.0"));
 }
 
-/// Cross-major → not a minor bump (different major series).
+/// Cross-major → not a minor bump.
 #[test]
 fn is_minor_bump_cross_major_is_false() {
     assert!(!is_minor_bump("22.0.0", "23.1.0"));
@@ -444,7 +444,7 @@ fn pagination_window_offset_at_max_does_not_overflow() {
     assert_eq!(window.start.saturating_add(window.limit), u32::MAX);
 }
 
-/// Edge case: zero requested limit → clamped to FRONTEND_PAGE_SIZE_MIN.
+/// Zero requested limit → clamped to FRONTEND_PAGE_SIZE_MIN.
 #[test]
 fn pagination_window_zero_limit_clamped_to_min() {
     let window = pagination_window(5, 0);
@@ -803,4 +803,41 @@ fn valid_hash_but_empty_version_is_incompatible() {
         CompatibilityStatus::Incompatible
     );
     assert!(validate_wasm_hash(&hash));
+}
+
+/// Full safe-upgrade flow: build record, assess, validate hash, emit event.
+#[test]
+fn full_safe_upgrade_flow() {
+    let env = make_env();
+    let reviewer = Address::generate(&env);
+
+    // 1. Build a change record for the register API change.
+    let record = build_sdk_change_record(
+        &env,
+        "register_api",
+        false,
+        String::from_str(&env, "env.register(Contract, ()) replaces register_contract"),
+    );
+    assert!(!record.is_breaking);
+
+    // 2. Assess compatibility.
+    assert_eq!(
+        assess_compatibility(&env, "22.0.0", "22.1.0"),
+        CompatibilityStatus::Compatible
+    );
+
+    // 3. Validate WASM hash.
+    let mut bytes = [0u8; 32];
+    bytes[0] = 0xDE;
+    let hash = BytesN::from_array(&env, &bytes);
+    assert!(validate_wasm_hash(&hash));
+
+    // 4. Emit audit event with note.
+    emit_upgrade_audit_event_with_note(
+        &env,
+        String::from_str(&env, "22.0.0"),
+        String::from_str(&env, "22.1.0"),
+        reviewer,
+        String::from_str(&env, "all checks passed"),
+    );
 }
