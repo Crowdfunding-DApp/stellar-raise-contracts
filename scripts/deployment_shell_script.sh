@@ -19,6 +19,19 @@
 set -euo pipefail
 
 # ── Exit code constants ───────────────────────────────────────────────────────
+EXIT_OK=0
+EXIT_MISSING_DEP=1
+EXIT_BAD_ARG=2
+EXIT_BUILD_FAIL=3
+EXIT_DEPLOY_FAIL=4
+EXIT_INIT_FAIL=5
+EXIT_NETWORK_FAIL=6
+
+RPC_TESTNET="https://soroban-testnet.stellar.org"
+RPC_MAINNET="https://mainnet.stellar.validationcloud.io/v1/xycpM7GIGz7BKZQ7IQKM"
+RPC_FUTURENET="https://rpc-futurenet.stellar.org"
+
+DEFAULT_MIN_CONTRIBUTION=1
 
 NETWORK="${NETWORK:-testnet}"
 DEPLOY_LOG="${DEPLOY_LOG:-deploy_errors.log}"
