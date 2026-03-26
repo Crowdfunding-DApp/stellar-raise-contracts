@@ -718,6 +718,8 @@ pub struct CampaignInfo {
     GoalTooLow = 8,
     /// Returned when the contribution amount is below the campaign minimum.
     AmountTooLow = 9,
+    /// Returned by `initialize` when `goal < MIN_GOAL_AMOUNT`.
+    GoalTooLow = 13,
 
     /// Returned by `contribute` when `amount` is zero.
     ZeroAmount = 13,
