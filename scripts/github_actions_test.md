@@ -107,8 +107,8 @@ Key speed optimisations:
 
 | Script | Purpose |
 |---|---|
-| `scripts/github_actions_test.sh` | Validates workflow files in CI or locally (8 checks) |
-| `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (9 tests) |
+| `scripts/github_actions_test.sh` | Validates workflow files in CI or locally (12 checks) |
+| `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (13 tests) |
 
 Run locally:
 
@@ -116,6 +116,23 @@ Run locally:
 bash scripts/github_actions_test.sh
 bash scripts/github_actions_test.test.sh
 ```
+
+## Checks performed by `github_actions_test.sh`
+
+| # | Check | Why it matters |
+|---|---|---|
+| 1 | Required workflow files exist and are non-empty | Missing or empty files silently skip CI jobs |
+| 2 | No `actions/checkout@v6` (non-existent version) | Typo causes every run to fail at checkout |
+| 3 | No duplicate WASM build steps in `rust_ci.yml` | Redundant build wastes ~60–90 s per run |
+| 4 | Smoke test does not call non-existent functions | Bad function names cause smoke test to always fail |
+| 5 | Smoke test `initialize` includes `--admin` | Missing arg causes contract initialization to fail |
+| 6 | Smoke test WASM build scoped to `-p crowdfund` | Full workspace build wastes CI time |
+| 7 | Smoke test uses `stellar-cli`, not `soroban-cli` | `soroban-cli` is deprecated and unmaintained |
+| 8 | `rust_ci.yml` includes a `frontend` job | Frontend regressions would otherwise merge undetected |
+| 9 | `rust_ci.yml` job has `timeout-minutes` | Prevents runaway builds holding a runner for 6 hours |
+| 10 | WASM build step has `timeout-minutes` | Step-level signal when dependency download stalls |
+| 11 | Test step has `timeout-minutes` | Bounds slow test files independently of the job cap |
+| 12 | `rust_ci.yml` includes elapsed-time logging step | Timing signal available even when the job fails |
 
 ## Logging bounds added to `rust_ci.yml`
 

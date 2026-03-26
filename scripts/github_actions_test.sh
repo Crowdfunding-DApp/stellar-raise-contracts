@@ -11,10 +11,11 @@
 #   5. Smoke test initialize call includes required --admin argument.
 #   6. Smoke test WASM build is scoped to -p crowdfund.
 #   7. Smoke test uses stellar-cli, not deprecated soroban-cli.
-#   8. rust_ci.yml job has a timeout-minutes bound.
-#   9. rust_ci.yml WASM build step has a timeout-minutes bound.
-#  10. rust_ci.yml test step has a timeout-minutes bound.
-#  11. rust_ci.yml includes a job elapsed-time logging step.
+#   8. rust_ci.yml includes a frontend job for UI tests.
+#   9. rust_ci.yml job has a timeout-minutes bound.
+#  10. rust_ci.yml WASM build step has a timeout-minutes bound.
+#  11. rust_ci.yml test step has a timeout-minutes bound.
+#  12. rust_ci.yml includes a job elapsed-time logging step.
 #
 # Usage:
 #   bash scripts/github_actions_test.sh
@@ -114,6 +115,47 @@ if ! grep -qE "^  frontend:" "$WORKFLOWS_DIR/rust_ci.yml"; then
   fail "rust_ci.yml is missing a 'frontend' job for UI tests"
 else
   pass "rust_ci.yml includes a 'frontend' job for UI tests"
+fi
+
+# ── Check 9: rust_ci.yml job has a timeout-minutes bound ──────────────────────
+# @notice A job-level timeout prevents runaway builds from blocking the merge
+#         queue indefinitely. Without it a hung dependency could hold a runner
+#         for the GitHub Actions default of 6 hours.
+
+if ! grep -q "timeout-minutes" "$WORKFLOWS_DIR/rust_ci.yml"; then
+  fail "rust_ci.yml is missing a timeout-minutes bound on the check job"
+else
+  pass "rust_ci.yml has a timeout-minutes bound"
+fi
+
+# ── Check 10: rust_ci.yml WASM build step has a timeout-minutes bound ─────────
+# @notice Step-level timeouts give finer-grained signals when a specific step
+#         hangs (e.g. a dependency download stalls during WASM compilation).
+
+if ! grep -A2 "Build crowdfund WASM" "$WORKFLOWS_DIR/rust_ci.yml" | grep -q "timeout-minutes"; then
+  fail "rust_ci.yml WASM build step is missing a timeout-minutes bound"
+else
+  pass "rust_ci.yml WASM build step has a timeout-minutes bound"
+fi
+
+# ── Check 11: rust_ci.yml test step has a timeout-minutes bound ───────────────
+# @notice Bounds the test step independently so a single slow test file does
+#         not silently consume the entire job budget.
+
+if ! grep -A2 "Run tests" "$WORKFLOWS_DIR/rust_ci.yml" | grep -q "timeout-minutes"; then
+  fail "rust_ci.yml test step is missing a timeout-minutes bound"
+else
+  pass "rust_ci.yml test step has a timeout-minutes bound"
+fi
+
+# ── Check 12: rust_ci.yml includes an elapsed-time logging step ───────────────
+# @notice An always-running elapsed-time step provides a timing signal even
+#         when the job fails, helping identify which step caused a slowdown.
+
+if ! grep -q "elapsed" "$WORKFLOWS_DIR/rust_ci.yml"; then
+  fail "rust_ci.yml is missing a job elapsed-time logging step"
+else
+  pass "rust_ci.yml includes a job elapsed-time logging step"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
