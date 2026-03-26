@@ -307,6 +307,10 @@ fn test_withdrawn_event_payout_reflects_fee_deduction() {
         &None,
         &None,
         &None,
+        &None,
+        &None,
+        &None,
+        &None,
     );
 
     let c = Address::generate(&env);
@@ -351,6 +355,10 @@ fn test_withdraw_emits_fee_transferred_event() {
         &deadline,
         &1,
         &Some(PlatformConfig { address: platform_addr, fee_bps: 200 }), // 2%
+        &None,
+        &None,
+        &None,
+        &None,
         &None,
         &None,
         &None,

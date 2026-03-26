@@ -6,30 +6,23 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
-pub mod crowdfund_initialize_function;
+// ── Modules ──────────────────────────────────────────────────────────────────
 
+pub mod admin_upgrade_mechanism;
+pub mod campaign_goal_minimum;
 pub mod cargo_toml_rust;
-#[cfg(test)]
-#[path = "cargo_toml_rust.test.rs"]
-mod cargo_toml_rust_test;
-
-pub mod withdraw_event_emission;
-#[cfg(test)]
-mod withdraw_event_emission_test;
-
 pub mod contract_state_size;
-#[cfg(test)]
-#[path = "contract_state_size.test.rs"]
-mod contract_state_size_test;
-
-
+pub mod contribute_error_handling;
+pub mod crowdfund_initialize_function;
+pub mod proptest_generator_boundary;
 pub mod refund_single_token;
 pub mod soroban_sdk_minor;
-pub mod campaign_goal_minimum;
-pub mod contribute_error_handling;
-pub mod proptest_generator_boundary;
+pub mod stellar_token_minter;
+pub mod withdraw_event_emission;
 
-// --- Imports from Modules ---
+// ── Imports from modules ──────────────────────────────────────────────────────
+
+use crowdfund_initialize_function::{execute_initialize, InitParams};
 use refund_single_token::{
     execute_refund_single, refund_single_transfer, validate_refund_preconditions,
 };
@@ -54,19 +47,22 @@ mod withdraw_event_emission_test;
 #[path = "stellar_token_minter_test.rs"]
 mod stellar_token_minter_test_original;
 
-// --- Tests ---
 #[cfg(test)]
 mod test;
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]
+#[path = "admin_upgrade_mechanism.test.rs"]
+mod admin_upgrade_mechanism_test;
+#[cfg(test)]
 #[path = "campaign_goal_minimum.test.rs"]
 mod campaign_goal_minimum_test;
-pub mod crowdfund_initialize_function;
 #[cfg(test)]
-#[path = "crowdfund_initialize_function.test.rs"]
-mod crowdfund_initialize_function_test;
-pub mod contribute_error_handling;
+#[path = "cargo_toml_rust.test.rs"]
+mod cargo_toml_rust_test;
+#[cfg(test)]
+#[path = "contract_state_size.test.rs"]
+mod contract_state_size_test;
 #[cfg(test)]
 mod contribute_error_handling_tests;
 #[cfg(test)]
@@ -81,8 +77,7 @@ pub mod stellar_token_minter;
 #[path = "stellar_token_minter.test.rs"]
 mod stellar_token_minter_test_comprehensive;
 #[cfg(test)]
-#[path = "admin_upgrade_mechanism.test.rs"]
-mod admin_upgrade_mechanism_test;
+mod withdraw_event_emission_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
@@ -280,7 +275,6 @@ impl CrowdfundContract {
         bonus_goal_description: Option<String>,
         metadata_uri: Option<String>,
     ) -> Result<(), ContractError> {
-
         execute_initialize(
             &env,
             InitParams {
@@ -294,52 +288,7 @@ impl CrowdfundContract {
                 bonus_goal,
                 bonus_goal_description,
             },
-        );
-
-        if env.storage().instance().has(&DataKey::Creator) {
-            return Err(ContractError::AlreadyInitialized);
-        }
-
-        // Validate that `token` is a real SEP-41 contract by reading its decimals.
-        // This call will trap if the address does not implement the token interface,
-        // preventing campaigns from being initialized with arbitrary/invalid addresses.
-        let token_client = token::Client::new(&env, &token);
-        let token_decimals: u32 = token_client.decimals();
-
-        creator.require_auth();
-        crate::crowdfund_initialize_function::validate_initialize_inputs(
-            goal,
-            min_contribution,
-            &platform_config,
-            bonus_goal,
-            &bonus_goal_description,
-        );
-        crate::crowdfund_initialize_function::persist_initialize_state(
-            &env,
-            &admin,
-            &creator,
-            &token,
-            goal,
-            deadline,
-            min_contribution,
-            &platform_config,
-            bonus_goal,
-            &bonus_goal_description,
-        );
-
-        // Store optional IPFS metadata URI.
-        if let Some(ref uri) = metadata_uri {
-            env.storage().instance().set(&DataKey::MetadataUri, uri);
-        }
-
-        // Emit CampaignCreated event for off-chain indexers.
-        env.events().publish(
-            ("campaign", "campaign_created"),
-            (creator.clone(), token.clone(), goal, deadline, metadata_uri),
-        );
-
-        Ok(())
-
+        )
     }
 
     /// Returns the list of all contributor addresses.
