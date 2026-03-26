@@ -3,7 +3,7 @@
 Technical reference for the Stellar Raise crowdfund smart contract security module built with Soroban SDK.
 # stellar_token_minter — Crowdfund Contract
 
-Technical reference for the Stellar Raise crowdfund smart contract built with Soroban SDK 22.
+Technical reference for the Stellar Raise crowdfund smart contract security module built with Soroban SDK.
 
 ---
 
@@ -157,6 +157,7 @@ to update one location when campaign parameters change.
 ---
 
 ## Contract Functions
+## Module Functions
 
 #### `validate_pledge_preconditions`
 
@@ -226,41 +227,162 @@ Pulls tokens from all pledgers after the deadline when the combined total meets
 the goal. Each pledger must have pre-authorized the transfer. Emits a single
 `("campaign", "pledges_collected")` summary event.
 ### `initialize`
+### Validation Functions
+
+#### `validate_pledge_preconditions`
 
 ```rust
-fn initialize(
-    env: Env,
-    admin: Address,
-    creator: Address,
-    token: Address,
-    goal: i128,
-    deadline: u64,
+pub fn validate_pledge_preconditions(
+    env: &Env,
+    amount: i128,
     min_contribution: i128,
-    platform_config: Option<PlatformConfig>,
-    bonus_goal: Option<i128>,
-    bonus_goal_description: Option<String>,
 ) -> Result<(), ContractError>
 ```
 
-Creates a new campaign. Can only be called once.
+Validates preconditions for pledge operations.
 
-- `admin` — stored for `upgrade` authorization.
-- `creator` — must sign the transaction (`require_auth`).
-- `platform_config` — optional fee recipient; `fee_bps` must be ≤ 10,000.
-- `bonus_goal` — must be strictly greater than `goal`.
+**Security Checks:**
+1. Campaign must be active (`CampaignNotActive` if not)
+2. Amount must be non-zero (`ZeroAmount` if zero)
+3. Amount must meet minimum (`BelowMinimum` if below)
+4. Current time must be before deadline (`CampaignEnded` if past)
 
-**Errors:** `AlreadyInitialized`  
-**Panics:** platform fee > 100%, bonus goal ≤ primary goal
+**Validation Order:** Status → Amount → Deadline (prevents timing-based attacks)
+
+#### `validate_collect_preconditions`
+
+```rust
+pub fn validate_collect_preconditions(
+    env: &Env,
+) -> Result<(i128, i128, i128), ContractError>
+```
+
+Validates preconditions for collect_pledges operations.
+
+**Returns:** `(goal, total_raised, total_pledged)` on success
+
+**Security Checks:**
+1. Campaign must be active (`CampaignNotActive` if not)
+2. Current time must be after deadline (`CampaignStillActive` if before)
+3. Combined total must meet goal (`GoalNotReached` if below)
+4. No overflow in total calculation (`Overflow` if overflow)
+
+### Arithmetic Helper Functions
+
+#### `calculate_total_commitment`
+
+```rust
+pub fn calculate_total_commitment(
+    total_raised: i128,
+    total_pledged: i128,
+) -> Result<i128, ContractError>
+```
+
+Safely calculates the total commitment (raised + pledged).
+
+- Uses `checked_add` to prevent overflow
+- Returns `ContractError::Overflow` if addition would overflow
+
+#### `safe_add_pledge`
+
+```rust
+pub fn safe_add_pledge(
+    current_total: i128,
+    new_amount: i128,
+) -> Result<i128, ContractError>
+```
+
+Validates that a pledge amount can be safely added to existing totals.
+
+#### `validate_contribution_amount`
+
+```rust
+pub fn validate_contribution_amount(
+    amount: i128,
+    min_contribution: i128,
+) -> Result<(), ContractError>
+```
+
+Validates contribution amounts for security.
+
+- Non-zero amount prevents dust transactions
+- Amount >= minimum prevents spam
+
+#### `safe_calculate_progress`
+
+```rust
+pub fn safe_calculate_progress(
+    current_amount: i128,
+    goal: i128,
+) -> Result<u32, ContractError>
+```
+
+Safely calculates campaign progress in basis points (BPS).
+
+- Returns progress from 0 to 10,000 (where 10,000 = 100%)
+- Caps at 100% to prevent display issues
+- Uses checked arithmetic for overflow protection
+
+### Parameter Validation Functions
+
+#### `validate_deadline`
+
+```rust
+pub fn validate_deadline(
+    env: &Env,
+    deadline: u64,
+) -> Result<(), ContractError>
+```
+
+Validates that a deadline is in the future.
+
+- Returns `CampaignEnded` if deadline is in the past or current
+- Checks against maximum campaign duration (1 year)
+
+#### `validate_goal`
+
+```rust
+pub fn validate_goal(goal: i128) -> Result<(), ContractError>
+```
+
+Validates that a goal amount is reasonable.
+
+- Returns `GoalNotReached` for zero or negative goals
+
+#### `calculate_platform_fee`
+
+```rust
+pub fn calculate_platform_fee(
+    amount: i128,
+    fee_bps: u32,
+) -> Result<i128, ContractError>
+```
+
+Calculates platform fee safely with bounds checking.
+
+- Fee BPS should be 0-10000
+- Uses checked arithmetic
+
+#### `validate_bonus_goal`
+
+```rust
+pub fn validate_bonus_goal(
+    bonus_goal: i128,
+    primary_goal: i128,
+) -> Result<(), ContractError>
+```
+
+Validates bonus goal is strictly greater than primary goal.
+
+- Returns `GoalNotReached` if bonus ≤ primary
 
 ---
 
-### `contribute`
+## Security Features
 
-```rust
-fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError>
-```
+### Authorization Enforcement
 
-Transfers `amount` tokens from `contributor` to the contract. Contributor must sign.
+All state-changing operations require proper authentication via Soroban's `require_auth` mechanism.
 
 - Rejects `amount == 0` → `ZeroAmount`.
 - Rejects amounts below `min_contribution` → `BelowMinimum`.
@@ -270,18 +392,50 @@ Transfers `amount` tokens from `contributor` to the contract. Contributor must s
 - Fires `("campaign", "bonus_goal_reached")` **once** when `total_raised` crosses `bonus_goal`.
 
 **Errors:** `CampaignEnded`, `ZeroAmount`, `BelowMinimum`, `Overflow`
+### Overflow Protection
+
+All arithmetic operations use `checked_*` methods:
+- `checked_add` for additions
+- `checked_mul` for multiplications
+- `checked_div` for divisions
+
+This prevents integer overflow attacks on financial calculations.
+
+### State Validation
+
+Strict validation of campaign state before operations:
+1. Status check occurs first
+2. Input validation follows
+3. Timing checks last
+
+This order ensures consistent error reporting and prevents state confusion attacks.
+
+### Deadline Enforcement
+
+Time-based guards use strict inequality comparisons:
+- `timestamp > deadline` for pledge operations (deadline is exclusive)
+- `timestamp <= deadline` for collection operations (must wait until after)
+
+### Goal Verification
+
+Ensures pledges are only collected when goals are met:
+- Combined totals are atomically validated
+- Overflow protection on total calculations
+- Strict comparison against goal
 
 ---
 
-### `pledge`
+## Attack Vectors Mitigated
 
-```rust
-fn pledge(env: Env, pledger: Address, amount: i128) -> Result<(), ContractError>
-```
-
-Records a pledge without transferring tokens. Tokens are collected later via `collect_pledges`.
-
-**Errors:** `CampaignEnded`
+| Attack Vector | Mitigation |
+|---|---|
+| Integer Overflow | All arithmetic uses `checked_*` operations |
+| Deadline Bypass | Timestamp comparisons use strict inequality |
+| State Confusion | Status checks occur before any modifications |
+| Goal Manipulation | Combined totals atomically validated |
+| Dust Attacks | Zero and minimum amount validation |
+| Reentrancy | Soroban execution model is single-threaded |
+| TOCTOU | Atomic reads of all values before comparison |
 
 ---
 
@@ -566,6 +720,7 @@ pub struct CampaignStats {
 ```
 
 ### `ContractError`
+## Error Codes
 
 | Code | Variant | Meaning |
 |---|---|---|
@@ -634,10 +789,28 @@ pub struct CampaignStats {
 | 8 | `ZeroAmount` | Contribution amount is zero |
 | 9 | `BelowMinimum` | Contribution below `min_contribution` |
 | 10 | `CampaignNotActive` | Campaign is not in `Active` status |
+| 6 | `Overflow` | Integer overflow in calculations |
+| 7 | `NothingToRefund` | Caller has no contribution to refund |
+| 8 | `ZeroAmount` | Amount is zero |
+| 9 | `BelowMinimum` | Amount is below minimum contribution |
+| 10 | `CampaignNotActive` | Campaign is not in active state |
 
 ---
 
-## Events
+## Testing
+
+Tests are located in `contracts/crowdfund/src/stellar_token_minter.test.rs`.
+
+### Test Categories
+
+1. **Authorization Tests**: Verify authentication requirements
+2. **Overflow Protection Tests**: Ensure arithmetic safety
+3. **State Transition Tests**: Validate state machine integrity
+4. **Timing Tests**: Verify deadline enforcement
+5. **Goal Validation Tests**: Ensure goal requirements
+6. **Edge Case Tests**: Cover boundary conditions
+7. **Module Function Tests**: Unit tests for module functions
+8. **Integration Tests**: End-to-end workflow tests
 
 | Topic | Data | Emitted by |
 |---|---|---|
@@ -821,7 +994,86 @@ Tests live in multiple files for comprehensive coverage:
 7. **Status transitions**: Campaign status is properly managed to prevent double operations.
 
 Run with:
+### Running Tests
 
 ```bash
-cargo test --package crowdfund
+# Run all stellar_token_minter tests
+cargo test --package crowdfund stellar_token_minter
+
+# Run with detailed output
+cargo test --package crowdfund stellar_token_minter -- --nocapture
+
+# Run specific test
+cargo test --package crowdfund test_pledge_requires_authorization
 ```
+
+### Test Coverage
+
+| Function | Tests |
+|---|---|
+| `calculate_total_commitment` | Success, zero values, overflow detection, boundary values |
+| `safe_add_pledge` | Success, overflow, zero addition, multiple accumulations |
+| `validate_contribution_amount` | Valid, exact minimum, zero, below minimum |
+| `safe_calculate_progress` | Zero goal, exact, halfway, overfunded, small amounts |
+| `validate_deadline` | Future, past, exact current |
+| `validate_goal` | Positive, zero, negative |
+| `calculate_platform_fee` | Zero BPS, 1%, 5%, 100% |
+| `validate_bonus_goal` | Valid, equal to primary, less than primary |
+| `validate_pledge_preconditions` | Success, zero, below minimum, after deadline, inactive |
+| `validate_collect_preconditions` | Before deadline, at deadline, goal not met, success, inactive |
+
+---
+
+## Integration
+
+The module is designed to be used internally by the crowdfund contract:
+
+```rust
+use crate::stellar_token_minter;
+
+fn pledge(env: Env, pledger: Address, amount: i128) -> Result<(), ContractError> {
+    // Use module validation functions
+    stellar_token_minter::validate_pledge_preconditions(
+        &env,
+        amount,
+        min_contribution
+    )?;
+    
+    // ... rest of pledge logic
+}
+```
+
+---
+
+## Security Invariants
+
+The module guarantees:
+
+1. **No Integer Overflow**: All financial calculations are overflow-safe
+2. **Strict Validation Order**: Status → Inputs → Timing
+3. **Atomic Reads**: All values read at once to prevent TOCTOU
+4. **Consistent Error Codes**: Same errors for same failure conditions
+5. **Non-zero Amounts**: Zero transactions are rejected
+6. **Minimum Enforcement**: Amounts below minimum are rejected
+7. **Deadline Strictness**: Deadline comparisons are always exclusive
+
+---
+
+## Changelog
+
+### v2.0.0
+
+- Added comprehensive NatSpec documentation
+- Added `safe_calculate_progress` function
+- Added `validate_deadline` function
+- Added `validate_goal` function
+- Added `calculate_platform_fee` function
+- Added `validate_bonus_goal` function
+- Added extensive unit tests in module
+- Improved test documentation
+
+### v1.0.0
+
+- Initial module structure
+- Core validation functions
+- Basic overflow protection

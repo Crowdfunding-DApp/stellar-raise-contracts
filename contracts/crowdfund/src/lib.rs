@@ -178,9 +178,13 @@ mod crowdfund_initialize_function_test;
 #[cfg(test)]
 mod admin_upgrade_mechanism_test;
 pub mod soroban_sdk_minor;
+pub mod stellar_token_minter;
 
 #[cfg(test)]
 mod auth_tests;
+#[cfg(test)]
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test_new;
 pub mod campaign_goal_minimum;
 #[cfg(test)]
 mod campaign_goal_minimum_test;
