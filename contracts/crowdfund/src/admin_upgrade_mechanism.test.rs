@@ -1,6 +1,6 @@
 #![cfg(test)]
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 use crate::{CrowdfundContract, CrowdfundContractClient};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
@@ -23,15 +23,7 @@ fn setup() -> (
     let client = CrowdfundContractClient::new(&env, &contract_id);
 
     client.initialize(
-        &admin,
-        &creator,
-        &token,
-        &1000i128,
-        &10000u64,
-        &10i128,
-        &None,
-        &None,
-        &None,
+        &admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None,
         &None, // metadata_uri
     );
 
@@ -166,15 +158,7 @@ fn test_admin_can_upgrade_with_valid_wasm() {
     // Initialize with mock_all_auths so initialize() succeeds
     env.mock_all_auths();
     client.initialize(
-        &admin,
-        &creator,
-        &token,
-        &1000i128,
-        &10000u64,
-        &10i128,
-        &None,
-        &None,
-        &None,
+        &admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None,
         &None, // metadata_uri
     );
 

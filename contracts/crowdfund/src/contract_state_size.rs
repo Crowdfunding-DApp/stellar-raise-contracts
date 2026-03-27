@@ -10,7 +10,7 @@
 //!
 //! All byte constants are measured in UTF-8 bytes; count constants are item counts.
 
-use soroban_sdk::{contract, contractimpl, contracterror, Address, Env, String, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, String, Vec};
 
 use crate::{DataKey, RoadmapItem};
 
@@ -220,9 +220,17 @@ pub fn validate_bonus_goal_description(desc: &String) -> Result<(), StateSizeErr
 /// @param title_len        Length of the title string in bytes.
 /// @param description_len  Length of the description string in bytes.
 /// @param socials_len      Length of the social links string in bytes.
-pub fn validate_metadata_total_length(title_len: u32, description_len: u32, socials_len: u32) -> Result<(), StateSizeError> {
+pub fn validate_metadata_total_length(
+    title_len: u32,
+    description_len: u32,
+    socials_len: u32,
+) -> Result<(), StateSizeError> {
     const AGGREGATE_LIMIT: u32 = MAX_TITLE_LENGTH + MAX_DESCRIPTION_LENGTH + MAX_STRING_LEN;
-    if title_len.saturating_add(description_len).saturating_add(socials_len) > AGGREGATE_LIMIT {
+    if title_len
+        .saturating_add(description_len)
+        .saturating_add(socials_len)
+        > AGGREGATE_LIMIT
+    {
         Err(StateSizeError::StringTooLong)
     } else {
         Ok(())
@@ -239,17 +247,29 @@ pub struct ContractStateSize;
 #[contractimpl]
 impl ContractStateSize {
     /// Returns `MAX_TITLE_LENGTH`.
-    pub fn max_title_length(_env: Env) -> u32 { MAX_TITLE_LENGTH }
+    pub fn max_title_length(_env: Env) -> u32 {
+        MAX_TITLE_LENGTH
+    }
     /// Returns `MAX_DESCRIPTION_LENGTH`.
-    pub fn max_description_length(_env: Env) -> u32 { MAX_DESCRIPTION_LENGTH }
+    pub fn max_description_length(_env: Env) -> u32 {
+        MAX_DESCRIPTION_LENGTH
+    }
     /// Returns `MAX_STRING_LEN` (social links limit).
-    pub fn max_social_links_length(_env: Env) -> u32 { MAX_STRING_LEN }
+    pub fn max_social_links_length(_env: Env) -> u32 {
+        MAX_STRING_LEN
+    }
     /// Returns `MAX_CONTRIBUTORS`.
-    pub fn max_contributors(_env: Env) -> u32 { MAX_CONTRIBUTORS }
+    pub fn max_contributors(_env: Env) -> u32 {
+        MAX_CONTRIBUTORS
+    }
     /// Returns `MAX_ROADMAP_ITEMS`.
-    pub fn max_roadmap_items(_env: Env) -> u32 { MAX_ROADMAP_ITEMS }
+    pub fn max_roadmap_items(_env: Env) -> u32 {
+        MAX_ROADMAP_ITEMS
+    }
     /// Returns `MAX_STRETCH_GOALS`.
-    pub fn max_stretch_goals(_env: Env) -> u32 { MAX_STRETCH_GOALS }
+    pub fn max_stretch_goals(_env: Env) -> u32 {
+        MAX_STRETCH_GOALS
+    }
 
     /// Returns `true` if `title` length is within `MAX_TITLE_LENGTH`.
     pub fn validate_title(_env: Env, title: String) -> bool {

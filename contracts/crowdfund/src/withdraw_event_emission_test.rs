@@ -60,7 +60,13 @@ impl MockNft {
 /// Advances past the deadline and calls `finalize()` so `withdraw()` is ready.
 fn setup_with_nft(
     contributor_count: u32,
-) -> (Env, CrowdfundContractClient<'static>, Address, Address, Address) {
+) -> (
+    Env,
+    CrowdfundContractClient<'static>,
+    Address,
+    Address,
+    Address,
+) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -105,9 +111,7 @@ fn setup_with_nft(
 }
 
 /// Set up a campaign without an NFT contract.
-fn setup_no_nft(
-    contribution: i128,
-) -> (Env, CrowdfundContractClient<'static>, Address, Address) {
+fn setup_no_nft(contribution: i128) -> (Env, CrowdfundContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -152,8 +156,14 @@ fn count_events(env: &Env, t1: &str, t2: &str) -> usize {
         .iter()
         .filter(|(_, topics, _)| {
             topics.len() >= 2
-                && topics.get(0).map(|v| v == soroban_sdk::Symbol::new(env, t1).into()).unwrap_or(false)
-                && topics.get(1).map(|v| v == soroban_sdk::Symbol::new(env, t2).into()).unwrap_or(false)
+                && topics
+                    .get(0)
+                    .map(|v| v == soroban_sdk::Symbol::new(env, t1).into())
+                    .unwrap_or(false)
+                && topics
+                    .get(1)
+                    .map(|v| v == soroban_sdk::Symbol::new(env, t2).into())
+                    .unwrap_or(false)
         })
         .count()
 }
@@ -165,8 +175,14 @@ fn event_data(env: &Env, t1: &str, t2: &str) -> Option<Val> {
         .iter()
         .find(|(_, topics, _)| {
             topics.len() >= 2
-                && topics.get(0).map(|v| v == soroban_sdk::Symbol::new(env, t1).into()).unwrap_or(false)
-                && topics.get(1).map(|v| v == soroban_sdk::Symbol::new(env, t2).into()).unwrap_or(false)
+                && topics
+                    .get(0)
+                    .map(|v| v == soroban_sdk::Symbol::new(env, t1).into())
+                    .unwrap_or(false)
+                && topics
+                    .get(1)
+                    .map(|v| v == soroban_sdk::Symbol::new(env, t2).into())
+                    .unwrap_or(false)
         })
         .map(|(_, _, data)| data)
 }
@@ -186,14 +202,20 @@ fn test_withdraw_caps_minting_at_max_batch() {
     let count = MAX_NFT_MINT_BATCH + 5;
     let (env, client, _creator, _token, nft_id) = setup_with_nft(count);
     client.withdraw();
-    assert_eq!(MockNftClient::new(&env, &nft_id).count(), MAX_NFT_MINT_BATCH);
+    assert_eq!(
+        MockNftClient::new(&env, &nft_id).count(),
+        MAX_NFT_MINT_BATCH
+    );
 }
 
 #[test]
 fn test_withdraw_mints_exactly_at_cap_boundary() {
     let (env, client, _creator, _token, nft_id) = setup_with_nft(MAX_NFT_MINT_BATCH);
     client.withdraw();
-    assert_eq!(MockNftClient::new(&env, &nft_id).count(), MAX_NFT_MINT_BATCH);
+    assert_eq!(
+        MockNftClient::new(&env, &nft_id).count(),
+        MAX_NFT_MINT_BATCH
+    );
 }
 
 #[test]
@@ -303,7 +325,10 @@ fn test_withdrawn_event_payout_reflects_fee_deduction() {
         &goal,
         &deadline,
         &1,
-        &Some(PlatformConfig { address: platform_addr, fee_bps: 500 }), // 5%
+        &Some(PlatformConfig {
+            address: platform_addr,
+            fee_bps: 500,
+        }), // 5%
         &None,
         &None,
         &None,
@@ -354,7 +379,10 @@ fn test_withdraw_emits_fee_transferred_event() {
         &goal,
         &deadline,
         &1,
-        &Some(PlatformConfig { address: platform_addr, fee_bps: 200 }), // 2%
+        &Some(PlatformConfig {
+            address: platform_addr,
+            fee_bps: 200,
+        }), // 2%
         &None,
         &None,
         &None,
@@ -575,12 +603,14 @@ fn test_withdrawn_event_includes_ledger_timestamp() {
     let ts = env.ledger().timestamp();
     client.withdraw();
 
-    let data =
-        first_event_data(&env, "campaign", "withdrawn").expect("withdrawn event not found");
+    let data = first_event_data(&env, "campaign", "withdrawn").expect("withdrawn event not found");
     let tuple: (Address, i128, u32, u64) =
         <(Address, i128, u32, u64)>::try_from_val(&env, &data).expect("data shape mismatch");
 
-    assert_eq!(tuple.3, ts, "timestamp in event must match ledger at withdrawal time");
+    assert_eq!(
+        tuple.3, ts,
+        "timestamp in event must match ledger at withdrawal time"
+    );
 }
 
 /// Two withdrawals at different timestamps produce different timestamp fields.
@@ -607,7 +637,10 @@ fn test_withdrawn_event_timestamp_changes_between_calls() {
     let tuple2: (Address, i128, u32, u64) =
         <(Address, i128, u32, u64)>::try_from_val(&env2, &data2).unwrap();
 
-    assert_ne!(tuple1.3, tuple2.3, "timestamps must differ between withdrawals");
+    assert_ne!(
+        tuple1.3, tuple2.3,
+        "timestamps must differ between withdrawals"
+    );
 }
 
 // ── Security: emit helper — fee_bps boundary ─────────────────────────────────
