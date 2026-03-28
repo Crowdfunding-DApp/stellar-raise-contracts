@@ -109,6 +109,10 @@ pub fn log_contribute_error(env: &soroban_sdk::Env, error: crate::ContractError)
             Symbol::new(env, "CampaignNotActive"),
             error_codes::CAMPAIGN_NOT_ACTIVE,
         ),
+        crate::ContractError::NegativeAmount => (
+            Symbol::new(env, "NegativeAmount"),
+            error_codes::NEGATIVE_AMOUNT,
+        ),
         _ => return,
     };
     env.events().publish(("contribute_error", variant), code);

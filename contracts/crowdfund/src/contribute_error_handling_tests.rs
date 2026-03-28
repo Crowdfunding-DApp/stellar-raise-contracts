@@ -16,7 +16,7 @@ use soroban_sdk::{
 
 use crate::{contribute_error_handling, ContractError, CrowdfundContract, CrowdfundContractClient};
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 const GOAL: i128 = 1_000;
 const MIN: i128 = 10;
@@ -32,7 +32,7 @@ fn setup() -> (Env, CrowdfundContractClient<'static>, Address) {
     let token_admin = Address::generate(&env);
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_addr = token_id.address();
-    let sac = token::StellarAssetClient::new(&env, &token_addr);
+    let asset_client = token::StellarAssetClient::new(&env, &token_addr);
 
     let creator = Address::generate(&env);
     let contributor = Address::generate(&env);
@@ -329,6 +329,19 @@ fn error_event_emitted_on_campaign_not_active() {
     assert_eq!(
         code,
         contribute_error_handling::error_codes::CAMPAIGN_NOT_ACTIVE
+    );
+}
+
+#[test]
+fn error_event_emitted_on_negative_amount() {
+    let (env, client, contributor) = setup();
+    env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+    let _ = client.try_contribute(&contributor, &-1);
+    let (variant, code) = last_contribute_error_event(&env).expect("no event emitted");
+    assert_eq!(variant, Symbol::new(&env, "NegativeAmount"));
+    assert_eq!(
+        code,
+        contribute_error_handling::error_codes::NEGATIVE_AMOUNT
     );
 }
 
