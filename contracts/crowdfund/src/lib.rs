@@ -9,6 +9,7 @@ use soroban_sdk::{
 // ── Modules ──────────────────────────────────────────────────────────────────
 
 pub mod admin_upgrade_mechanism;
+pub mod proxy;
 pub mod campaign_goal_minimum;
 pub mod cargo_toml_rust;
 pub mod contract_state_size;
@@ -42,6 +43,10 @@ pub mod withdraw_event_emission;
 use withdraw_event_emission::{emit_fee_transferred, emit_withdrawn, mint_nfts_in_batch};
 #[cfg(test)]
 mod withdraw_event_emission_test;
+
+#[cfg(test)]
+#[path = "proxy.test.rs"]
+mod proxy_test;
 
 #[cfg(test)]
 #[path = "stellar_token_minter_test.rs"]
@@ -760,33 +765,6 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::Status, &Status::Cancelled);
-    }
-
-    /// Upgrade the contract to a new WASM implementation — admin-only.
-    ///
-    /// Validation order (cheapest checks first for gas efficiency):
-    /// 1. Reject zero hash — pure, no storage reads.
-    /// 2. Load admin + enforce `require_auth()`.
-    /// 3. Execute WASM swap.
-    /// 4. Emit audit event.
-    ///
-    /// # Panics
-    /// * `"zero wasm hash"` — if `new_wasm_hash` is all-zero bytes.
-    /// * `"Admin not initialized"` — if `initialize()` was never called.
-    /// * Auth error — if the caller is not the stored admin.
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        // Gas-efficiency edge case: reject zero hash before any storage read.
-        if !admin_upgrade_mechanism::validate_wasm_hash(&new_wasm_hash) {
-            panic!("zero wasm hash");
-        }
-        let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
-        admin_upgrade_mechanism::validate_wasm_hash(&new_wasm_hash);
-        admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
-
-        env.events().publish(
-            (soroban_sdk::Symbol::new(&env, "upgrade"), admin),
-            new_wasm_hash
-        );
     }
 
     /// Update campaign metadata — only callable by the creator while the

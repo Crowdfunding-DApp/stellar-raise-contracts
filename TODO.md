@@ -1,12 +1,15 @@
-# Completed Tasks
+# Proxy Upgrade Implementation - Progress Update
 
-## withdraw_event_emission (closes #321)
-✅ Verified/committed (branch pushed)
+## Completed
+### 1. [x] Create proxy.rs + proxy.test.rs - Fixed compilation, basic delegation
+### 2. [x] Refactor lib.rs - Removed upgrade fn, added proxy mod
 
-## cargo_toml_rust (closes #371)
-✅ Verified `contracts/crowdfund/src/cargo_toml_rust.rs` (dependency mgmt, security policies, compliance).
-✅ Verified tests `cargo_toml_rust.test.rs` (initialization, validation, policies).
-✅ Verified docs `cargo_toml_rust.md` (API, security model).
-✅ **Status**: FULLY IMPLEMENTED on branch `feature/add-logging-bounds-to-cargotoml-rust-dependencies-for-scripts`
+## Next Steps
+### 3. [ ] Update admin_upgrade_mechanism - Deprecate, proxy owns logic
+### 4. [ ] Full tests - proxy.test.rs + integration
+### 5. [ ] Test build: cd contracts/crowdfund && cargo test
+### 6. [ ] Docs update
+### 7. [ ] Branch/PR
 
-**Next steps for PR**: `git add . && git commit -m "feat: implement add-logging-bounds-to-cargotoml-rust-dependencies-for-scripts with tests/docs (closes #371)" && git push -u origin HEAD && gh pr create --title \"feat: ... (closes #371)\" --body \"$(cat contracts/crowdfund/src/cargo_toml_rust.md)\""` (after `gh repo set-default`).
+Run `cd contracts/crowdfund && cargo test` when ready.
+
