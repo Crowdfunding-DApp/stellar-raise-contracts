@@ -14,7 +14,6 @@ pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
 #[cfg(test)]
-#[cfg(test)]
 pub mod npm_package_lock;
 pub mod proptest_generator_boundary;
 pub mod refund_single_token;
@@ -23,6 +22,7 @@ pub mod stellar_token_minter;
 pub mod stream_processing_optimization;
 pub mod withdraw_event_emission;
 pub mod security_compliance_automation;
+pub mod security_monitoring;
 
 // ── Imports from modules ──────────────────────────────────────────────────────
 
@@ -81,6 +81,9 @@ mod stream_processing_optimization_test;
 #[cfg(test)]
 #[path = "security_compliance_automation.test.rs"]
 mod security_compliance_automation_test;
+#[cfg(test)]
+#[path = "security_monitoring.test.rs"]
+mod security_monitoring_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
@@ -188,6 +191,14 @@ pub enum DataKey {
     GovernanceAddress,
     /// Boolean flag — when true, contribute() and withdraw() are blocked.
     Paused,
+
+    // ── Security monitoring keys ──────────────────────────────────────────
+    /// Per-address contribution burst counter.
+    BurstCount(Address),
+    /// Per-address consecutive failure counter.
+    FailureCount(Address),
+    /// Global count of security alerts raised.
+    SecurityAlertCount,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
