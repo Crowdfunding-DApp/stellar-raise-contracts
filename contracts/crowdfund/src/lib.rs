@@ -9,6 +9,7 @@ use soroban_sdk::{
 pub mod access_control;
 pub mod admin_upgrade_mechanism;
 pub mod dependency_vulnerability_scanning;
+pub mod emergency_stop;
 pub mod pause_mechanism;
 pub mod sharding_mechanism;
 pub mod algorithm_optimization;
@@ -57,6 +58,9 @@ mod admin_upgrade_mechanism_test;
 #[cfg(test)]
 #[path = "dependency_vulnerability_scanning.test.rs"]
 mod dependency_vulnerability_scanning_test;
+#[cfg(test)]
+#[path = "emergency_stop.test.rs"]
+mod emergency_stop_test;
 #[cfg(test)]
 #[path = "pause_mechanism.test.rs"]
 mod pause_mechanism_test;
@@ -262,6 +266,10 @@ pub enum DataKey {
     ShardCount,
     /// Contributor address list for shard index `n`.
     ContributorShard(u32),
+
+    // ── Emergency stop key ──────────────────────────────────────────────────
+    /// Boolean flag — when true, all state-mutating entry points are permanently blocked.
+    EmergencyStopped,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -396,6 +404,8 @@ impl CrowdfundContract {
     pub fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError> {
         contributor.require_auth();
 
+        // Guard: reject if emergency stop is active.
+        emergency_stop::assert_not_stopped(&env);
         // Guard: reject if contract is paused.
         pause_mechanism::assert_not_paused(&env);
 
@@ -722,6 +732,8 @@ impl CrowdfundContract {
     /// If a platform fee is configured, deducts the fee and transfers it to
     /// the platform address, then sends the remainder to the creator.
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
+        // Guard: reject if emergency stop is active.
+        emergency_stop::assert_not_stopped(&env);
         // Guard: reject if contract is paused.
         pause_mechanism::assert_not_paused(&env);
 
@@ -916,6 +928,26 @@ impl CrowdfundContract {
     /// @notice Returns `true` if the contract is currently paused.
     pub fn paused(env: Env) -> bool {
         pause_mechanism::is_paused(&env)
+    }
+
+    /// @notice Permanently stop the contract — irreversible.
+    /// @dev    Only `DEFAULT_ADMIN_ROLE` may call this.
+    ///         Sets campaign status to `Cancelled` so contributors can refund.
+    ///         Emits `(emergency, stopped)` event.
+    ///
+    /// # Arguments
+    /// * `caller` — Must be `DEFAULT_ADMIN_ROLE`.
+    ///
+    /// # Panics
+    /// * `"only DEFAULT_ADMIN_ROLE can trigger emergency stop"` if not admin.
+    /// * `"already stopped"` if already triggered.
+    pub fn emergency_stop(env: Env, caller: Address) {
+        emergency_stop::trigger(&env, &caller);
+    }
+
+    /// @notice Returns `true` if the emergency stop has been triggered.
+    pub fn is_stopped(env: Env) -> bool {
+        emergency_stop::is_stopped(&env)
     }
 
     /// Update campaign metadata — only callable by the creator while the
