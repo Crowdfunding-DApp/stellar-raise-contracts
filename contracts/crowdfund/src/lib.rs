@@ -24,6 +24,7 @@ pub mod soroban_sdk_minor;
 pub mod stellar_token_minter;
 pub mod stream_processing_optimization;
 pub mod withdraw_event_emission;
+pub mod loop_optimization;
 pub mod security_compliance_automation;
 pub mod security_analytics;
 pub mod batch_processing_optimization;
