@@ -24,6 +24,7 @@ pub mod stream_processing_optimization;
 pub mod withdraw_event_emission;
 pub mod security_compliance_automation;
 pub mod security_analytics;
+pub mod conditional_optimization;
 
 // ── Imports from modules ──────────────────────────────────────────────────────
 
@@ -88,6 +89,9 @@ mod role_based_access_test;
 #[cfg(test)]
 #[path = "security_analytics.test.rs"]
 mod security_analytics_test;
+#[cfg(test)]
+#[path = "conditional_optimization.test.rs"]
+mod conditional_optimization_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
