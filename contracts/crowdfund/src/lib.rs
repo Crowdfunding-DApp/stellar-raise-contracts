@@ -20,6 +20,7 @@ pub mod refund_single_token;
 pub mod soroban_sdk_minor;
 pub mod stellar_token_minter;
 pub mod stream_processing_optimization;
+pub mod privilege_escalation;
 pub mod withdraw_event_emission;
 
 // ── Imports from modules ──────────────────────────────────────────────────────
@@ -71,6 +72,9 @@ mod soroban_sdk_minor_test;
 #[cfg(test)]
 #[path = "stellar_token_minter.test.rs"]
 mod stellar_token_minter_test_comprehensive;
+#[cfg(test)]
+#[path = "privilege_escalation.test.rs"]
+mod privilege_escalation_test;
 #[cfg(test)]
 #[path = "stream_processing_optimization.test.rs"]
 mod stream_processing_optimization_test;
