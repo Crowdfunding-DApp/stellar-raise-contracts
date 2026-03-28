@@ -8,6 +8,8 @@ use soroban_sdk::{
 
 pub mod access_control;
 pub mod admin_upgrade_mechanism;
+pub mod algorithm_optimization;
+pub mod session_management;
 pub mod campaign_goal_minimum;
 pub mod cargo_toml_rust;
 pub mod contract_state_size;
@@ -24,10 +26,9 @@ pub mod stream_processing_optimization;
 pub mod withdraw_event_emission;
 pub mod security_compliance_automation;
 pub mod security_analytics;
-pub mod network_optimization;
-pub mod resource_management;
+pub mod batch_processing_optimization;
 
-// ── Imports from modules ──────────────────────────────────────────────────────
+pub mod parallel
 
 use crowdfund_initialize_function::{execute_initialize, InitParams};
 use refund_single_token::{
@@ -91,11 +92,8 @@ mod role_based_access_test;
 #[path = "security_analytics.test.rs"]
 mod security_analytics_test;
 #[cfg(test)]
-#[path = "network_optimization.test.rs"]
-mod network_optimization_test;
-#[cfg(test)]
-#[path = "resource_management.test.rs"]
-mod resource_management_test;
+#[path = "batch_processing_optimization.test.rs"]
+mod batch_processing_optimization_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
