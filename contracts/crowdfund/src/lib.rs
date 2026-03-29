@@ -30,6 +30,7 @@ pub mod stream_processing_optimization;
 pub mod withdraw_event_emission;
 pub mod loop_optimization;
 pub mod security_compliance_automation;
+pub mod security_compliance_testing;
 pub mod security_compliance_validation;
 pub mod security_analytics;
 pub mod conditional_optimization;
@@ -105,6 +106,9 @@ mod stream_processing_optimization_test;
 #[cfg(test)]
 #[path = "security_compliance_automation.test.rs"]
 mod security_compliance_automation_test;
+#[cfg(test)]
+#[path = "security_compliance_testing.test.rs"]
+mod security_compliance_testing_test;
 #[cfg(test)]
 #[path = "security_compliance_validation.test.rs"]
 mod security_compliance_validation_test;
