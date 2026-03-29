@@ -126,6 +126,9 @@ mod batch_processing_optimization_test;
 #[cfg(test)]
 #[path = "state_compression.test.rs"]
 mod state_compression_test;
+#[cfg(test)]
+#[path = "withdraw_event_emission.test.rs"]
+mod withdraw_event_emission_test_new;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
@@ -762,7 +765,7 @@ impl CrowdfundContract {
         let platform_config: Option<PlatformConfig> =
             env.storage().instance().get(&DataKey::PlatformConfig);
 
-        let creator_payout = if let Some(config) = platform_config {
+        let creator_payout = if let Some(config) = &platform_config {
             let fee = total
                 .checked_mul(config.fee_bps as i128)
                 .expect("fee calculation overflow")
@@ -774,29 +777,23 @@ impl CrowdfundContract {
                 &env,
                 &config.address,
                 fee,
+                config.fee_bps,
             );
             total.checked_sub(fee).expect("creator payout underflow")
         } else {
-            0
+            total
         };
 
         protected_transfer(&env, || {
-            // Platform fee transfer + emit (if applicable)
-            if let Some(config) = platform_config {
-                token_client.transfer(&env.current_contract_address(), &config.address, &creator_payout);
-                withdraw_event_emission::emit_fee_transferred(&env, &config.address, creator_payout, config.fee_bps);
-            }
-
             // Creator payout transfer
-            let final_creator_payout = total.checked_sub(creator_payout).expect("creator payout underflow");
-            token_client.transfer(&env.current_contract_address(), &creator, &final_creator_payout);
+            token_client.transfer(&env.current_contract_address(), &creator, &creator_payout);
 
             // Bounded NFT minting
             let nft_contract: Option<Address> = env.storage().instance().get(&DataKey::NFTContract);
             let nft_minted_count = mint_nfts_in_batch(&env, &nft_contract);
 
             // Emit withdrawal event
-            emit_withdrawn(&env, &creator, final_creator_payout, nft_minted_count);
+            emit_withdrawn(&env, &creator, creator_payout, nft_minted_count);
         });
 
         // Clear TotalRaised AFTER transfers (CEI compliance)
