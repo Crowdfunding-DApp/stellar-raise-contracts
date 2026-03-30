@@ -142,6 +142,12 @@ pub fn validate_allowed_license_strings(policy: &SecurityPolicy) -> Result<(), &
     Ok(())
 }
 
+<<<<<<< HEAD
+use soroban_sdk::{contracttype, Address, Env, Symbol, Vec, Map, String};
+||||||| a43ed59f
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec, Map, String};
+=======
+>>>>>>> origin/main
 
 // ── Contract Types for Dependency Management ─────────────────────────────────────
 
@@ -267,10 +273,8 @@ pub fn all_deprecated_versions_replaced() -> bool {
 
 // ── Contract Implementation ─────────────────────────────────────────────────────
 
-#[contract]
 pub struct CargoTomlRust;
 
-#[contractimpl]
 impl CargoTomlRust {
     /// Initialize the contract with default security policies and compliance rules
     ///
@@ -376,15 +380,27 @@ impl CargoTomlRust {
 
         // Security validation
         if security_level > policy.max_security_level {
+<<<<<<< HEAD
+            panic!("security level exceeds maximum allowed");
+||||||| a43ed59f
+            panic!("Security level {} exceeds maximum allowed {}", security_level, policy.max_security_level);
+=======
             panic!(
                 "Security level {} exceeds maximum allowed {}",
                 security_level, policy.max_security_level
             );
+>>>>>>> origin/main
         }
 
         // Check if dependency is blocked
         if policy.blocked_crates.contains(&name) {
+<<<<<<< HEAD
+            panic!("dependency is blocked by security policy");
+||||||| a43ed59f
+            panic!("Dependency {} is blocked by security policy", name);
+=======
             panic!("Dependency is blocked by security policy");
+>>>>>>> origin/main
         }
 
         // Auto-approve dev dependencies if policy allows
@@ -705,6 +721,100 @@ impl CargoTomlRust {
                 continue;
             }
 
+<<<<<<< HEAD
+            let (passed, message) = {
+                let check_type_str = rule.check_type.clone();
+                let version_key = String::from_str(&env, "version");
+                let security_key = String::from_str(&env, "security");
+                let audit_key = String::from_str(&env, "audit");
+
+                if check_type_str == version_key {
+                    let mut outdated_count: u32 = 0;
+                    let version_map: Map<String, String> = env.storage().instance()
+                        .get(&DataKey::DependencyVersions)
+                        .unwrap_or_else(|| Map::new(&env));
+                    for dep in approved_deps.iter() {
+                        if !version_map.get(dep.name.clone()).map_or(false, |latest| latest == dep.version) {
+                            outdated_count += 1;
+                        }
+                    }
+                    let msg = if outdated_count == 0 {
+                        String::from_str(&env, "All dependencies are up to date")
+                    } else {
+                        String::from_str(&env, "Some dependencies are out of date")
+                    };
+                    (outdated_count == 0, msg)
+                } else if check_type_str == security_key {
+                    let mut high_risk_count: u32 = 0;
+                    for dep in approved_deps.iter() {
+                        if dep.security_level > policy.max_security_level {
+                            high_risk_count += 1;
+                        }
+                    }
+                    let msg = if high_risk_count == 0 {
+                        String::from_str(&env, "All dependencies meet security requirements")
+                    } else {
+                        String::from_str(&env, "Some dependencies exceed maximum security level")
+                    };
+                    (high_risk_count == 0, msg)
+                } else if check_type_str == audit_key {
+                    let mut unapproved_count: u32 = 0;
+                    for dep in approved_deps.iter() {
+                        if !dep.approved {
+                            unapproved_count += 1;
+                        }
+                    }
+                    let msg = if unapproved_count == 0 {
+                        String::from_str(&env, "All dependencies are approved")
+                    } else {
+                        String::from_str(&env, "Some dependencies require approval")
+                    };
+                    (unapproved_count == 0, msg)
+                } else {
+                    (false, String::from_str(&env, "Unknown rule type"))
+                }
+||||||| a43ed59f
+            let (passed, message) = match rule.check_type.to_string().as_str() {
+                "version" => {
+                    let outdated_count = approved_deps.iter().filter(|dep| {
+                        !env.storage().instance()
+                            .get(&DataKey::DependencyVersions)
+                            .unwrap_or_else(|| Map::new(&env))
+                            .get(dep.name.clone())
+                            .map_or(false, |latest| latest == dep.version)
+                    }).count();
+                    
+                    (outdated_count == 0, 
+                     if outdated_count == 0 {
+                         "All dependencies are up to date".to_string()
+                     } else {
+                         format!("{} dependencies are out of date", outdated_count)
+                     })
+                },
+                "security" => {
+                    let high_risk_count = approved_deps.iter()
+                        .filter(|dep| dep.security_level > policy.max_security_level)
+                        .count();
+                    
+                    (high_risk_count == 0,
+                     if high_risk_count == 0 {
+                         "All dependencies meet security requirements".to_string()
+                     } else {
+                         format!("{} dependencies exceed maximum security level", high_risk_count)
+                     })
+                },
+                "audit" => {
+                    let unapproved_count = approved_deps.iter().filter(|dep| !dep.approved).count();
+                    
+                    (unapproved_count == 0,
+                     if unapproved_count == 0 {
+                         "All dependencies are approved".to_string()
+                     } else {
+                         format!("{} dependencies require approval", unapproved_count)
+                     })
+                },
+                _ => (false, "Unknown rule type".to_string()),
+=======
             let check_type_version = soroban_sdk::String::from_str(&env, "version");
             let check_type_security = soroban_sdk::String::from_str(&env, "security");
             let check_type_audit = soroban_sdk::String::from_str(&env, "audit");
@@ -766,6 +876,7 @@ impl CargoTomlRust {
                     false,
                     soroban_sdk::String::from_str(&env, "Unknown rule type"),
                 )
+>>>>>>> origin/main
             };
 
             results.push_back((rule.rule_name.clone(), passed, message));

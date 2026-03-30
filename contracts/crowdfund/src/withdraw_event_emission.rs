@@ -213,3 +213,28 @@ pub fn emit_withdrawal_event(
 ) -> WithdrawnPayload {
     emit_withdrawn(env, creator, payout, nft_minted_count)
 }
+
+/// Emit the fee-transferred event.
+pub fn emit_fee_transferred(env: &Env, platform_address: &Address, fee: i128) {
+    if fee <= 0 {
+        panic!("fee_transferred: fee must be positive");
+    }
+    env.events()
+        .publish(("campaign", "fee_transferred"), (platform_address.clone(), fee));
+}
+
+/// Emit the nft_batch_minted event.
+pub fn emit_nft_batch_minted(env: &Env, count: u32) {
+    if count == 0 {
+        panic!("nft_batch_minted: minted_count must be positive");
+    }
+    env.events().publish(("campaign", "nft_batch_minted"), count);
+}
+
+/// Emit the withdrawn event.
+pub fn emit_withdrawn(env: &Env, creator: &Address, payout: i128, nft_minted_count: u32) {
+    if payout <= 0 {
+        panic!("withdrawn: creator_payout must be positive");
+    }
+    emit_withdrawal_event(env, creator, payout, nft_minted_count);
+}

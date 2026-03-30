@@ -1,11 +1,1 @@
-# Task: Add test for refund_single() token transfer logic for Optimization
-
-## Steps:
-
-- [x] Step 1: Create contracts/crowdfund/src/refund_single_token_optimization.test.rs with gas benchmarks, property tests, early return verification
-- [x] Step 2: Update contracts/crowdfund/src/refund_single_token.md to document new optimization tests
-- [x] Step 3: Run `cargo test` to verify all tests pass
-
-- [x] Step 4: Commit with feat message
-
-Current progress: Steps 1-3 complete (tests passed), proceeding to Step 4 (commit)
+# Implement Issues #955 & #953: Trending Discovery UI + Compliance Checking\n\n## Issue #955: create-campaign-trending-discovery-feature-for-frontend-ui\n\n- [ ] Step 1: git checkout -b feature/create-campaign-trending-discovery-feature-for-frontend-ui\n- [ ] Step 2: Create frontend/components/trending_discovery.tsx\n- [ ] Step 3: Create frontend/components/trending_discovery.test.tsx\n- [ ] Step 4: Create frontend/components/trending_discovery.md\n- [ ] Step 5: Test with npm test\n- [ ] Step 6: git add/commit/push\n- [ ] Step 7: gh pr create --title \"feat: implement create-campaign-trending-discovery-feature-for-frontend-ui with tests and docs\" --body \"Closes #955\"\n\n## Issue #953: add-automated-compliance-checking-for-cicd\n\n- [ ] Step 8: git checkout main && git pull && git checkout -b feature/add-automated-compliance-checking-for-cicd\n- [ ] Step 9: Create scripts/compliance_checking.sh\n- [ ] Step 10: Create scripts/compliance_checking.test.sh\n- [ ] Step 11: Create scripts/compliance_checking.md\n- [ ] Step 12: Run tests\n- [ ] Step 13: git add/commit/push\n- [ ] Step 14: gh pr create --title \"feat: implement add-automated-compliance-checking-for-cicd with tests and docs\" --body \"Closes #953\"\n\n## Final\n- [ ] Update this TODO.md with completions\n- [ ] Verify PRs opened

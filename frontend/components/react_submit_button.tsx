@@ -387,7 +387,6 @@ const ReactSubmitButton: React.FC<ReactSubmitButtonProps> = ({
 
   return (
     <button
-      id={id}
       type={type}
       className={`submit-btn ${className}`.trim()}
       disabled={blocked}

@@ -25,6 +25,9 @@
 
 #![cfg(test)]
 
+extern crate alloc;
+
+use alloc::vec::Vec;
 use proptest::prelude::*;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
@@ -105,10 +108,7 @@ fn test_total_raised_equals_sum_many_small() {
 /// @notice  Happy path: zero total is non-negative.
 #[test]
 fn test_total_raised_non_negative_zero() {
-    assert_eq!(
-        check_total_raised_non_negative(0),
-        InvariantResult::Passed
-    );
+    assert_eq!(check_total_raised_non_negative(0), InvariantResult::Passed);
 }
 
 /// @notice  Happy path: positive total.
@@ -194,10 +194,7 @@ fn test_goal_positive_negative_fail() {
 /// @notice  Happy path: min_contribution of 1.
 #[test]
 fn test_min_contribution_positive_pass() {
-    assert_eq!(
-        check_min_contribution_positive(1),
-        InvariantResult::Passed
-    );
+    assert_eq!(check_min_contribution_positive(1), InvariantResult::Passed);
 }
 
 /// @notice  Failure path: zero min_contribution.
@@ -207,7 +204,9 @@ fn test_min_contribution_positive_pass() {
 fn test_min_contribution_positive_zero_fail() {
     let result = check_min_contribution_positive(0);
     assert!(!result.is_passed());
-    assert!(result.message().contains("min_contribution is zero or negative"));
+    assert!(result
+        .message()
+        .contains("min_contribution is zero or negative"));
 }
 
 /// @notice  Failure path: negative min_contribution.
@@ -253,7 +252,10 @@ fn test_probe_withdraw_authorization_fail() {
 #[test]
 fn test_probe_contribution_amount_pass() {
     assert_eq!(probe_contribution_amount(1), InvariantResult::Passed);
-    assert_eq!(probe_contribution_amount(i128::MAX), InvariantResult::Passed);
+    assert_eq!(
+        probe_contribution_amount(i128::MAX),
+        InvariantResult::Passed
+    );
 }
 
 /// @notice  Failure path: zero amount.
@@ -319,25 +321,24 @@ fn test_transition_active_to_cancelled() {
 ///          creator to collect new contributions against an expired deadline.
 #[test]
 fn test_transition_expired_to_active_fail() {
-    let result =
-        check_valid_status_transition(&CampaignStatus::Expired, &CampaignStatus::Active);
+    let result = check_valid_status_transition(&CampaignStatus::Expired, &CampaignStatus::Active);
     assert!(!result.is_passed());
-    assert!(result.message().contains("invalid campaign status transition"));
+    assert!(result
+        .message()
+        .contains("invalid campaign status transition"));
 }
 
 /// @notice  Failure path: Succeeded → Active.
 #[test]
 fn test_transition_succeeded_to_active_fail() {
-    let result =
-        check_valid_status_transition(&CampaignStatus::Succeeded, &CampaignStatus::Active);
+    let result = check_valid_status_transition(&CampaignStatus::Succeeded, &CampaignStatus::Active);
     assert!(!result.is_passed());
 }
 
 /// @notice  Failure path: Cancelled → Active.
 #[test]
 fn test_transition_cancelled_to_active_fail() {
-    let result =
-        check_valid_status_transition(&CampaignStatus::Cancelled, &CampaignStatus::Active);
+    let result = check_valid_status_transition(&CampaignStatus::Cancelled, &CampaignStatus::Active);
     assert!(!result.is_passed());
 }
 
@@ -461,14 +462,8 @@ fn test_run_security_audit_all_pass() {
 #[test]
 fn test_run_security_audit_negative_total() {
     let env = env();
-    let report: SecurityReport = run_security_audit(
-        &env,
-        -1,
-        &[100],
-        1_000,
-        10,
-        &CampaignStatus::Active,
-    );
+    let report: SecurityReport =
+        run_security_audit(&env, -1, &[100], 1_000, 10, &CampaignStatus::Active);
     assert!(!report.all_passed);
     assert!(report.failed >= 1);
 }
@@ -589,8 +584,7 @@ proptest! {
 ///          to extend the deadline or reset the goal.
 #[test]
 fn test_reinitialize_attempt_blocked() {
-    let result =
-        check_valid_status_transition(&CampaignStatus::Active, &CampaignStatus::Active);
+    let result = check_valid_status_transition(&CampaignStatus::Active, &CampaignStatus::Active);
     assert!(!result.is_passed(), "Active → Active must be rejected");
 }
 
