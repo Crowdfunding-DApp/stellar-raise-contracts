@@ -1,0 +1,121 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`TrendingDiscovery matches snapshot 1`] = `
+<DocumentFragment>
+  <div
+    class="trending-discovery"
+  >
+    <h2>
+      🔥 Trending Campaigns
+    </h2>
+    <p>
+      Top campaigns by funding velocity and engagement for better visibility.
+    </p>
+    <div
+      class="campaigns-grid"
+    >
+      <div
+        class="campaign-card"
+      >
+        <span
+          class="badge badge-fire"
+        >
+          HOT
+        </span>
+        <h3>
+          Eco Fund
+        </h3>
+        <div
+          class="progress-bar"
+        >
+          <div
+            aria-valuemax="100"
+            aria-valuemin="0"
+            aria-valuenow="85"
+            class="progress-fill"
+            role="progressbar"
+            style="width: 85%;"
+          />
+        </div>
+        <div
+          class="stats"
+        >
+          <span>
+            $85,000 / $100,000
+          </span>
+          <span>
+            250 backers
+          </span>
+          <span>
+            Trend: 95%
+          </span>
+        </div>
+      </div>
+      <div
+        class="campaign-card"
+      >
+        <h3>
+          Tech Innovate
+        </h3>
+        <div
+          class="progress-bar"
+        >
+          <div
+            aria-valuemax="100"
+            aria-valuemin="0"
+            aria-valuenow="90"
+            class="progress-fill"
+            role="progressbar"
+            style="width: 90%;"
+          />
+        </div>
+        <div
+          class="stats"
+        >
+          <span>
+            $72,000 / $80,000
+          </span>
+          <span>
+            180 backers
+          </span>
+          <span>
+            Trend: 88%
+          </span>
+        </div>
+      </div>
+      <div
+        class="campaign-card"
+      >
+        <h3>
+          Health Future
+        </h3>
+        <div
+          class="progress-bar"
+        >
+          <div
+            aria-valuemax="100"
+            aria-valuemin="0"
+            aria-valuenow="90"
+            class="progress-fill"
+            role="progressbar"
+            style="width: 90%;"
+          />
+        </div>
+        <div
+          class="stats"
+        >
+          <span>
+            $45,000 / $50,000
+          </span>
+          <span>
+            120 backers
+          </span>
+          <span>
+            Trend: 76%
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
