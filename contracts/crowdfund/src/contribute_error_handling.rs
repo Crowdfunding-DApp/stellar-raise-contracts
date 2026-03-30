@@ -60,7 +60,7 @@ pub fn describe_error(code: u32) -> &'static str {
         error_codes::ZERO_AMOUNT => "Contribution amount must be greater than zero",
         error_codes::BELOW_MINIMUM => "Contribution amount is below the minimum required",
         error_codes::CAMPAIGN_NOT_ACTIVE => "Campaign is not active",
-        error_codes::NEGATIVE_AMOUNT => "Contribution amount must not be negative",
+        error_codes::AMOUNT_TOO_LOW => "Contribution amount is below the campaign minimum",
         _ => "Unknown error",
     }
 }
@@ -117,3 +117,4 @@ pub fn log_contribute_error(env: &soroban_sdk::Env, error: crate::ContractError)
     };
     env.events().publish(("contribute_error", variant), code);
 }
+

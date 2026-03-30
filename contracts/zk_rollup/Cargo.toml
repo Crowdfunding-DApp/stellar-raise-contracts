@@ -1,0 +1,28 @@
+[package]
+name = "zk-rollup"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate is native Rust (std) — it is NOT compiled to WASM.
+# It handles off-chain proof generation and verification using ark-groth16.
+# The on-chain side lives in contracts/crowdfund/src/zk_rollups.rs.
+
+[[bin]]
+name = "zk_rollup"
+path = "src/main.rs"
+
+[lib]
+name = "zk_rollup"
+path = "src/lib.rs"
+
+[dependencies]
+ark-groth16  = { version = "0.4", features = ["r1cs"] }
+ark-bn254    = "0.4"
+ark-std      = "0.4"
+ark-ff       = "0.4"
+ark-ec       = "0.4"
+ark-r1cs-std = "0.4"
+ark-relations = "0.4"
+ark-serialize = "0.4"
+ark-snark    = "0.4"

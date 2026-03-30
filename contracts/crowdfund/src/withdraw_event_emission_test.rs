@@ -186,7 +186,20 @@ fn event_data(env: &Env, t1: &str, t2: &str) -> Option<Val> {
         .map(|(_, _, data)| data)
 }
 
+<<<<<<< HEAD
+/// Alias for `setup_with_nft` used by tests.
+fn setup(
+    contributor_count: u32,
+) -> (Env, CrowdfundContractClient<'static>, Address, Address, Address) {
+    setup_with_nft(contributor_count)
+}
+
+// ── NFT minting cap tests ────────────────────────────────────────────────────
+||||||| a43ed59f
+// ── NFT minting cap tests ────────────────────────────────────────────────────
+=======
 // ── NFT minting cap ───────────────────────────────────────────────────────────
+>>>>>>> origin/main
 
 #[test]
 fn test_withdraw_mints_all_when_within_cap() {
@@ -329,6 +342,7 @@ fn test_withdrawn_event_payout_reflects_fee_deduction() {
             address: platform_addr,
             fee_bps: 500,
         }), // 5%
+        &None,
         &None,
         &None,
     );
@@ -510,6 +524,13 @@ fn test_fee_transferred_event_data_includes_fee_amount() {
         &Some(config),
         &None,
         &None,
+<<<<<<< HEAD
+        &None,
+        &None,
+||||||| a43ed59f
+        &None,
+=======
+>>>>>>> origin/main
     );
 
     let contributor = Address::generate(&env);
@@ -528,6 +549,13 @@ fn test_fee_transferred_event_data_includes_fee_amount() {
 
 /// `fee_transferred` event is emitted with the correct fee amount.
 #[test]
+<<<<<<< HEAD
+fn test_no_fee_transferred_event_without_platform_config() {
+    let (env, client, _creator, _token, _nft_id) = setup(2);
+||||||| a43ed59f
+fn test_withdraw_emits_withdrawn_event_once() {
+    let (env, client, _creator, _token, _nft_id) = setup(2);
+=======
 fn test_fee_transferred_event_fee_amount_matches_config() {
     let env = Env::default();
     env.mock_all_auths();
@@ -568,6 +596,7 @@ fn test_fee_transferred_event_fee_amount_matches_config() {
     sac.mint(&contributor, &goal);
     client.contribute(&contributor, &goal);
     env.ledger().set_timestamp(deadline + 1);
+>>>>>>> origin/main
     client.finalize();
     client.withdraw();
 
