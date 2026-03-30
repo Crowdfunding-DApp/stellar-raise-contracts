@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod multi_signature_execution;
+pub mod access_delegation;
 pub mod output_sanitization;
 pub mod security_testing_automation;
 pub mod security_remediation;
@@ -10,6 +11,10 @@ pub mod security_training_integration;
 #[cfg(test)]
 #[path = "multi_signature_execution.test.rs"]
 mod multi_signature_execution_test;
+
+#[cfg(test)]
+#[path = "access_delegation.test.rs"]
+mod access_delegation_test;
 
 #[cfg(test)]
 #[path = "output_sanitization.test.rs"]
