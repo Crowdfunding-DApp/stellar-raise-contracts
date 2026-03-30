@@ -41,6 +41,8 @@ pub mod optimistic_execution;
 pub mod security_incident_response;
 pub mod data_availability_layer;
 pub mod security_regression;
+#[cfg(test)]
+pub mod property_based_testing;
 
 use crate::reentrancy_guard::{enter_transfer, exit_transfer, protected_transfer};
 
