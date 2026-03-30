@@ -41,8 +41,10 @@ pub mod optimistic_execution;
 pub mod security_incident_response;
 pub mod data_availability_layer;
 pub mod security_regression;
+pub mod zk_proof_verification;
 
 use crate::reentrancy_guard::{enter_transfer, exit_transfer, protected_transfer};
+use crate::zk_proof_verification::ZkProof;
 
 use crowdfund_initialize_function::{execute_initialize, InitParams};
 use refund_single_token::{
@@ -160,6 +162,9 @@ mod data_availability_layer_test;
 #[cfg(test)]
 #[path = "security_regression.test.rs"]
 mod security_regression_test;
+#[cfg(test)]
+#[path = "zk_proof_verification.test.rs"]
+mod zk_proof_verification_test;
 
 // --- Constants ---
 const CONTRACT_VERSION: u32 = 3;
@@ -1379,5 +1384,26 @@ impl CrowdfundContract {
     /// Returns `true` if `contract_address` is in the trusted allowlist.
     pub fn is_trusted_contract(env: Env, contract_address: Address) -> bool {
         cross_rollup_communication::is_trusted(&env, &contract_address)
+    }
+
+    /// Verifies a zero-knowledge proof for contribution validation.
+    ///
+    /// This function can be used to verify proofs submitted with contributions
+    /// to improve gas efficiency and privacy.
+    ///
+    /// # Arguments
+    /// * `proof` - The zero-knowledge proof
+    /// * `public_key` - The public key for verification
+    /// * `statement` - The statement being proven (e.g., minimum contribution)
+    ///
+    /// # Returns
+    /// * `true` if the proof is valid
+    pub fn verify_contribution_proof(
+        env: Env,
+        proof: ZkProof,
+        public_key: soroban_sdk::BytesN<32>,
+        statement: i128,
+    ) -> bool {
+        crate::zk_proof_verification::verify_zkp(&env, &proof, &public_key, statement)
     }
 }
