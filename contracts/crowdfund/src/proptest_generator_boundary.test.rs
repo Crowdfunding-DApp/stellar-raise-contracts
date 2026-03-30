@@ -183,6 +183,9 @@ mod tests {
 
     // ── Clamping ──────────────────────────────────────────────────────────────
 
+    // ── Typo-fix regression ───────────────────────────────────────────────────
+
+    /// Regression: 100 was the old (wrong) minimum; must remain rejected.
     #[test]
     fn test_clamp_proptest_cases() {
         let (_env, client) = setup();
@@ -195,6 +198,7 @@ mod tests {
         assert_eq!(client.clamp_proptest_cases(&u32::MAX), PROPTEST_CASES_MAX);
     }
 
+    /// Regression: 1000 is the corrected minimum; must be accepted.
     #[test]
     fn test_clamp_progress_bps() {
         let (_env, client) = setup();
@@ -217,6 +221,7 @@ mod tests {
         assert_eq!(client.compute_progress_bps(&2_000, &1_000), 10_000);
     }
 
+    /// Regression seed: goal=2_000_000, deadline=100, contribution=100_000.
     #[test]
     fn test_compute_progress_bps_edge_cases() {
         let (_env, client) = setup();
@@ -225,6 +230,8 @@ mod tests {
         assert_eq!(client.compute_progress_bps(&-100, &1_000), 0);
         assert_eq!(client.compute_progress_bps(&1, &10_000), 1);
     }
+
+    // ── Exact boundary values ─────────────────────────────────────────────────
 
     #[test]
     fn test_compute_progress_bps_overflow_safety() {

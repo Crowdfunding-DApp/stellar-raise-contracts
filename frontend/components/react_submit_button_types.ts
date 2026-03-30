@@ -16,7 +16,7 @@ export { ALLOWED_TRANSITIONS } from "./react_submit_button";
 import type { SubmitButtonState } from "./react_submit_button";
 
 /**
- * @notice Visual configuration for each button state.
+ * @notice Visual and accessibility configuration for each button state.
  * @dev Centralising colours here makes security review straightforward —
  *      no dynamic style injection from user input.
  */
@@ -55,3 +55,42 @@ export const STATE_CONFIG: Record<
     ariaLabel: "Button disabled",
   },
 };
+
+// ── Allowed state transitions ─────────────────────────────────────────────────
+
+/**
+ * @notice Defines valid next states for each current state.
+ * @dev Used by isValidStateTransition to guard against invalid jumps.
+ */
+export const ALLOWED_TRANSITIONS: Record<ButtonState, ButtonState[]> = {
+  idle: ["submitting", "disabled"],
+  submitting: ["success", "error", "disabled"],
+  success: ["idle", "disabled"],
+  error: ["idle", "submitting", "disabled"],
+  disabled: ["idle"],
+};
+
+// ── Pure helper functions ─────────────────────────────────────────────────────
+
+/**
+ * @notice Returns true if the transition from `from` to `to` is allowed.
+ * @dev Same-state transitions are always allowed (idempotent updates).
+ */
+export function isValidStateTransition(from: ButtonState, to: ButtonState): boolean {
+  if (from === to) return true;
+  return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * @notice Returns true when the button should be non-interactive.
+ */
+export function isInteractionBlocked(state: ButtonState, disabled = false): boolean {
+  return Boolean(disabled) || state === "submitting" || state === "success" || state === "disabled";
+}
+
+/**
+ * @notice Returns true when aria-busy should be set.
+ */
+export function isBusy(state: ButtonState): boolean {
+  return state === "submitting";
+}

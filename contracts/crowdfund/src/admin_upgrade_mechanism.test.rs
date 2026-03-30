@@ -25,6 +25,11 @@ fn setup() -> (
     let contract_id = env.register(CrowdfundContract, ());
     let client = CrowdfundContractClient::new(&env, &contract_id);
 
+<<<<<<< HEAD
+    client.initialize(&admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None, &None);
+||||||| a43ed59f
+    client.initialize(&admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None);
+=======
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
         &admin,
@@ -38,6 +43,7 @@ fn setup() -> (
         &None,
         &None,
     );
+>>>>>>> origin/main
 
     (env, contract_id, client, admin, creator, token_addr)
 }
@@ -121,6 +127,23 @@ fn test_upgrade_panics_before_initialize() {
     let env = Env::default();
     let contract_id = env.register(CrowdfundContract, ());
     let client = CrowdfundContractClient::new(&env, &contract_id);
+<<<<<<< HEAD
+
+    client.initialize(&admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None, &None);
+
+    let new_wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+
+    // We do NOT mock auth, so calling from a random context will fail
+    client.upgrade(&new_wasm_hash);
+||||||| a43ed59f
+
+    client.initialize(&admin, &creator, &token, &1000i128, &10000u64, &10i128, &None, &None, &None);
+
+    let new_wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+
+    // We do NOT mock auth, so calling from a random context will fail
+    client.upgrade(&new_wasm_hash);
+=======
     client.upgrade(&dummy_hash(&env));
 }
 
@@ -141,4 +164,5 @@ fn test_admin_can_upgrade_with_valid_wasm() {
     //   cargo build --target wasm32-unknown-unknown --release -p crowdfund
     // then re-run with --ignored to execute.
     let (_env, _contract_id, _client, _admin, _creator, _token) = setup();
+>>>>>>> origin/main
 }

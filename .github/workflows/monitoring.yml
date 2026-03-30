@@ -1,0 +1,31 @@
+name: Infrastructure Monitoring
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch:       # allow manual trigger
+
+jobs:
+  monitor:
+    name: Run Infrastructure Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run infrastructure monitoring
+        env:
+          STELLAR_RPC_URL: ${{ secrets.STELLAR_RPC_URL }}
+          CONTRACT_ID: ${{ secrets.CONTRACT_ID }}
+          STELLAR_NETWORK_PASSPHRASE: ${{ secrets.STELLAR_NETWORK_PASSPHRASE }}
+        run: bash scripts/infrastructure_monitoring.sh
+
+      - name: Upload monitoring log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-log-${{ github.run_id }}
+          path: /tmp/monitoring.log
+          if-no-files-found: ignore

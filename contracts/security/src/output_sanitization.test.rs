@@ -21,6 +21,9 @@
 
 #![cfg(test)]
 
+extern crate alloc;
+
+use alloc::string::String as RustString;
 use proptest::prelude::*;
 use soroban_sdk::{Env, String};
 
@@ -91,13 +94,19 @@ fn test_sanitize_amount_zero_clean() {
 /// @notice  Happy path: positive amount is clean.
 #[test]
 fn test_sanitize_amount_positive_clean() {
-    assert_eq!(sanitize_amount(1_000_000), SanitizedOutput::Clean(1_000_000));
+    assert_eq!(
+        sanitize_amount(1_000_000),
+        SanitizedOutput::Clean(1_000_000)
+    );
 }
 
 /// @notice  Happy path: i128::MAX is clean.
 #[test]
 fn test_sanitize_amount_max_i128_clean() {
-    assert_eq!(sanitize_amount(i128::MAX), SanitizedOutput::Clean(i128::MAX));
+    assert_eq!(
+        sanitize_amount(i128::MAX),
+        SanitizedOutput::Clean(i128::MAX)
+    );
 }
 
 /// @notice  Failure path: -1 is clamped to ZERO_SENTINEL.
@@ -142,10 +151,7 @@ fn test_sanitize_amount_bounded_at_max_clean() {
 /// @notice  Happy path: zero amount with positive max is clean.
 #[test]
 fn test_sanitize_amount_bounded_zero_clean() {
-    assert_eq!(
-        sanitize_amount_bounded(0, 1_000),
-        SanitizedOutput::Clean(0)
-    );
+    assert_eq!(sanitize_amount_bounded(0, 1_000), SanitizedOutput::Clean(0));
 }
 
 /// @notice  Failure path: amount above max is clamped to max.
@@ -166,10 +172,7 @@ fn test_sanitize_amount_bounded_negative_clamped_to_zero() {
 /// @notice  Edge case: max == 0, amount == 0 is clean.
 #[test]
 fn test_sanitize_amount_bounded_zero_max_zero_amount() {
-    assert_eq!(
-        sanitize_amount_bounded(0, 0),
-        SanitizedOutput::Clean(0)
-    );
+    assert_eq!(sanitize_amount_bounded(0, 0), SanitizedOutput::Clean(0));
 }
 
 /// @notice  Edge case: max == 0, positive amount is clamped to 0.
@@ -291,7 +294,7 @@ fn test_sanitize_string_empty_clean() {
 #[test]
 fn test_sanitize_string_at_max_len_clean() {
     let env = env();
-    let s: std::string::String = "a".repeat(MAX_STRING_LEN as usize);
+    let s: RustString = "a".repeat(MAX_STRING_LEN as usize);
     let soroban_s = String::from_str(&env, &s);
     let out = sanitize_string(&env, &soroban_s);
     assert!(out.is_clean());
@@ -312,7 +315,7 @@ fn test_sanitize_string_short_clean() {
 #[test]
 fn test_sanitize_string_over_max_len_clamped() {
     let env = env();
-    let s: std::string::String = "x".repeat(MAX_STRING_LEN as usize + 1);
+    let s: RustString = "x".repeat(MAX_STRING_LEN as usize + 1);
     let soroban_s = String::from_str(&env, &s);
     let out = sanitize_string(&env, &soroban_s);
     assert!(out.was_modified());
@@ -324,7 +327,7 @@ fn test_sanitize_string_over_max_len_clamped() {
 #[test]
 fn test_sanitize_string_very_long_clamped() {
     let env = env();
-    let s: std::string::String = "z".repeat(10_000);
+    let s: RustString = "z".repeat(10_000);
     let soroban_s = String::from_str(&env, &s);
     let out = sanitize_string(&env, &soroban_s);
     assert!(out.was_modified());
@@ -337,10 +340,7 @@ fn test_sanitize_string_very_long_clamped() {
 /// @notice  Happy path: zero count is clean.
 #[test]
 fn test_sanitize_contributor_count_zero_clean() {
-    assert_eq!(
-        sanitize_contributor_count(0),
-        SanitizedOutput::Clean(0)
-    );
+    assert_eq!(sanitize_contributor_count(0), SanitizedOutput::Clean(0));
 }
 
 /// @notice  Happy path: exactly MAX_CONTRIBUTOR_COUNT is clean.

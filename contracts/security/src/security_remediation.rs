@@ -3,10 +3,11 @@
 //! This module provides automated security remediation capabilities for detecting
 //! and fixing common vulnerabilities in smart contract operations.
 
-use soroban_sdk::{Env, String, Symbol, Vec};
+use soroban_sdk::{contracttype, Env, String, Vec};
 
 /// Security vulnerability severity levels
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[contracttype]
 pub enum VulnerabilitySeverity {
     Critical,
     High,
@@ -16,7 +17,8 @@ pub enum VulnerabilitySeverity {
 }
 
 /// Represents a detected security vulnerability
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct SecurityVulnerability {
     pub id: String,
     pub severity: VulnerabilitySeverity,
@@ -26,6 +28,7 @@ pub struct SecurityVulnerability {
 
 /// Remediation action types
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[contracttype]
 pub enum RemediationAction {
     /// Add input validation
     AddValidation,
@@ -40,7 +43,8 @@ pub enum RemediationAction {
 }
 
 /// Remediation result
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct RemediationResult {
     pub vulnerability_id: String,
     pub action_taken: RemediationAction,
@@ -57,7 +61,7 @@ pub struct RemediationResult {
 /// Vector of detected vulnerabilities
 pub fn scan_vulnerabilities(env: &Env) -> Vec<SecurityVulnerability> {
     let mut vulnerabilities = Vec::new(env);
-    
+
     // Check for missing input validation
     if !has_input_validation(env) {
         vulnerabilities.push_back(SecurityVulnerability {
@@ -67,7 +71,7 @@ pub fn scan_vulnerabilities(env: &Env) -> Vec<SecurityVulnerability> {
             affected_function: String::from_str(env, "contribute"),
         });
     }
-    
+
     // Check for reentrancy risks
     if !has_reentrancy_protection(env) {
         vulnerabilities.push_back(SecurityVulnerability {
@@ -77,7 +81,7 @@ pub fn scan_vulnerabilities(env: &Env) -> Vec<SecurityVulnerability> {
             affected_function: String::from_str(env, "withdraw"),
         });
     }
-    
+
     vulnerabilities
 }
 
@@ -89,12 +93,9 @@ pub fn scan_vulnerabilities(env: &Env) -> Vec<SecurityVulnerability> {
 ///
 /// # Returns
 /// Remediation result indicating success or failure
-pub fn apply_remediation(
-    env: &Env,
-    vulnerability: &SecurityVulnerability,
-) -> RemediationResult {
+pub fn apply_remediation(env: &Env, vulnerability: &SecurityVulnerability) -> RemediationResult {
     let action = determine_remediation_action(&vulnerability.id);
-    
+
     let success = match action {
         RemediationAction::AddValidation => apply_validation_fix(env),
         RemediationAction::AddAccessControl => apply_access_control_fix(env),
@@ -102,7 +103,7 @@ pub fn apply_remediation(
         RemediationAction::AddOverflowProtection => apply_overflow_fix(env),
         RemediationAction::AddRateLimit => apply_rate_limit_fix(env),
     };
-    
+
     RemediationResult {
         vulnerability_id: vulnerability.id.clone(),
         action_taken: action,
@@ -116,7 +117,7 @@ pub fn apply_remediation(
 }
 
 /// Determines the appropriate remediation action for a vulnerability
-fn determine_remediation_action(vulnerability_id: &String) -> RemediationAction {
+fn determine_remediation_action(_vulnerability_id: &String) -> RemediationAction {
     // Simple mapping based on vulnerability ID
     // In production, this would use more sophisticated logic
     RemediationAction::AddValidation
@@ -173,14 +174,10 @@ fn apply_rate_limit_fix(_env: &Env) -> bool {
 /// # Returns
 /// Formatted report string
 pub fn generate_remediation_report(env: &Env, results: &Vec<RemediationResult>) -> String {
-    let mut report = String::from_str(env, "Security Remediation Report\n");
-    
-    for result in results.iter() {
-        // Append result details to report
-        // In production, would format more comprehensively
+    for _result in results.iter() {
+        // Placeholder: structured report formatting would be added here.
     }
-    
-    report
+    String::from_str(env, "Security Remediation Report\n")
 }
 
 /// Validates that all critical vulnerabilities have been addressed

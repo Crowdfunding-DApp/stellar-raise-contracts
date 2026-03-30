@@ -11,8 +11,14 @@
 
 #![cfg(test)]
 
+<<<<<<< HEAD
+use soroban_sdk::{Env, Address, String, Vec};
+||||||| a43ed59f
+use soroban_sdk::{Env, Address};
+=======
 extern crate std;
 
+>>>>>>> origin/main
 use crate::cargo_toml_rust::{
     all_deprecated_versions_replaced, audited_dependencies, ci_string_within_bounds,
     validate_allowed_license_strings, validate_compliance_rule_strings, validate_dependency_strings,
@@ -398,7 +404,7 @@ fn add_approved_dependency_success() {
 }
 
 #[test]
-#[should_panic(expected = "Security level 5 exceeds maximum allowed 3")]
+#[should_panic(expected = "security level exceeds maximum allowed")]
 fn add_dependency_exceeding_security_level_panics() {
     with_cargo_contract(|env| {
         CargoTomlRust::initialize(env.clone());

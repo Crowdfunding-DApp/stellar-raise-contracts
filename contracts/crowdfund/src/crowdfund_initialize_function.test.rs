@@ -35,6 +35,23 @@ fn setup() -> (
     (env, client, creator, token_address, admin)
 }
 
+<<<<<<< HEAD
+/// @notice Ensure initialize rejects non-positive goal.
+/// @security Prevents unusable or invalid campaigns from being instantiated.
+#[test]
+#[should_panic]
+fn initialize_rejects_zero_goal() {
+    let (env, client, creator, token) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+||||||| a43ed59f
+/// @notice Ensure initialize rejects non-positive goal.
+/// @security Prevents unusable or invalid campaigns from being instantiated.
+#[test]
+#[should_panic(expected = "goal must be positive")]
+fn initialize_rejects_zero_goal() {
+    let (env, client, creator, token) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+=======
 /// Calls `initialize()` with sensible defaults and returns the admin used.
 fn default_init(
     client: &CrowdfundContractClient,
@@ -43,7 +60,13 @@ fn default_init(
     deadline: u64,
 ) -> Address {
     let admin = creator.clone();
+>>>>>>> origin/main
     client.initialize(
+<<<<<<< HEAD
+        &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None,
+||||||| a43ed59f
+        &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None,
+=======
         &admin,
         creator,
         token,
@@ -53,6 +76,7 @@ fn default_init(
         &None,
         &None,
         &None,
+>>>>>>> origin/main
         &None,
     );
     admin
@@ -61,6 +85,15 @@ fn default_init(
 // ── Happy-path tests ──────────────────────────────────────────────────────────
 
 #[test]
+<<<<<<< HEAD
+#[should_panic]
+fn initialize_rejects_zero_min_contribution() {
+    let (env, client, creator, token) = setup();
+||||||| a43ed59f
+#[should_panic(expected = "min contribution must be positive")]
+fn initialize_rejects_zero_min_contribution() {
+    let (env, client, creator, token) = setup();
+=======
 fn test_initialize_stores_core_fields() {
     let (env, client, creator, token, _admin) = setup();
     let deadline = env.ledger().timestamp() + 3_600;
@@ -125,8 +158,14 @@ fn test_initialize_emits_event() {
 #[test]
 fn test_initialize_stores_admin_address() {
     let (env, client, creator, token, admin) = setup();
+>>>>>>> origin/main
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
+<<<<<<< HEAD
+        &creator, &creator, &token, &1_000_000, &deadline, &0, &None, &None, &None,
+||||||| a43ed59f
+        &creator, &creator, &token, &1_000_000, &deadline, &0, &None, &None, &None,
+=======
         &admin,
         &creator,
         &token,
@@ -136,6 +175,7 @@ fn test_initialize_stores_admin_address() {
         &None,
         &None,
         &None,
+>>>>>>> origin/main
         &None,
     );
     assert_eq!(client.goal(), 1_000_000);
@@ -144,8 +184,18 @@ fn test_initialize_stores_admin_address() {
 // ── Re-initialization guard ───────────────────────────────────────────────────
 
 #[test]
+<<<<<<< HEAD
+#[should_panic]
+fn initialize_rejects_fee_over_100_percent() {
+    let (env, client, creator, token) = setup();
+||||||| a43ed59f
+#[should_panic(expected = "platform fee cannot exceed 100%")]
+fn initialize_rejects_fee_over_100_percent() {
+    let (env, client, creator, token) = setup();
+=======
 fn test_initialize_twice_returns_already_initialized() {
     let (env, client, creator, token, _admin) = setup();
+>>>>>>> origin/main
     let deadline = env.ledger().timestamp() + 3_600;
     default_init(&client, &creator, &token, deadline);
 
@@ -319,10 +369,52 @@ fn test_initialize_rejects_fee_over_100_percent() {
         &Some(cfg),
         &None,
         &None,
+        &None,
     );
+<<<<<<< HEAD
+}
+
+/// @notice Ensure initialize rejects bonus goal that is not above primary goal.
+#[test]
+#[should_panic]
+fn initialize_rejects_non_increasing_bonus_goal() {
+    let (env, client, creator, token) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    client.initialize(
+        &creator,
+        &creator,
+        &token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &Some(1_000_000),
+        &None,
+        &None,
+||||||| a43ed59f
+}
+
+/// @notice Ensure initialize rejects bonus goal that is not above primary goal.
+#[test]
+#[should_panic(expected = "bonus goal must be greater than primary goal")]
+fn initialize_rejects_non_increasing_bonus_goal() {
+    let (env, client, creator, token) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    client.initialize(
+        &creator,
+        &creator,
+        &token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &Some(1_000_000),
+        &None,
+=======
     assert_eq!(
         result.unwrap_err().unwrap(),
         ContractError::InvalidPlatformFee
+>>>>>>> origin/main
     );
 }
 
