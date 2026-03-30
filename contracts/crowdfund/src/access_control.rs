@@ -20,7 +20,8 @@
 
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
-use crate::{ContractError, DataKey, PlatformConfig};
+use crate::exception_handling::{Error, ensure_auth, invalid_input};
+use crate::{DataKey, PlatformConfig};
 
 #[derive(Clone)]
 #[contracttype]
@@ -67,14 +68,14 @@ pub fn get_governance(env: &Env) -> Address {
 /// # Security
 /// - `caller.require_auth()` ensures the transaction is signed by `caller`.
 /// - Emits a `paused` event so monitors can alert immediately.
-pub fn pause(env: &Env, caller: &Address) {
-    caller.require_auth();
+pub fn pause(env: &Env, caller: &Address) -> Result<(), Error> {
+    ensure_auth(env, caller)?;
 
     let pauser = get_pauser(env);
     let admin = get_default_admin(env);
 
     if *caller != pauser && *caller != admin {
-        panic!("not authorized to pause");
+        return invalid_input(env, "not authorized to pause");
     }
 
     env.storage().instance().set(&DataKey::Paused, &true);
@@ -83,6 +84,7 @@ pub fn pause(env: &Env, caller: &Address) {
         (Symbol::new(env, "access"), Symbol::new(env, "paused")),
         caller.clone(),
     );
+    Ok(())
 }
 
 /// @notice Unpause the contract.
@@ -93,12 +95,12 @@ pub fn pause(env: &Env, caller: &Address) {
 /// # Security
 /// - `caller.require_auth()` ensures the transaction is signed by `caller`.
 /// - Emits an `unpaused` event.
-pub fn unpause(env: &Env, caller: &Address) {
-    caller.require_auth();
+pub fn unpause(env: &Env, caller: &Address) -> Result<(), Error> {
+    ensure_auth(env, caller)?;
 
     let admin = get_default_admin(env);
     if *caller != admin {
-        panic!("only DEFAULT_ADMIN_ROLE can unpause");
+        return invalid_input(env, "only DEFAULT_ADMIN_ROLE can unpause");
     }
 
     env.storage().instance().set(&DataKey::Paused, &false);
@@ -107,6 +109,7 @@ pub fn unpause(env: &Env, caller: &Address) {
         (Symbol::new(env, "access"), Symbol::new(env, "unpaused")),
         caller.clone(),
     );
+    Ok(())
 }
 
 /// @notice Panics if the contract is currently paused.
