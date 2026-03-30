@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -38,12 +40,18 @@ jobs:
         run: sudo apt-get install -y binaryen
 
       - name: Make validation script executable
-        run: chmod +x scripts/security_compliance_validation.sh scripts/security_compliance_validation.test.sh
+        run: chmod +x scripts/security_compliance_validation.sh scripts/security_compliance_validation.test.sh scripts/security_policy_enforcement.sh scripts/security_policy_enforcement.test.sh
 
       - name: Run security compliance validation
         # Exit code 1 = check failed → blocks the PR.
         # Exit code 2 = tooling missing → blocks the PR.
         run: ./scripts/security_compliance_validation.sh
+
+      - name: Run security policy enforcement
+        run: ./scripts/security_policy_enforcement.sh
+
+      - name: Run security policy enforcement tests
+        run: ./scripts/security_policy_enforcement.test.sh
 
       - name: Run validation test suite
         run: ./scripts/security_compliance_validation.test.sh

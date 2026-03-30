@@ -8,6 +8,7 @@ jobs:
   stale:
     name: Auto-close stale issues and PRs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       issues: write
       pull-requests: write
