@@ -107,7 +107,13 @@
     "unpaused",
     "metadata",
     "centralizes",
-    "initializes"
+    "initializes",
+    "discriminant",
+    "idempotent",
+    "GoalTooLow",
+    "auditable",
+    "permissionless",
+    "nocapture"
   ],
   "ignorePaths": [
     "node_modules/**",

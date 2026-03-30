@@ -5,7 +5,16 @@ members = [
 ]
 
 [workspace.dependencies]
+<<<<<<< HEAD
+soroban-sdk = "22.0.0"
+||||||| a43ed59f
+soroban-sdk = "22.1.0"
+=======
 soroban-sdk = "22.0.11"
+>>>>>>> origin/main
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+toml = { version = "0.8", default-features = false }
+proptest = "1.5.0"
 
 [profile.release]
 opt-level = "z"

@@ -5,9 +5,12 @@
     "optimize:svg": "svgo --folder frontend/public/images/ --recursive --multipass --config svgo.config.js",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "coverage:monitor": "bash scripts/code_coverage_monitoring.sh",
+    "coverage:monitor:enforce": "bash scripts/code_coverage_monitoring.sh --enforce",
     "test:watch": "jest --watch",
     "lint": "tsc --noEmit",
-    "format": "prettier --write \"frontend/**/*.ts\" \"frontend/**/*.tsx\""
+    "format": "prettier --write \"frontend/**/*.ts\" \"frontend/**/*.tsx\"",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
@@ -19,6 +22,7 @@
     "@types/jest": "^30.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
@@ -30,6 +34,7 @@
   "dependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "canvas": "^3.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   }

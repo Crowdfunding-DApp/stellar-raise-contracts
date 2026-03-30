@@ -15,11 +15,13 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["jest", "node"]
+    "types": ["jest", "node", "@testing-library/jest-dom"],
   },
   "include": [
     "frontend/**/*",
-    "contracts/**/*"
+    "contracts/**/*",
+    "milestone_insights.tsx",
+    "milestone_insights.test.tsx"
   ],
   "exclude": [
     "node_modules"
