@@ -19,14 +19,17 @@
 
 #![cfg(test)]
 
+extern crate alloc;
+
+use alloc::vec;
+use alloc::vec::Vec;
 use proptest::prelude::*;
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 use crate::security_training_integration::{
-    all_required_complete, build_report, compute_compliance_score, derive_status,
-    is_passing_score, is_training_valid, SecurityTrainingIntegration, TrainingModule,
-    TrainingRecord, TrainingSeverity, TrainingStatus, MIN_PASSING_SCORE,
-    SECONDS_PER_DAY, TRAINING_VALIDITY_DAYS,
+    all_required_complete, build_report, compute_compliance_score, derive_status, is_passing_score,
+    is_training_valid, SecurityTrainingIntegration, TrainingModule, TrainingRecord,
+    TrainingSeverity, TrainingStatus, MIN_PASSING_SCORE, SECONDS_PER_DAY, TRAINING_VALIDITY_DAYS,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,7 +55,12 @@ fn make_module(env: &Env, id: u32, required: bool) -> TrainingModule {
 }
 
 /// Builds a `TrainingRecord` with the given status.
-fn make_record(env: &Env, member: &Address, module_id: u32, status: TrainingStatus) -> TrainingRecord {
+fn make_record(
+    env: &Env,
+    member: &Address,
+    module_id: u32,
+    status: TrainingStatus,
+) -> TrainingRecord {
     TrainingRecord {
         member: member.clone(),
         module_id,
@@ -414,12 +422,7 @@ fn test_record_completion_passing_score() {
         TrainingSeverity::High,
         true,
     );
-    let status = SecurityTrainingIntegration::record_completion(
-        env.clone(),
-        member.clone(),
-        1,
-        90,
-    );
+    let status = SecurityTrainingIntegration::record_completion(env.clone(), member.clone(), 1, 90);
     assert_eq!(status, TrainingStatus::Completed);
 }
 
@@ -435,12 +438,7 @@ fn test_record_completion_failing_score() {
         TrainingSeverity::High,
         true,
     );
-    let status = SecurityTrainingIntegration::record_completion(
-        env.clone(),
-        member.clone(),
-        1,
-        50,
-    );
+    let status = SecurityTrainingIntegration::record_completion(env.clone(), member.clone(), 1, 50);
     assert_eq!(status, TrainingStatus::Failed);
 }
 

@@ -1,9 +1,10 @@
-/// Security Alerting System for Soroban Contracts
-/// Provides automated security monitoring and alerting capabilities
+//! Security Alerting System for Soroban Contracts.
+//! Provides automated security monitoring and alerting capabilities.
 
-use soroban_sdk::{contract, contractimpl, Env, Symbol, Vec, String};
+use soroban_sdk::{contract, contractimpl, contracttype, Env, String};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct SecurityAlert {
     pub alert_id: u64,
     pub severity: u32, // 1=Low, 2=Medium, 3=High, 4=Critical
@@ -13,51 +14,52 @@ pub struct SecurityAlert {
     pub resolved: bool,
 }
 
+#[derive(Clone)]
+#[contracttype]
+enum DataKey {
+    Initialized,
+    AlertCounter,
+    Alert(u64),
+}
+
 #[contract]
 pub struct SecurityAlertingSystem;
 
 #[contractimpl]
 impl SecurityAlertingSystem {
     /// Initialize security alerting system
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
-    /// 
+    ///
     /// # Returns
     /// Success status
     pub fn initialize(env: Env) -> bool {
-        let key = Symbol::new(&env, "initialized");
-        env.storage().instance().set(&key, &true);
+        env.storage().instance().set(&DataKey::Initialized, &true);
         true
     }
 
     /// Create a new security alert
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `severity` - Alert severity level (1-4)
     /// * `alert_type` - Type of security alert
     /// * `message` - Alert message
-    /// 
+    ///
     /// # Returns
     /// Alert ID
-    pub fn create_alert(
-        env: Env,
-        severity: u32,
-        alert_type: String,
-        message: String,
-    ) -> u64 {
+    pub fn create_alert(env: Env, severity: u32, alert_type: String, message: String) -> u64 {
         // Validate severity
         if severity < 1 || severity > 4 {
             panic!("Invalid severity level");
         }
 
         // Get next alert ID
-        let counter_key = Symbol::new(&env, "alert_counter");
         let alert_id: u64 = env
             .storage()
             .instance()
-            .get(&counter_key)
+            .get(&DataKey::AlertCounter)
             .unwrap_or(0u64);
         let next_id = alert_id + 1;
 
@@ -72,29 +74,31 @@ impl SecurityAlertingSystem {
         };
 
         // Store alert using next_id as part of key
-        let alert_key = Symbol::new(&env, &next_id.to_string());
-        env.storage().instance().set(&alert_key, &alert);
+        env.storage()
+            .instance()
+            .set(&DataKey::Alert(next_id), &alert);
 
         // Update counter
-        env.storage().instance().set(&counter_key, &next_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::AlertCounter, &next_id);
 
         next_id
     }
 
     /// Resolve a security alert
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `alert_id` - ID of alert to resolve
-    /// 
+    ///
     /// # Returns
     /// Success status
     pub fn resolve_alert(env: Env, alert_id: u64) -> bool {
-        let alert_key = Symbol::new(&env, &alert_id.to_string());
-        
-        if let Some(mut alert) = env.storage().instance().get::<_, SecurityAlert>(&alert_key) {
+        let key = DataKey::Alert(alert_id);
+        if let Some(mut alert) = env.storage().instance().get::<_, SecurityAlert>(&key) {
             alert.resolved = true;
-            env.storage().instance().set(&alert_key, &alert);
+            env.storage().instance().set(&key, &alert);
             true
         } else {
             false
@@ -102,45 +106,52 @@ impl SecurityAlertingSystem {
     }
 
     /// Get alert by ID
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `alert_id` - ID of alert to retrieve
-    /// 
+    ///
     /// # Returns
     /// Alert details or None
     pub fn get_alert(env: Env, alert_id: u64) -> Option<SecurityAlert> {
-        let alert_key = Symbol::new(&env, &alert_id.to_string());
-        env.storage().instance().get(&alert_key)
+        env.storage().instance().get(&DataKey::Alert(alert_id))
     }
 
     /// Get total alert count
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
-    /// 
+    ///
     /// # Returns
     /// Total number of alerts
     pub fn get_alert_count(env: Env) -> u64 {
-        let counter_key = Symbol::new(&env, "alert_counter");
-        env.storage().instance().get(&counter_key).unwrap_or(0u64)
+        env.storage()
+            .instance()
+            .get(&DataKey::AlertCounter)
+            .unwrap_or(0u64)
     }
 
     /// Get critical alerts count
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
-    /// 
+    ///
     /// # Returns
     /// Number of critical alerts
     pub fn get_critical_alerts_count(env: Env) -> u64 {
-        let counter_key = Symbol::new(&env, "alert_counter");
-        let total: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        
+        let total: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AlertCounter)
+            .unwrap_or(0u64);
+
         let mut critical_count = 0u64;
         for i in 1..=total {
-            let alert_key = Symbol::new(&env, &i.to_string());
-            if let Some(alert) = env.storage().instance().get::<_, SecurityAlert>(&alert_key) {
+            if let Some(alert) = env
+                .storage()
+                .instance()
+                .get::<_, SecurityAlert>(&DataKey::Alert(i))
+            {
                 if alert.severity == 4 && !alert.resolved {
                     critical_count += 1;
                 }
@@ -150,10 +161,10 @@ impl SecurityAlertingSystem {
     }
 
     /// Check if system has unresolved critical alerts
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Soroban environment
-    /// 
+    ///
     /// # Returns
     /// True if critical alerts exist
     pub fn has_critical_alerts(env: Env) -> bool {
