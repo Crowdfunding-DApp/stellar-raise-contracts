@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --manifest-path ../../Cargo.toml --target wasm32-unknown-unknown --release",
-    "test": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path ../../Cargo.toml --workspace",
+    "test": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --manifest-path ../../Cargo.toml --target wasm32-unknown-unknown --release && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path ../../Cargo.toml --workspace",
     "lint": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo clippy --manifest-path ../../Cargo.toml --workspace -- -D warnings",
     "lint:fix": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo clippy --manifest-path ../../Cargo.toml --workspace --fix --allow-dirty -- -D warnings",
     "dev": "echo 'No dev server for contracts. Use pnpm build to compile.'"
