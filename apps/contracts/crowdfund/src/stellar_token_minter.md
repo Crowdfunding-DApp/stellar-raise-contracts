@@ -43,12 +43,12 @@ fn set_minter(env, admin: Address, new_minter: Address);
 
 ## Storage Layout
 
-| Key | Storage type | Value type | Description |
-| :--- | :--- | :--- | :--- |
-| `Admin` | Instance | `Address` | Administrator — can update the minter role |
-| `Minter` | Instance | `Address` | Authorized minter — can call `mint()` |
-| `TotalMinted` | Instance | `u64` | Running count of minted tokens |
-| `TokenMetadata(token_id)` | Persistent | `Address` | Maps each token ID to its owner |
+| Key                       | Storage type | Value type | Description                                |
+| :------------------------ | :----------- | :--------- | :----------------------------------------- |
+| `Admin`                   | Instance     | `Address`  | Administrator — can update the minter role |
+| `Minter`                  | Instance     | `Address`  | Authorized minter — can call `mint()`      |
+| `TotalMinted`             | Instance     | `u64`      | Running count of minted tokens             |
+| `TokenMetadata(token_id)` | Persistent   | `Address`  | Maps each token ID to its owner            |
 
 ---
 
@@ -92,30 +92,30 @@ fn set_minter(env, admin: Address, new_minter: Address);
 
 All public functions and the module-level doc use NatSpec-style tags:
 
-| Tag | Meaning |
-| :--- | :--- |
-| `@title` | Human-readable contract/module name |
-| `@notice` | What the function does (user-facing) |
-| `@dev` | Implementation detail (developer-facing) |
-| `@param` | Parameter description |
-| `@return` | Return value description |
-| `@custom:security` | Security note or invariant |
-| `@custom:limitations` | Known limitations |
+| Tag                   | Meaning                                  |
+| :-------------------- | :--------------------------------------- |
+| `@title`              | Human-readable contract/module name      |
+| `@notice`             | What the function does (user-facing)     |
+| `@dev`                | Implementation detail (developer-facing) |
+| `@param`              | Parameter description                    |
+| `@return`             | Return value description                 |
+| `@custom:security`    | Security note or invariant               |
+| `@custom:limitations` | Known limitations                        |
 
 ---
 
 ## Test Coverage
 
-| Area | Tests | Coverage |
-| :--- | ---: | ---: |
-| Initialization | 3 | 100 % |
-| Minting | 6 | 100 % |
-| Authorization | 4 | 100 % |
-| State Management | 5 | 100 % |
-| View Functions | 3 | 100 % |
-| Admin Operations | 3 | 100 % |
-| Edge Cases | 4 | 100 % |
-| **Total** | **28** | **95 %+** |
+| Area             |  Tests |  Coverage |
+| :--------------- | -----: | --------: |
+| Initialization   |      3 |     100 % |
+| Minting          |      6 |     100 % |
+| Authorization    |      4 |     100 % |
+| State Management |      5 |     100 % |
+| View Functions   |      3 |     100 % |
+| Admin Operations |      3 |     100 % |
+| Edge Cases       |      4 |     100 % |
+| **Total**        | **28** | **95 %+** |
 
 ### Security Invariants Tested
 
@@ -157,6 +157,7 @@ minter_client.set_minter(&admin, &new_crowdfund_contract_address);
 ```bash
 cargo test --package crowdfund stellar_token_minter
 ```
+
 # Stellar Token Minter Contract
 
 Technical reference for the `StellarTokenMinter` Soroban smart contract used by the Stellar Raise crowdfunding platform.
@@ -202,12 +203,12 @@ fn set_minter(env, admin: Address, new_minter: Address);
 
 ## Storage Layout
 
-| Key | Storage type | Value type | Description |
-| :--- | :--- | :--- | :--- |
-| `Admin` | Instance | `Address` | Administrator — can update the minter role |
-| `Minter` | Instance | `Address` | Authorized minter — can call `mint()` |
-| `TotalMinted` | Instance | `u64` | Running count of minted tokens |
-| `TokenMetadata(token_id)` | Persistent | `Address` | Maps each token ID to its owner |
+| Key                       | Storage type | Value type | Description                                |
+| :------------------------ | :----------- | :--------- | :----------------------------------------- |
+| `Admin`                   | Instance     | `Address`  | Administrator — can update the minter role |
+| `Minter`                  | Instance     | `Address`  | Authorized minter — can call `mint()`      |
+| `TotalMinted`             | Instance     | `u64`      | Running count of minted tokens             |
+| `TokenMetadata(token_id)` | Persistent   | `Address`  | Maps each token ID to its owner            |
 
 ---
 
@@ -251,30 +252,30 @@ fn set_minter(env, admin: Address, new_minter: Address);
 
 All public functions and the module-level doc use NatSpec-style tags:
 
-| Tag | Meaning |
-| :--- | :--- |
-| `@title` | Human-readable contract/module name |
-| `@notice` | What the function does (user-facing) |
-| `@dev` | Implementation detail (developer-facing) |
-| `@param` | Parameter description |
-| `@return` | Return value description |
-| `@custom:security` | Security note or invariant |
-| `@custom:limitations` | Known limitations |
+| Tag                   | Meaning                                  |
+| :-------------------- | :--------------------------------------- |
+| `@title`              | Human-readable contract/module name      |
+| `@notice`             | What the function does (user-facing)     |
+| `@dev`                | Implementation detail (developer-facing) |
+| `@param`              | Parameter description                    |
+| `@return`             | Return value description                 |
+| `@custom:security`    | Security note or invariant               |
+| `@custom:limitations` | Known limitations                        |
 
 ---
 
 ## Test Coverage
 
-| Area | Tests | Coverage |
-| :--- | ---: | ---: |
-| Initialization | 3 | 100 % |
-| Minting | 6 | 100 % |
-| Authorization | 4 | 100 % |
-| State Management | 5 | 100 % |
-| View Functions | 3 | 100 % |
-| Admin Operations | 3 | 100 % |
-| Edge Cases | 4 | 100 % |
-| **Total** | **28** | **95 %+** |
+| Area             |  Tests |  Coverage |
+| :--------------- | -----: | --------: |
+| Initialization   |      3 |     100 % |
+| Minting          |      6 |     100 % |
+| Authorization    |      4 |     100 % |
+| State Management |      5 |     100 % |
+| View Functions   |      3 |     100 % |
+| Admin Operations |      3 |     100 % |
+| Edge Cases       |      4 |     100 % |
+| **Total**        | **28** | **95 %+** |
 
 ### Security Invariants Tested
 

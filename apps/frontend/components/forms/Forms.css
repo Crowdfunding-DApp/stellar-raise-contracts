@@ -23,7 +23,7 @@
 }
 
 .form__label--required::after {
-  content: '*';
+  content: "*";
   color: var(--color-error-red);
   margin-left: var(--space-1);
 }
@@ -176,7 +176,7 @@
 }
 
 .toggle-slider::before {
-  content: '';
+  content: "";
   position: absolute;
   height: 24px;
   width: 24px;
@@ -226,12 +226,12 @@
 
 .btn--primary:hover,
 .btn--primary:focus-visible {
-  background-color: #0052CC;
+  background-color: #0052cc;
   box-shadow: var(--shadow-md);
 }
 
 .btn--primary:active {
-  background-color: #003D99;
+  background-color: #003d99;
 }
 
 .btn--primary:disabled {
@@ -257,7 +257,7 @@
 
 .btn--danger:hover,
 .btn--danger:focus-visible {
-  background-color: #E6342A;
+  background-color: #e6342a;
 }
 
 .btn--outline {

@@ -5,19 +5,19 @@ validating that contracts have migrated to v22.
 
 ## What Changed in v22
 
-| Area | Deprecated (v21) | Required (v22) |
-|---|---|---|
+| Area              | Deprecated (v21)                        | Required (v22)               |
+| ----------------- | --------------------------------------- | ---------------------------- |
 | Test registration | `env.register_contract(None, Contract)` | `env.register(Contract, ())` |
-| Storage keys | `Symbol::new(&env, "key")` | `#[contracttype]` enum keys |
-| Auth pattern | Manual checks | `address.require_auth()` |
+| Storage keys      | `Symbol::new(&env, "key")`              | `#[contracttype]` enum keys  |
+| Auth pattern      | Manual checks                           | `address.require_auth()`     |
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `scripts/soroban_sdk_minor.rs` | Pure audit functions — no Soroban runtime |
-| `scripts/soroban_sdk_minor.test.rs` | Self-contained test suite (49 cases) |
-| `scripts/soroban_sdk_minor.md` | This document |
+| File                                | Purpose                                   |
+| ----------------------------------- | ----------------------------------------- |
+| `scripts/soroban_sdk_minor.rs`      | Pure audit functions — no Soroban runtime |
+| `scripts/soroban_sdk_minor.test.rs` | Self-contained test suite (49 cases)      |
+| `scripts/soroban_sdk_minor.md`      | This document                             |
 
 ## Contract API
 
@@ -33,28 +33,28 @@ pub struct ScanResult {
 
 ### Functions
 
-| Function | Description |
-|---|---|
-| `parse_semver(version)` | Parses semver string → `Option<(u64,u64,u64)>` |
-| `is_version_gte(version, min)` | Returns `true` if `version >= min` |
-| `is_sdk_v22_compatible(sdk_version)` | Returns `true` if version ≥ `22.0.0` |
-| `scan_source(file, source)` | Scans source text for deprecated v21 patterns |
-| `scan_all(sources)` | Scans a map of file→source; results sorted by filename |
-| `dirty_results(results)` | Filters to only results with findings |
+| Function                             | Description                                            |
+| ------------------------------------ | ------------------------------------------------------ |
+| `parse_semver(version)`              | Parses semver string → `Option<(u64,u64,u64)>`         |
+| `is_version_gte(version, min)`       | Returns `true` if `version >= min`                     |
+| `is_sdk_v22_compatible(sdk_version)` | Returns `true` if version ≥ `22.0.0`                   |
+| `scan_source(file, source)`          | Scans source text for deprecated v21 patterns          |
+| `scan_all(sources)`                  | Scans a map of file→source; results sorted by filename |
+| `dirty_results(results)`             | Filters to only results with findings                  |
 
 ### Constants
 
-| Constant | Value | Description |
-|---|---|---|
-| `MIN_SDK_VERSION` | `"22.0.0"` | Minimum SDK version for v22 compatibility |
+| Constant              | Value      | Description                                     |
+| --------------------- | ---------- | ----------------------------------------------- |
+| `MIN_SDK_VERSION`     | `"22.0.0"` | Minimum SDK version for v22 compatibility       |
 | `DEPRECATED_PATTERNS` | see source | `(pattern, description)` pairs checked per line |
 
 ## Deprecated Patterns Detected
 
-| Pattern | Replacement |
-|---|---|
-| `register_contract(` | `env.register(Contract, ())` |
-| `Symbol::new(` | `Symbol::short` or `#[contracttype]` enum key |
+| Pattern              | Replacement                                   |
+| -------------------- | --------------------------------------------- |
+| `register_contract(` | `env.register(Contract, ())`                  |
+| `Symbol::new(`       | `Symbol::short` or `#[contracttype]` enum key |
 
 ## Usage in CI
 

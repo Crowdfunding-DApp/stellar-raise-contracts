@@ -32,7 +32,7 @@ Panics with `"Admin not initialized"` if called before `initialize()`.
 
 Delegates to `env.deployer().update_current_contract_wasm(new_wasm_hash)`.
 
-### `upgrade(env, new_wasm_hash)` *(contract entry point)*
+### `upgrade(env, new_wasm_hash)` _(contract entry point)_
 
 Calls `validate_admin_upgrade`, then `perform_upgrade`, then emits an
 `("upgrade", admin)` event with the new WASM hash as the event data.
@@ -62,6 +62,7 @@ stellar contract invoke \
 
 Require at least two reviewers to approve upgrade PRs before merging to
 production. The admin key for mainnet should be a multisig account.
+
 # admin_upgrade_mechanism
 
 Admin-gated WASM upgrade validation for the Stellar Raise crowdfund contract.
@@ -103,13 +104,13 @@ upgrade(env, new_wasm_hash)
 
 ## Edge Cases
 
-| Input | Outcome |
-|---|---|
-| Non-admin caller | Rejected by `require_auth()` |
-| Creator (≠ admin) | Rejected by `require_auth()` |
-| No admin stored (pre-init) | Panics on `expect("Admin not initialized")` |
-| All-zero WASM hash | Panics with `"upgrade: wasm_hash must not be zero"` |
-| Valid hash, valid admin | Upgrade proceeds |
+| Input                      | Outcome                                             |
+| -------------------------- | --------------------------------------------------- |
+| Non-admin caller           | Rejected by `require_auth()`                        |
+| Creator (≠ admin)          | Rejected by `require_auth()`                        |
+| No admin stored (pre-init) | Panics on `expect("Admin not initialized")`         |
+| All-zero WASM hash         | Panics with `"upgrade: wasm_hash must not be zero"` |
+| Valid hash, valid admin    | Upgrade proceeds                                    |
 
 ## Security Considerations
 
@@ -117,6 +118,7 @@ upgrade(env, new_wasm_hash)
 - **Admin key custody**: the admin address is set once at `initialize()` and cannot be changed without an upgrade.
 - **State persistence**: all contract storage survives a WASM swap — the upgrade only replaces executable code.
 - **Recommendation**: require at least two reviewers to approve upgrade PRs before merging.
+
 # Admin Upgrade Mechanism
 
 ## Overview
@@ -151,7 +153,7 @@ Panics with `"Admin not initialized"` if called before `initialize()`.
 
 Delegates to `env.deployer().update_current_contract_wasm(new_wasm_hash)`.
 
-### `upgrade(env, new_wasm_hash)` *(contract entry point)*
+### `upgrade(env, new_wasm_hash)` _(contract entry point)_
 
 Calls `validate_admin_upgrade`, then `perform_upgrade`, then emits an
 `("upgrade", admin)` event with the new WASM hash as the event data.

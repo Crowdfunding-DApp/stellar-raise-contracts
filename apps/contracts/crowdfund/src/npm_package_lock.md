@@ -15,15 +15,15 @@ This module audits `package-lock.json` dependency entries for known security vul
 
 ## Vulnerability Fixed
 
-| Field       | Value |
-|-------------|-------|
+| Field       | Value                                                                    |
+| ----------- | ------------------------------------------------------------------------ |
 | Advisory    | [GHSA-xpqw-6gx7-v673](https://github.com/advisories/GHSA-xpqw-6gx7-v673) |
-| Package     | `svgo` |
-| Severity    | High (CVSS 7.5) |
-| CWE         | CWE-776 (Improper Restriction of Recursive Entity References) |
-| Affected    | `>=3.0.0 <3.3.3` |
-| Fixed in    | `3.3.3` |
-| CVSS vector | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H` |
+| Package     | `svgo`                                                                   |
+| Severity    | High (CVSS 7.5)                                                          |
+| CWE         | CWE-776 (Improper Restriction of Recursive Entity References)            |
+| Affected    | `>=3.0.0 <3.3.3`                                                         |
+| Fixed in    | `3.3.3`                                                                  |
+| CVSS vector | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H`                           |
 
 ### What Changed
 
@@ -34,20 +34,20 @@ the first patched release. Run `npm audit` to confirm zero vulnerabilities.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `npm_package_lock.rs` | Pure-Rust audit functions (no Soroban SDK dependency) |
-| `npm_package_lock_test.rs` | Test suite (≥95% coverage, 49 test cases) |
-| `npm_package_lock.md` | This document |
-| Field        | Value |
-|--------------|-------|
-| Advisory     | [GHSA-xpqw-6gx7-v673](https://github.com/advisories/GHSA-xpqw-6gx7-v673) |
-| Package      | `svgo` |
-| Severity     | High (CVSS 7.5) |
-| CWE          | CWE-776 (Improper Restriction of Recursive Entity References) |
-| Affected     | `>=3.0.0 <3.3.3` |
-| Fixed in     | `3.3.3` |
-| CVSS vector  | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H` |
+| File                       | Purpose                                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `npm_package_lock.rs`      | Pure-Rust audit functions (no Soroban SDK dependency)                    |
+| `npm_package_lock_test.rs` | Test suite (≥95% coverage, 49 test cases)                                |
+| `npm_package_lock.md`      | This document                                                            |
+| Field                      | Value                                                                    |
+| --------------             | -------                                                                  |
+| Advisory                   | [GHSA-xpqw-6gx7-v673](https://github.com/advisories/GHSA-xpqw-6gx7-v673) |
+| Package                    | `svgo`                                                                   |
+| Severity                   | High (CVSS 7.5)                                                          |
+| CWE                        | CWE-776 (Improper Restriction of Recursive Entity References)            |
+| Affected                   | `>=3.0.0 <3.3.3`                                                         |
+| Fixed in                   | `3.3.3`                                                                  |
+| CVSS vector                | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H`                           |
 
 ### What Changed
 
@@ -89,6 +89,7 @@ npm_package_lock.rs
 #### 1. Semantic Version Parsing
 
 The `parse_semver()` function handles:
+
 - Standard versions: `3.3.3`
 - Optional `v` prefix: `v1.2.0`
 - Pre-release suffixes: `1.2.0-alpha`, `1.2.0-beta.1`
@@ -111,6 +112,7 @@ This implementation is O(1) and avoids string comparisons.
 Only `sha512` hashes are accepted.
 
 **Rationale**:
+
 - `sha1` is cryptographically broken (collision attacks)
 - `sha256` is acceptable but `sha512` is stronger
 - NPM v7+ defaults to `sha512` for all entries
@@ -129,6 +131,7 @@ thousands of entries and cause a DoS via excessive processing time.
 Only versions 2 and 3 are accepted.
 
 **Rationale**:
+
 - Version 1 (npm <7) lacks integrity hashes for all entries
 - Version 2 (npm 7-8) includes integrity hashes
 - Version 3 (npm 9+) adds workspace support
@@ -149,11 +152,11 @@ Only versions 2 and 3 are accepted.
    versions.
 5. `audit_all_bounded` enforces `MAX_PACKAGES = 500` to prevent DoS via
    unbounded input.
-| File | Purpose |
-|------|---------|
-| `npm_package_lock.rs` | Pure-Rust audit functions (no Soroban SDK dependency) |
-| `npm_package_lock_test.rs` | Test suite (≥95% coverage, 49 test cases) |
-| `npm_package_lock.md` | This document |
+   | File | Purpose |
+   |------|---------|
+   | `npm_package_lock.rs` | Pure-Rust audit functions (no Soroban SDK dependency) |
+   | `npm_package_lock_test.rs` | Test suite (≥95% coverage, 49 test cases) |
+   | `npm_package_lock.md` | This document |
 
 ---
 
@@ -178,22 +181,22 @@ pub struct AuditResult {
 
 ### Constants
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `MAX_PACKAGES` | 500 | Hard cap for `audit_all_bounded` to prevent unbounded processing |
+| Constant       | Value | Purpose                                                          |
+| -------------- | ----- | ---------------------------------------------------------------- |
+| `MAX_PACKAGES` | 500   | Hard cap for `audit_all_bounded` to prevent unbounded processing |
 
 ### Functions
 
-| Function | Description |
-|----------|-------------|
-| `parse_semver(version)` | Parses a semver string into `Option<(u64, u64, u64)>` |
-| `is_version_gte(version, min)` | Returns `true` if `version >= min` |
-| `validate_integrity(integrity)` | Validates sha512 hash presence and prefix |
-| `audit_package(entry, min_safe_versions)` | Audits one package entry |
-| `audit_all(packages, min_safe_versions)` | Audits a full lockfile snapshot |
-| `audit_all_bounded(packages, min_safe_versions)` | Like `audit_all` but rejects inputs > `MAX_PACKAGES` |
-| `failing_results(results)` | Filters to only failing audit results |
-| `validate_lockfile_version(version)` | Accepts only `lockfileVersion` 2 or 3 |
+| Function                                         | Description                                           |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| `parse_semver(version)`                          | Parses a semver string into `Option<(u64, u64, u64)>` |
+| `is_version_gte(version, min)`                   | Returns `true` if `version >= min`                    |
+| `validate_integrity(integrity)`                  | Validates sha512 hash presence and prefix             |
+| `audit_package(entry, min_safe_versions)`        | Audits one package entry                              |
+| `audit_all(packages, min_safe_versions)`         | Audits a full lockfile snapshot                       |
+| `audit_all_bounded(packages, min_safe_versions)` | Like `audit_all` but rejects inputs > `MAX_PACKAGES`  |
+| `failing_results(results)`                       | Filters to only failing audit results                 |
+| `validate_lockfile_version(version)`             | Accepts only `lockfileVersion` 2 or 3                 |
 
 ---
 
@@ -219,7 +222,7 @@ pub struct AuditResult {
 `.github/workflows/rust_ci.yml`. The build fails if any moderate-or-higher
 vulnerability is detected in the NPM dependency tree.
 
-```yaml
+````yaml
 - name: Audit NPM dependencies
   run: npm audit --audit-level=moderate
 #### `PackageEntry`
@@ -249,13 +252,13 @@ pub struct AuditResult {
     pub passed: bool,
     pub issues: Vec<String>, // empty if passed
 }
-```
+````
 
 ### Constants
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `MAX_PACKAGES` | 500 | Hard cap for `audit_all_bounded` to prevent unbounded processing |
+| Constant       | Value | Purpose                                                          |
+| -------------- | ----- | ---------------------------------------------------------------- |
+| `MAX_PACKAGES` | 500   | Hard cap for `audit_all_bounded` to prevent unbounded processing |
 
 ### Functions
 
@@ -264,6 +267,7 @@ pub struct AuditResult {
 Parse a semantic version string into (major, minor, patch) tuple.
 
 **Handles**:
+
 - Standard versions: `3.3.3`
 - Optional `v` prefix: `v1.2.0`
 - Pre-release suffixes: `1.2.0-alpha`
@@ -273,6 +277,7 @@ Parse a semantic version string into (major, minor, patch) tuple.
 **Returns**: `(major, minor, patch)` or `(0, 0, 0)` on parse failure.
 
 **Example**:
+
 ```rust
 let version = String::from_slice(&env, "3.3.3");
 let (major, minor, patch) = parse_semver(&version);
@@ -290,6 +295,7 @@ Check if `version >= min_version` using semantic versioning rules.
 **Returns**: `true` if `version >= min_version`, `false` otherwise.
 
 **Example**:
+
 ```rust
 let v1 = String::from_slice(&env, "3.3.3");
 let v2 = String::from_slice(&env, "3.3.2");
@@ -309,6 +315,7 @@ Validate that an integrity hash is present and uses sha512.
 **Returns**: `true` if valid sha512 hash, `false` otherwise.
 
 **Example**:
+
 ```rust
 let hash = String::from_slice(&env, "sha512-abcdef1234567890");
 assert!(validate_integrity(&hash));
@@ -321,12 +328,14 @@ assert!(validate_integrity(&hash));
 Audit a single package entry against known vulnerabilities.
 
 **Checks**:
+
 1. Integrity hash is valid sha512
 2. Version is >= minimum safe version (if in advisory map)
 
 **Returns**: `AuditResult` with `passed=true` if all checks pass, `false` otherwise.
 
 **Example**:
+
 ```rust
 let entry = PackageEntry {
     name: String::from_slice(&env, "svgo"),
@@ -356,6 +365,7 @@ Audit all packages in a lockfile snapshot.
 **Returns**: A vector of `AuditResult` for each package.
 
 **Example**:
+
 ```rust
 let mut packages = Vec::new(&env);
 packages.push_back(PackageEntry { /* ... */ });
@@ -376,6 +386,7 @@ Filter audit results to only those that failed.
 **Returns**: A new vector containing only results where `passed=false`.
 
 **Example**:
+
 ```rust
 let failures = failing_results(&results);
 if failures.len() > 0 {
@@ -396,6 +407,7 @@ Validate the lockfile version.
 **Returns**: `true` if version is 2 or 3, `false` otherwise.
 
 **Example**:
+
 ```rust
 assert!(validate_lockfile_version(2));
 assert!(validate_lockfile_version(3));
@@ -411,6 +423,7 @@ Check if any audit results failed.
 **Returns**: `true` if any result failed, `false` if all passed.
 
 **Example**:
+
 ```rust
 if has_failures(&results) {
     println!("Vulnerabilities detected!");
@@ -426,6 +439,7 @@ Count the number of failed audits.
 **Returns**: The count of failed audits.
 
 **Example**:
+
 ```rust
 let failure_count = count_failures(&results);
 println!("Found {} vulnerabilities", failure_count);
@@ -454,8 +468,10 @@ vulnerability is detected in the NPM dependency tree.
 - name: Audit NPM dependencies
   run: npm audit --audit-level=moderate
 ```
+
 feat: implement add-code-comments-to-npm-packagelockjson-minor-vulnerabilities-for-frontend-ui with tests and docs
-```
+
+````
 
 **Changes**:
 - Replaced `npm_package_lock.rs` with pure-Rust implementation (no Soroban SDK dependency)
@@ -579,7 +595,7 @@ packages.push_back(PackageEntry {
 let results = audit_all_bounded(&packages, &advisories).expect("too many packages");
 let failures = failing_results(&results);
 assert_eq!(failures.len(), 0);
-```
+````
 
 ---
 
@@ -588,21 +604,22 @@ assert_eq!(failures.len(), 0);
 The test suite in `npm_package_lock_test.rs` covers **48 test cases**
 with ≥95% code coverage:
 
-| Group | Tests |
-|-------|-------|
-| `parse_semver` | 9 |
-| `is_version_gte` | 9 |
-| `validate_integrity` | 5 |
-| `audit_package` | 9 |
-| `audit_all` | 3 |
-| `failing_results` | 2 |
-| `validate_lockfile_version` | 5 |
-| `has_failures` | 2 |
-| `count_failures` | 2 |
-| `audit_all_bounded` | 6 |
-| **Total** | **52** |
+| Group                       | Tests  |
+| --------------------------- | ------ |
+| `parse_semver`              | 9      |
+| `is_version_gte`            | 9      |
+| `validate_integrity`        | 5      |
+| `audit_package`             | 9      |
+| `audit_all`                 | 3      |
+| `failing_results`           | 2      |
+| `validate_lockfile_version` | 5      |
+| `has_failures`              | 2      |
+| `count_failures`            | 2      |
+| `audit_all_bounded`         | 6      |
+| **Total**                   | **52** |
 
 ### audit_all_bounded (6 cases)
+
 - Within limit returns Ok
 - Empty input returns Ok
 - Results match `audit_all`
@@ -614,19 +631,19 @@ with ≥95% code coverage:
 
 ## Performance Characteristics
 
-| Function | Time | Space | Notes |
-|----------|------|-------|-------|
-| `parse_semver` | O(1) | O(1) | Fixed-size tuple |
-| `is_version_gte` | O(1) | O(1) | Three comparisons |
-| `validate_integrity` | O(1) | O(1) | String prefix check |
-| `audit_package` | O(1) | O(n) | n = issues per package |
-| `audit_all` | O(m) | O(m·n) | m = packages |
-| `audit_all_bounded` | O(m) | O(m·n) | Bounded at MAX_PACKAGES |
-| `failing_results` | O(m) | O(k) | k = failures |
-| `validate_lockfile_version` | O(1) | O(1) | Range check |
+| Function                                         | Time                                                 | Space  | Notes                   |
+| ------------------------------------------------ | ---------------------------------------------------- | ------ | ----------------------- |
+| `parse_semver`                                   | O(1)                                                 | O(1)   | Fixed-size tuple        |
+| `is_version_gte`                                 | O(1)                                                 | O(1)   | Three comparisons       |
+| `validate_integrity`                             | O(1)                                                 | O(1)   | String prefix check     |
+| `audit_package`                                  | O(1)                                                 | O(n)   | n = issues per package  |
+| `audit_all`                                      | O(m)                                                 | O(m·n) | m = packages            |
+| `audit_all_bounded`                              | O(m)                                                 | O(m·n) | Bounded at MAX_PACKAGES |
+| `failing_results`                                | O(m)                                                 | O(k)   | k = failures            |
+| `validate_lockfile_version`                      | O(1)                                                 | O(1)   | Range check             |
 | `audit_all_bounded(packages, min_safe_versions)` | Like `audit_all` but rejects inputs > `MAX_PACKAGES` |
-| `failing_results(results)` | Filters to only failing audit results |
-| `validate_lockfile_version(version)` | Accepts only `lockfileVersion` 2 or 3 |
+| `failing_results(results)`                       | Filters to only failing audit results                |
+| `validate_lockfile_version(version)`             | Accepts only `lockfileVersion` 2 or 3                |
 
 ---
 
@@ -680,7 +697,9 @@ The test suite in `npm_package_lock_test.rs` covers **49 test cases** (≥95%):
 - name: Audit NPM dependencies
   run: npm audit --audit-level=moderate
 ```
+
 feat: implement add-code-comments-to-npm-packagelockjson-minor-vulnerabilities-for-frontend-ui with tests and docs
+
 ```
 
 **Changes**:
@@ -702,3 +721,4 @@ feat: implement add-code-comments-to-npm-packagelockjson-minor-vulnerabilities-f
 - [NPM Lockfile Format](https://docs.npmjs.com/cli/v9/configuring-npm/package-lock-json) — Official documentation
 - [Semantic Versioning](https://semver.org/) — Version specification
 - [SHA-512](https://en.wikipedia.org/wiki/SHA-2) — Cryptographic hash function
+```

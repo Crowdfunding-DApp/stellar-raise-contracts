@@ -29,7 +29,7 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 ### Arguments
 
 | Parameter     | Type      | Description                                      |
-|---------------|-----------|--------------------------------------------------|
+| ------------- | --------- | ------------------------------------------------ |
 | `contributor` | `Address` | The address claiming the refund (must be caller) |
 
 ### Return value
@@ -38,11 +38,11 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 
 ### Errors
 
-| Error                          | Condition                                                    |
-|--------------------------------|--------------------------------------------------------------|
-| `ContractError::CampaignStillActive` | Deadline has not yet passed                            |
-| `ContractError::GoalReached`   | Campaign goal was met — no refunds available                 |
-| `ContractError::NothingToRefund` | Caller has no contribution on record (or already claimed)  |
+| Error                                | Condition                                                 |
+| ------------------------------------ | --------------------------------------------------------- |
+| `ContractError::CampaignStillActive` | Deadline has not yet passed                               |
+| `ContractError::GoalReached`         | Campaign goal was met — no refunds available              |
+| `ContractError::NothingToRefund`     | Caller has no contribution on record (or already claimed) |
 
 ### Panics
 
@@ -57,19 +57,19 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
    as the sender and the contributor as the recipient. This prevents parameter-order
    typos and ensures the direction cannot be reversed by a caller.
 
-2. **Direction Lock** — The token transfer explicitly uses the contract's address
+3. **Direction Lock** — The token transfer explicitly uses the contract's address
    as the sender and the contributor as the recipient. This prevents parameter-order
    typos and ensures the direction cannot be reversed by a caller.
 
-3. **Checks-Effects-Interactions** — The contribution record is zeroed in
-   storage *before* the token transfer is executed. This prevents re-entrancy
+4. **Checks-Effects-Interactions** — The contribution record is zeroed in
+   storage _before_ the token transfer is executed. This prevents re-entrancy
    and double-claim attacks even if the token contract calls back into the
    crowdfund contract.
 
-4. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
+5. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
    panicking on underflow rather than silently wrapping.
 
-5. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
+6. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
    rejected. A `Refunded` campaign (set by the deprecated batch path) is
    allowed so that any contributor not swept by the batch can still claim.
 
@@ -113,19 +113,27 @@ stellar contract invoke \
 ## Script Example (TypeScript / Stellar SDK)
 
 ```typescript
-import { Contract, SorobanRpc, TransactionBuilder, Networks } from "@stellar/stellar-sdk";
+import {
+  Contract,
+  SorobanRpc,
+  TransactionBuilder,
+  Networks,
+} from "@stellar/stellar-sdk";
 
 async function claimRefund(
   contractId: string,
   contributorKeypair: Keypair,
-  server: SorobanRpc.Server
+  server: SorobanRpc.Server,
 ) {
   const account = await server.getAccount(contributorKeypair.publicKey());
   const contract = new Contract(contractId);
 
-  const tx = new TransactionBuilder(account, { fee: "100", networkPassphrase: Networks.TESTNET })
+  const tx = new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: Networks.TESTNET,
+  })
     .addOperation(
-      contract.call("refund_single", contributorKeypair.publicKey())
+      contract.call("refund_single", contributorKeypair.publicKey()),
     )
     .setTimeout(30)
     .build();
@@ -139,10 +147,10 @@ async function claimRefund(
 
 ## Storage Layout
 
-| Key                          | Storage    | Type    | Description                          |
-|------------------------------|------------|---------|--------------------------------------|
-| `DataKey::Contribution(addr)`| Persistent | `i128`  | Per-contributor balance; zeroed on claim |
-| `DataKey::TotalRaised`       | Instance   | `i128`  | Global total; decremented on each claim  |
+| Key                           | Storage    | Type   | Description                              |
+| ----------------------------- | ---------- | ------ | ---------------------------------------- |
+| `DataKey::Contribution(addr)` | Persistent | `i128` | Per-contributor balance; zeroed on claim |
+| `DataKey::TotalRaised`        | Instance   | `i128` | Global total; decremented on each claim  |
 
 ## Test Coverage
 
@@ -151,23 +159,23 @@ async function claimRefund(
 Tests `validate_refund_preconditions` and `execute_refund_single` directly
 via `env.as_contract`, covering:
 
-| Test | What it validates |
-|------|-------------------|
-| `test_validate_returns_amount_on_success` | Happy path — returns contribution amount |
-| `test_validate_before_deadline_returns_campaign_still_active` | Deadline guard |
-| `test_validate_at_deadline_boundary_returns_campaign_still_active` | Strict `>` boundary |
-| `test_validate_goal_reached_returns_goal_reached` | Goal exactly met |
-| `test_validate_goal_exceeded_returns_goal_reached` | Goal exceeded |
-| `test_validate_no_contribution_returns_nothing_to_refund` | Unknown address |
-| `test_validate_after_refund_returns_nothing_to_refund` | Already-claimed address |
-| `test_validate_panics_on_successful_campaign` | Status guard — Successful |
-| `test_validate_panics_on_cancelled_campaign` | Status guard — Cancelled |
-| `test_execute_transfers_correct_amount` | Token balance after transfer |
-| `test_execute_zeroes_storage_before_transfer` | CEI order |
-| `test_execute_decrements_total_raised` | Global accounting |
-| `test_execute_double_refund_prevention` | amount=0 is a no-op |
-| `test_execute_large_amount_no_overflow` | `checked_sub` on large values |
-| `test_execute_does_not_affect_other_contributors` | Isolation |
+| Test                                                               | What it validates                        |
+| ------------------------------------------------------------------ | ---------------------------------------- |
+| `test_validate_returns_amount_on_success`                          | Happy path — returns contribution amount |
+| `test_validate_before_deadline_returns_campaign_still_active`      | Deadline guard                           |
+| `test_validate_at_deadline_boundary_returns_campaign_still_active` | Strict `>` boundary                      |
+| `test_validate_goal_reached_returns_goal_reached`                  | Goal exactly met                         |
+| `test_validate_goal_exceeded_returns_goal_reached`                 | Goal exceeded                            |
+| `test_validate_no_contribution_returns_nothing_to_refund`          | Unknown address                          |
+| `test_validate_after_refund_returns_nothing_to_refund`             | Already-claimed address                  |
+| `test_validate_panics_on_successful_campaign`                      | Status guard — Successful                |
+| `test_validate_panics_on_cancelled_campaign`                       | Status guard — Cancelled                 |
+| `test_execute_transfers_correct_amount`                            | Token balance after transfer             |
+| `test_execute_zeroes_storage_before_transfer`                      | CEI order                                |
+| `test_execute_decrements_total_raised`                             | Global accounting                        |
+| `test_execute_double_refund_prevention`                            | amount=0 is a no-op                      |
+| `test_execute_large_amount_no_overflow`                            | `checked_sub` on large values            |
+| `test_execute_does_not_affect_other_contributors`                  | Isolation                                |
 
 ### `refund_single_token_tests.rs` — integration tests via contract client
 
@@ -176,6 +184,7 @@ basic refund, multi-contributor, accumulated contributions, double-claim,
 zero-contribution, deadline boundary, goal-reached, campaign status guards,
 auth enforcement, interaction with deprecated `refund()`, platform fee
 isolation, contribution record zeroing, partial claims, and minimum amount.
+
 # refund_single_token — Single-Contributor Token Refund Logic
 
 ## Overview
@@ -185,7 +194,7 @@ pattern used inside the `CrowdfundContract::refund()` and `cancel()` bulk loops.
 
 The core operation is simple: read a contributor's stored balance, transfer it
 back from the contract to the contributor, then zero the record to prevent a
-double-refund.  By extracting this into a named, documented function the logic
+double-refund. By extracting this into a named, documented function the logic
 becomes independently testable and auditable.
 
 ---
@@ -241,16 +250,16 @@ persistent storage
 
 Transfers the contributor's stored balance back to them and zeroes the record.
 
-| Parameter       | Type        | Description                                      |
-|-----------------|-------------|--------------------------------------------------|
-| `env`           | `&Env`      | Soroban execution environment                    |
-| `token_address` | `&Address`  | Token contract address (set at initialisation)   |
-| `contributor`   | `&Address`  | The contributor to refund                        |
-| **returns**     | `i128`      | Amount refunded (0 if nothing was owed)          |
+| Parameter       | Type       | Description                                    |
+| --------------- | ---------- | ---------------------------------------------- |
+| `env`           | `&Env`     | Soroban execution environment                  |
+| `token_address` | `&Address` | Token contract address (set at initialisation) |
+| `contributor`   | `&Address` | The contributor to refund                      |
+| **returns**     | `i128`     | Amount refunded (0 if nothing was owed)        |
 
 ### `get_contribution(env, contributor) -> i128`
 
-Read-only query of a contributor's stored balance.  Returns 0 if the key is
+Read-only query of a contributor's stored balance. Returns 0 if the key is
 absent (never contributed or already refunded).
 
 ---
@@ -258,11 +267,11 @@ absent (never contributed or already refunded).
 ## Security Assumptions
 
 1. **Contract holds the tokens** — The contract must hold at least `amount`
-   tokens before `refund_single` is called.  This is guaranteed by the
+   tokens before `refund_single` is called. This is guaranteed by the
    `contribute()` function which transfers tokens in before recording them.
 
 2. **Storage-before-transfer ordering** — The contribution record is zeroed
-   *after* the token transfer succeeds.  If the transfer panics (e.g. the
+   _after_ the token transfer succeeds. If the transfer panics (e.g. the
    token contract rejects it), the entire transaction is rolled back and the
    record remains intact — no funds are lost.
 
@@ -274,10 +283,10 @@ absent (never contributed or already refunded).
    a cross-contract call, saving gas and keeping the event log clean.
 
 5. **Token address immutability** — The token client is always constructed from
-   the address stored at initialisation.  A caller cannot substitute a
+   the address stored at initialisation. A caller cannot substitute a
    different token contract.
 
-6. **No overflow** — `amount` is an `i128` read directly from storage.  It was
+6. **No overflow** — `amount` is an `i128` read directly from storage. It was
    validated at contribution time (checked_add) so it cannot exceed the total
    tokens held by the contract.
 
@@ -287,25 +296,25 @@ absent (never contributed or already refunded).
 
 The test suite in `refund_single_token.test.rs` covers:
 
-| Test | Description |
-|------|-------------|
-| `test_refund_single_transfers_correct_amount` | Correct amount transferred |
-| `test_refund_single_zeroes_contribution_record` | Record zeroed after transfer |
-| `test_refund_single_skips_zero_balance_contributor` | No-op for zero balance |
-| `test_refund_single_double_refund_prevention` | Second call returns 0 |
-| `test_refund_single_minimum_contribution` | Minimum amount handled |
-| `test_refund_single_large_amount` | Large amount (1 trillion) no overflow |
-| `test_refund_single_multiple_contributors_independent` | Multiple contributors independent |
-| `test_refund_single_does_not_affect_other_contributors` | Isolation between contributors |
-| `test_bulk_refund_refunds_all_contributors` | Integration with bulk refund() |
-| `test_bulk_refund_cannot_be_called_twice` | Status guard prevents double bulk refund |
-| `test_refund_blocked_before_deadline` | Blocked before deadline |
-| `test_refund_blocked_when_goal_reached` | Blocked when goal reached |
-| `test_get_contribution_returns_zero_for_unknown_address` | Unknown address → 0 |
-| `test_get_contribution_returns_correct_amount` | Correct amount after contribution |
-| `test_get_contribution_returns_zero_after_refund` | Zero after refund |
-| `test_refund_single_accumulated_contributions` | Accumulated contributions fully refunded |
-| `test_refund_single_explicit_zero_in_storage` | Explicit zero in storage → no-op |
+| Test                                                     | Description                              |
+| -------------------------------------------------------- | ---------------------------------------- |
+| `test_refund_single_transfers_correct_amount`            | Correct amount transferred               |
+| `test_refund_single_zeroes_contribution_record`          | Record zeroed after transfer             |
+| `test_refund_single_skips_zero_balance_contributor`      | No-op for zero balance                   |
+| `test_refund_single_double_refund_prevention`            | Second call returns 0                    |
+| `test_refund_single_minimum_contribution`                | Minimum amount handled                   |
+| `test_refund_single_large_amount`                        | Large amount (1 trillion) no overflow    |
+| `test_refund_single_multiple_contributors_independent`   | Multiple contributors independent        |
+| `test_refund_single_does_not_affect_other_contributors`  | Isolation between contributors           |
+| `test_bulk_refund_refunds_all_contributors`              | Integration with bulk refund()           |
+| `test_bulk_refund_cannot_be_called_twice`                | Status guard prevents double bulk refund |
+| `test_refund_blocked_before_deadline`                    | Blocked before deadline                  |
+| `test_refund_blocked_when_goal_reached`                  | Blocked when goal reached                |
+| `test_get_contribution_returns_zero_for_unknown_address` | Unknown address → 0                      |
+| `test_get_contribution_returns_correct_amount`           | Correct amount after contribution        |
+| `test_get_contribution_returns_zero_after_refund`        | Zero after refund                        |
+| `test_refund_single_accumulated_contributions`           | Accumulated contributions fully refunded |
+| `test_refund_single_explicit_zero_in_storage`            | Explicit zero in storage → no-op         |
 
 Total: **17 test cases** — exceeds the 95% coverage requirement.
 
@@ -320,6 +329,7 @@ feat: implement add-code-comments-to-refundsingle-token-transfer-logic-for-docum
 - Added `refund_single_token.rs` with NatSpec-style comments and documented transfer flow
 - Added `refund_single_token.test.rs` with 17 test cases covering all paths and edge cases
 - Added `refund_single_token.md` documentation
+
 # `refund_single` — Pull-Based Token Refund
 
 ## Overview
@@ -351,7 +361,7 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 ### Arguments
 
 | Parameter     | Type      | Description                                      |
-|---------------|-----------|--------------------------------------------------|
+| ------------- | --------- | ------------------------------------------------ |
 | `contributor` | `Address` | The address claiming the refund (must be caller) |
 
 ### Return value
@@ -360,11 +370,11 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 
 ### Errors
 
-| Error                          | Condition                                                    |
-|--------------------------------|--------------------------------------------------------------|
-| `ContractError::CampaignStillActive` | Deadline has not yet passed                            |
-| `ContractError::GoalReached`   | Campaign goal was met — no refunds available                 |
-| `ContractError::NothingToRefund` | Caller has no contribution on record (or already claimed)  |
+| Error                                | Condition                                                 |
+| ------------------------------------ | --------------------------------------------------------- |
+| `ContractError::CampaignStillActive` | Deadline has not yet passed                               |
+| `ContractError::GoalReached`         | Campaign goal was met — no refunds available              |
+| `ContractError::NothingToRefund`     | Caller has no contribution on record (or already claimed) |
 
 ### Panics
 
@@ -379,24 +389,24 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
    as the sender and the contributor as the recipient. This prevents parameter-order
    typos and ensures the direction cannot be reversed by a caller.
 
-2. **Direction Lock** — The token transfer explicitly uses the contract's address
+3. **Direction Lock** — The token transfer explicitly uses the contract's address
    as the sender and the contributor as the recipient. This prevents parameter-order
    typos and ensures the direction cannot be reversed by a caller.
 
-3. **Checks-Effects-Interactions** — The contribution record is zeroed in
-2. **Checks-Effects-Interactions** — The contribution record is zeroed in
-   storage *before* the token transfer is executed. This prevents re-entrancy
+4. **Checks-Effects-Interactions** — The contribution record is zeroed in
+5. **Checks-Effects-Interactions** — The contribution record is zeroed in
+   storage _before_ the token transfer is executed. This prevents re-entrancy
    and double-claim attacks even if the token contract calls back into the
    crowdfund contract.
 
-4. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
+6. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
    panicking on underflow rather than silently wrapping.
 
-5. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
-3. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
+7. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
+8. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
    panicking on underflow rather than silently wrapping.
 
-4. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
+9. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
    rejected. A `Refunded` campaign (set by the deprecated batch path) is
    allowed so that any contributor not swept by the batch can still claim.
 
@@ -440,19 +450,27 @@ stellar contract invoke \
 ## Script Example (TypeScript / Stellar SDK)
 
 ```typescript
-import { Contract, SorobanRpc, TransactionBuilder, Networks } from "@stellar/stellar-sdk";
+import {
+  Contract,
+  SorobanRpc,
+  TransactionBuilder,
+  Networks,
+} from "@stellar/stellar-sdk";
 
 async function claimRefund(
   contractId: string,
   contributorKeypair: Keypair,
-  server: SorobanRpc.Server
+  server: SorobanRpc.Server,
 ) {
   const account = await server.getAccount(contributorKeypair.publicKey());
   const contract = new Contract(contractId);
 
-  const tx = new TransactionBuilder(account, { fee: "100", networkPassphrase: Networks.TESTNET })
+  const tx = new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: Networks.TESTNET,
+  })
     .addOperation(
-      contract.call("refund_single", contributorKeypair.publicKey())
+      contract.call("refund_single", contributorKeypair.publicKey()),
     )
     .setTimeout(30)
     .build();
@@ -466,10 +484,10 @@ async function claimRefund(
 
 ## Storage Layout
 
-| Key                          | Storage    | Type    | Description                          |
-|------------------------------|------------|---------|--------------------------------------|
-| `DataKey::Contribution(addr)`| Persistent | `i128`  | Per-contributor balance; zeroed on claim |
-| `DataKey::TotalRaised`       | Instance   | `i128`  | Global total; decremented on each claim  |
+| Key                           | Storage    | Type   | Description                              |
+| ----------------------------- | ---------- | ------ | ---------------------------------------- |
+| `DataKey::Contribution(addr)` | Persistent | `i128` | Per-contributor balance; zeroed on claim |
+| `DataKey::TotalRaised`        | Instance   | `i128` | Global total; decremented on each claim  |
 
 ## Test Coverage
 
@@ -490,26 +508,26 @@ async function claimRefund(
 - Contribution record zeroed after claim
 - Partial claims (other contributors unaffected)
 - Minimum contribution boundary
-Tests `validate_refund_preconditions` and `execute_refund_single` directly
-via `env.as_contract`, covering:
+  Tests `validate_refund_preconditions` and `execute_refund_single` directly
+  via `env.as_contract`, covering:
 
-| Test | What it validates |
-|------|-------------------|
-| `test_validate_returns_amount_on_success` | Happy path — returns contribution amount |
-| `test_validate_before_deadline_returns_campaign_still_active` | Deadline guard |
-| `test_validate_at_deadline_boundary_returns_campaign_still_active` | Strict `>` boundary |
-| `test_validate_goal_reached_returns_goal_reached` | Goal exactly met |
-| `test_validate_goal_exceeded_returns_goal_reached` | Goal exceeded |
-| `test_validate_no_contribution_returns_nothing_to_refund` | Unknown address |
-| `test_validate_after_refund_returns_nothing_to_refund` | Already-claimed address |
-| `test_validate_panics_on_successful_campaign` | Status guard — Successful |
-| `test_validate_panics_on_cancelled_campaign` | Status guard — Cancelled |
-| `test_execute_transfers_correct_amount` | Token balance after transfer |
-| `test_execute_zeroes_storage_before_transfer` | CEI order |
-| `test_execute_decrements_total_raised` | Global accounting |
-| `test_execute_double_refund_prevention` | amount=0 is a no-op |
-| `test_execute_large_amount_no_overflow` | `checked_sub` on large values |
-| `test_execute_does_not_affect_other_contributors` | Isolation |
+| Test                                                               | What it validates                        |
+| ------------------------------------------------------------------ | ---------------------------------------- |
+| `test_validate_returns_amount_on_success`                          | Happy path — returns contribution amount |
+| `test_validate_before_deadline_returns_campaign_still_active`      | Deadline guard                           |
+| `test_validate_at_deadline_boundary_returns_campaign_still_active` | Strict `>` boundary                      |
+| `test_validate_goal_reached_returns_goal_reached`                  | Goal exactly met                         |
+| `test_validate_goal_exceeded_returns_goal_reached`                 | Goal exceeded                            |
+| `test_validate_no_contribution_returns_nothing_to_refund`          | Unknown address                          |
+| `test_validate_after_refund_returns_nothing_to_refund`             | Already-claimed address                  |
+| `test_validate_panics_on_successful_campaign`                      | Status guard — Successful                |
+| `test_validate_panics_on_cancelled_campaign`                       | Status guard — Cancelled                 |
+| `test_execute_transfers_correct_amount`                            | Token balance after transfer             |
+| `test_execute_zeroes_storage_before_transfer`                      | CEI order                                |
+| `test_execute_decrements_total_raised`                             | Global accounting                        |
+| `test_execute_double_refund_prevention`                            | amount=0 is a no-op                      |
+| `test_execute_large_amount_no_overflow`                            | `checked_sub` on large values            |
+| `test_execute_does_not_affect_other_contributors`                  | Isolation                                |
 
 ### `refund_single_token_tests.rs` — integration tests via contract client
 

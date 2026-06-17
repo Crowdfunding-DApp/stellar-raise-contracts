@@ -11,12 +11,13 @@ exercises every check against both the real repository and synthetic fixtures.
 
 ## Scripts
 
-| Script | Purpose |
-|---|---|
-| `scripts/github_actions_test.sh` | Validates workflow files (12 checks) |
+| Script                                | Purpose                                             |
+| ------------------------------------- | --------------------------------------------------- |
+| `scripts/github_actions_test.sh`      | Validates workflow files (12 checks)                |
 | `scripts/github_actions_test.test.sh` | Tests the validator (20 tests, edge cases included) |
 
 Run locally from the repository root:
+
 # GitHub Actions Workflow Fixes
 
 ## Overview
@@ -30,16 +31,16 @@ exercises every check against both the real repository and synthetic fixtures.
 
 ## Scripts
 
-| Script | Purpose |
-|---|---|
-| `scripts/github_actions_test.sh` | Validates workflow files in CI or locally (8 checks) |
-| `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (9 tests) |
-| `scripts/github_actions_test.sh` | Validates workflow files in CI or locally (11 checks) |
+| Script                                | Purpose                                                    |
+| ------------------------------------- | ---------------------------------------------------------- |
+| `scripts/github_actions_test.sh`      | Validates workflow files in CI or locally (8 checks)       |
+| `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (9 tests)  |
+| `scripts/github_actions_test.sh`      | Validates workflow files in CI or locally (11 checks)      |
 | `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (11 tests) |
-| `scripts/github_actions_test.sh` | Validates workflow files (8 checks) |
-| `scripts/github_actions_test.test.sh` | Tests the validator (14 tests, edge cases included) |
-| `scripts/github_actions_test.sh` | Validates workflow files (12 checks) |
-| `scripts/github_actions_test.test.sh` | Tests the validator (20 tests, edge cases included) |
+| `scripts/github_actions_test.sh`      | Validates workflow files (8 checks)                        |
+| `scripts/github_actions_test.test.sh` | Tests the validator (14 tests, edge cases included)        |
+| `scripts/github_actions_test.sh`      | Validates workflow files (12 checks)                       |
+| `scripts/github_actions_test.test.sh` | Tests the validator (20 tests, edge cases included)        |
 
 Run locally from the repository root:
 
@@ -115,9 +116,9 @@ Without a timeout, a hung build can consume a GitHub Actions runner for up to
 6 hours, blocking other PRs and wasting CI minutes. A 30-minute cap is
 recommended for the main job.
 
-| Script | Purpose |
-|---|---|
-| `scripts/github_actions_test.sh` | Validates workflow files in CI or locally (12 checks) |
+| Script                                | Purpose                                                    |
+| ------------------------------------- | ---------------------------------------------------------- |
+| `scripts/github_actions_test.sh`      | Validates workflow files in CI or locally (12 checks)      |
 | `scripts/github_actions_test.test.sh` | Tests the validator against pass/fail scenarios (13 tests) |
 
 The smoke test only needs to read source code. Explicit
@@ -133,17 +134,19 @@ up contract uploads.
 ---
 
 ## Speed optimisations in `rust_ci.yml`
+
 ## Logging bounds added to `rust_ci.yml`
+
 ---
 
 ## Checks performed
 
-| What | Where | Value |
-|---|---|---|
-| Job hard timeout | `jobs.check.timeout-minutes` | 30 min |
-| WASM build step timeout | `Build crowdfund WASM for tests` step | 10 min |
-| Test step timeout | `Run tests including property-based tests` step | 15 min |
-| Elapsed-time log | `Log total job elapsed time` step (always runs) | soft warn at 20 min |
+| What                    | Where                                           | Value               |
+| ----------------------- | ----------------------------------------------- | ------------------- |
+| Job hard timeout        | `jobs.check.timeout-minutes`                    | 30 min              |
+| WASM build step timeout | `Build crowdfund WASM for tests` step           | 10 min              |
+| Test step timeout       | `Run tests including property-based tests` step | 15 min              |
+| Elapsed-time log        | `Log total job elapsed time` step (always runs) | soft warn at 20 min |
 
 ---
 
@@ -171,40 +174,41 @@ step will fail CI immediately.
 
 The test suite (`github_actions_test.test.sh`) covers 20 tests across 12 checks:
 
-| Test | Scenario |
-|---|---|
-| 1 | Real repository passes all 12 checks (happy path) |
-| 2 | `spellcheck.yml` is missing |
-| 3 | Workflow file exists but is empty (zero bytes) |
-| 4 | Workflow file contains only whitespace (documents current behaviour) |
-| 5 | `checkout@v6` typo in `rust_ci.yml` |
-| 6 | `checkout@v6` typo in `testnet_smoke.yml` |
-| 7 | Duplicate WASM build steps in `rust_ci.yml` |
-| 8 | Smoke test calls non-existent `is_initialized` |
-| 9 | Smoke test calls non-existent `get_campaign_info` |
-| 10 | Smoke test `initialize` missing `--admin` |
-| 11 | Smoke test WASM build missing `-p crowdfund` |
-| 12 | Smoke test uses deprecated `soroban-cli` |
-| 13 | `rust_ci.yml` missing `frontend` job |
-| 14 | `rust_ci.yml` missing `Swatinem/rust-cache` |
-| 15 | `rust_ci.yml` missing `timeout-minutes` |
-| 16 | `testnet_smoke.yml` missing least-privilege permissions |
-| 17 | `rust_ci.yml` missing `wasm-opt` step |
-| 18 | `rust_ci.yml` missing entirely |
-| 19 | `testnet_smoke.yml` missing entirely |
-| 20 | Multiple simultaneous failures are all reported (no short-circuit) |
+| Test | Scenario                                                             |
+| ---- | -------------------------------------------------------------------- |
+| 1    | Real repository passes all 12 checks (happy path)                    |
+| 2    | `spellcheck.yml` is missing                                          |
+| 3    | Workflow file exists but is empty (zero bytes)                       |
+| 4    | Workflow file contains only whitespace (documents current behaviour) |
+| 5    | `checkout@v6` typo in `rust_ci.yml`                                  |
+| 6    | `checkout@v6` typo in `testnet_smoke.yml`                            |
+| 7    | Duplicate WASM build steps in `rust_ci.yml`                          |
+| 8    | Smoke test calls non-existent `is_initialized`                       |
+| 9    | Smoke test calls non-existent `get_campaign_info`                    |
+| 10   | Smoke test `initialize` missing `--admin`                            |
+| 11   | Smoke test WASM build missing `-p crowdfund`                         |
+| 12   | Smoke test uses deprecated `soroban-cli`                             |
+| 13   | `rust_ci.yml` missing `frontend` job                                 |
+| 14   | `rust_ci.yml` missing `Swatinem/rust-cache`                          |
+| 15   | `rust_ci.yml` missing `timeout-minutes`                              |
+| 16   | `testnet_smoke.yml` missing least-privilege permissions              |
+| 17   | `rust_ci.yml` missing `wasm-opt` step                                |
+| 18   | `rust_ci.yml` missing entirely                                       |
+| 19   | `testnet_smoke.yml` missing entirely                                 |
+| 20   | Multiple simultaneous failures are all reported (no short-circuit)   |
 
 ---
 
 ## What was changed in this branch
 
-| File | Change |
-|---|---|
-| `scripts/github_actions_test.sh` | Added checks 9–12 (rust-cache, timeout, permissions, wasm-opt); extracted `check_file_exists_and_nonempty` helper; added `readonly` to constants; improved `grep` safety with `--` flag; updated summary to show 12/12 |
-| `scripts/github_actions_test.test.sh` | Added tests 14–20 covering new checks 9–12 and additional edge cases; added `VERBOSE` env var support; improved fixture isolation |
-| `scripts/github_actions_test.md` | Documented all 12 checks, 20 tests, VERBOSE flag, and security rationale for new checks |
-| Test step timeout | `Run tests` step | 15 min |
-| Elapsed-time log | `Log total job elapsed time` step (always runs) | soft warn at 20 min |
+| File                                  | Change                                                                                                                                                                                                                 |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `scripts/github_actions_test.sh`      | Added checks 9–12 (rust-cache, timeout, permissions, wasm-opt); extracted `check_file_exists_and_nonempty` helper; added `readonly` to constants; improved `grep` safety with `--` flag; updated summary to show 12/12 |
+| `scripts/github_actions_test.test.sh` | Added tests 14–20 covering new checks 9–12 and additional edge cases; added `VERBOSE` env var support; improved fixture isolation                                                                                      |
+| `scripts/github_actions_test.md`      | Documented all 12 checks, 20 tests, VERBOSE flag, and security rationale for new checks                                                                                                                                |
+| Test step timeout                     | `Run tests` step                                                                                                                                                                                                       | 15 min              |
+| Elapsed-time log                      | `Log total job elapsed time` step (always runs)                                                                                                                                                                        | soft warn at 20 min |
+
 ### Check 1 — Required workflow files exist and are non-empty
 
 Verifies that `rust_ci.yml`, `testnet_smoke.yml`, and `spellcheck.yml` all
@@ -278,16 +282,16 @@ up contract uploads.
 
 ## Speed optimisations in `rust_ci.yml`
 
-| Optimisation | Detail |
-|---|---|
-| Single WASM build | Removed duplicate build step (~90 s saved per run) |
-| Scoped build (`-p crowdfund`) | Compiles only the required crate |
-| `Swatinem/rust-cache@v2` | Caches `~/.cargo` and `target/` between runs |
-| `cache: "npm"` in `setup-node` | Restores `~/.npm` automatically |
-| Parallel `frontend` job | UI tests run alongside Rust checks, not after |
-| `timeout-minutes` bounds | Job: 30 min · WASM build: 10 min · Tests: 15 min |
-| `wasm-opt -Oz` | Reduces WASM binary size 20–40% |
-| Elapsed-time log step | Fires on success and failure; warns if > 20 min |
+| Optimisation                   | Detail                                             |
+| ------------------------------ | -------------------------------------------------- |
+| Single WASM build              | Removed duplicate build step (~90 s saved per run) |
+| Scoped build (`-p crowdfund`)  | Compiles only the required crate                   |
+| `Swatinem/rust-cache@v2`       | Caches `~/.cargo` and `target/` between runs       |
+| `cache: "npm"` in `setup-node` | Restores `~/.npm` automatically                    |
+| Parallel `frontend` job        | UI tests run alongside Rust checks, not after      |
+| `timeout-minutes` bounds       | Job: 30 min · WASM build: 10 min · Tests: 15 min   |
+| `wasm-opt -Oz`                 | Reduces WASM binary size 20–40%                    |
+| Elapsed-time log step          | Fires on success and failure; warns if > 20 min    |
 
 ---
 
@@ -311,35 +315,35 @@ up contract uploads.
 
 The test suite (`github_actions_test.test.sh`) covers 20 tests across 12 checks:
 
-| Test | Scenario |
-|---|---|
-| 1 | Real repository passes all 12 checks (happy path) |
-| 2 | `spellcheck.yml` is missing |
-| 3 | Workflow file exists but is empty (zero bytes) |
-| 4 | Workflow file contains only whitespace (documents current behaviour) |
-| 5 | `checkout@v6` typo in `rust_ci.yml` |
-| 6 | `checkout@v6` typo in `testnet_smoke.yml` |
-| 7 | Duplicate WASM build steps in `rust_ci.yml` |
-| 8 | Smoke test calls non-existent `is_initialized` |
-| 9 | Smoke test calls non-existent `get_campaign_info` |
-| 10 | Smoke test `initialize` missing `--admin` |
-| 11 | Smoke test WASM build missing `-p crowdfund` |
-| 12 | Smoke test uses deprecated `soroban-cli` |
-| 13 | `rust_ci.yml` missing `frontend` job |
-| 14 | `rust_ci.yml` missing `Swatinem/rust-cache` |
-| 15 | `rust_ci.yml` missing `timeout-minutes` |
-| 16 | `testnet_smoke.yml` missing least-privilege permissions |
-| 17 | `rust_ci.yml` missing `wasm-opt` step |
-| 18 | `rust_ci.yml` missing entirely |
-| 19 | `testnet_smoke.yml` missing entirely |
-| 20 | Multiple simultaneous failures are all reported (no short-circuit) |
+| Test | Scenario                                                             |
+| ---- | -------------------------------------------------------------------- |
+| 1    | Real repository passes all 12 checks (happy path)                    |
+| 2    | `spellcheck.yml` is missing                                          |
+| 3    | Workflow file exists but is empty (zero bytes)                       |
+| 4    | Workflow file contains only whitespace (documents current behaviour) |
+| 5    | `checkout@v6` typo in `rust_ci.yml`                                  |
+| 6    | `checkout@v6` typo in `testnet_smoke.yml`                            |
+| 7    | Duplicate WASM build steps in `rust_ci.yml`                          |
+| 8    | Smoke test calls non-existent `is_initialized`                       |
+| 9    | Smoke test calls non-existent `get_campaign_info`                    |
+| 10   | Smoke test `initialize` missing `--admin`                            |
+| 11   | Smoke test WASM build missing `-p crowdfund`                         |
+| 12   | Smoke test uses deprecated `soroban-cli`                             |
+| 13   | `rust_ci.yml` missing `frontend` job                                 |
+| 14   | `rust_ci.yml` missing `Swatinem/rust-cache`                          |
+| 15   | `rust_ci.yml` missing `timeout-minutes`                              |
+| 16   | `testnet_smoke.yml` missing least-privilege permissions              |
+| 17   | `rust_ci.yml` missing `wasm-opt` step                                |
+| 18   | `rust_ci.yml` missing entirely                                       |
+| 19   | `testnet_smoke.yml` missing entirely                                 |
+| 20   | Multiple simultaneous failures are all reported (no short-circuit)   |
 
 ---
 
 ## What was changed in this branch
 
-| File | Change |
-|---|---|
-| `scripts/github_actions_test.sh` | Added checks 9–12 (rust-cache, timeout, permissions, wasm-opt); extracted `check_file_exists_and_nonempty` helper; added `readonly` to constants; improved `grep` safety with `--` flag; updated summary to show 12/12 |
-| `scripts/github_actions_test.test.sh` | Added tests 14–20 covering new checks 9–12 and additional edge cases; added `VERBOSE` env var support; improved fixture isolation |
-| `scripts/github_actions_test.md` | Documented all 12 checks, 20 tests, VERBOSE flag, and security rationale for new checks |
+| File                                  | Change                                                                                                                                                                                                                 |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/github_actions_test.sh`      | Added checks 9–12 (rust-cache, timeout, permissions, wasm-opt); extracted `check_file_exists_and_nonempty` helper; added `readonly` to constants; improved `grep` safety with `--` flag; updated summary to show 12/12 |
+| `scripts/github_actions_test.test.sh` | Added tests 14–20 covering new checks 9–12 and additional edge cases; added `VERBOSE` env var support; improved fixture isolation                                                                                      |
+| `scripts/github_actions_test.md`      | Documented all 12 checks, 20 tests, VERBOSE flag, and security rationale for new checks                                                                                                                                |

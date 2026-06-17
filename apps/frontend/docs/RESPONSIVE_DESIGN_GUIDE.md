@@ -94,12 +94,14 @@ Desktop:  > 1024px   (Full-screen management interface)
 **Location**: Fixed at bottom of screen  
 **Items**: Home, Savings, Activity, Profile  
 **Features**:
+
 - 44x44px minimum touch targets
 - Active state indicator (blue bar at top)
 - Badge support for notifications
 - Safe area inset support for notched devices
 
 **Implementation**:
+
 ```html
 <nav class="bottom-nav">
   <div class="bottom-nav__container">
@@ -111,6 +113,7 @@ Desktop:  > 1024px   (Full-screen management interface)
 ```
 
 **Content Adjustment**:
+
 ```html
 <main class="has-bottom-nav">
   <!-- Content automatically padded for bottom nav -->
@@ -122,6 +125,7 @@ Desktop:  > 1024px   (Full-screen management interface)
 **Location**: Fixed at top of screen  
 **Height**: 48px (mobile), hidden on tablet/desktop  
 **Features**:
+
 - Brand logo + "Stellar Raise" wordmark on all mobile viewports
 - Skip-navigation link as first focusable child (WCAG 2.4.1)
 - Elevated shadow (`--shadow-md`) when page is scrolled beyond 0 px
@@ -130,20 +134,23 @@ Desktop:  > 1024px   (Full-screen management interface)
 
 **Breakpoint behaviour**:
 
-| Viewport | Header | BottomNav | Sidebar |
-|---|---|---|---|
-| < 768 px (mobile) | ✓ Visible | ✓ Visible | ✗ Hidden |
-| 768–1023 px (tablet) | ✗ Hidden | ✗ Hidden | ✓ 240 px |
-| ≥ 1024 px (desktop) | ✗ Hidden | ✗ Hidden | ✓ 280 px |
+| Viewport             | Header    | BottomNav | Sidebar  |
+| -------------------- | --------- | --------- | -------- |
+| < 768 px (mobile)    | ✓ Visible | ✓ Visible | ✗ Hidden |
+| 768–1023 px (tablet) | ✗ Hidden  | ✗ Hidden  | ✓ 240 px |
+| ≥ 1024 px (desktop)  | ✗ Hidden  | ✗ Hidden  | ✓ 280 px |
 
 **Implementation**:
+
 ```html
 <!-- Link stylesheets in this order -->
 <link rel="stylesheet" href="styles/responsive.css" />
 <link rel="stylesheet" href="components/navigation/Header.css" />
 
 <header class="site-header" role="banner">
-  <a href="#main-content" class="site-header__skip-link">Skip to main content</a>
+  <a href="#main-content" class="site-header__skip-link"
+    >Skip to main content</a
+  >
   <div class="site-header__inner">
     <a href="/" class="site-header__brand" aria-label="Stellar Raise — home">
       <svg class="site-header__logo" aria-hidden="true"><!-- logo --></svg>
@@ -162,33 +169,38 @@ Desktop:  > 1024px   (Full-screen management interface)
 ```
 
 **Scroll shadow toggle** (inline script):
+
 ```js
-const header = document.querySelector('.site-header');
-window.addEventListener('scroll', () => {
-  header.classList.toggle('site-header--scrolled', window.scrollY > 0);
-}, { passive: true });
+const header = document.querySelector(".site-header");
+window.addEventListener(
+  "scroll",
+  () => {
+    header.classList.toggle("site-header--scrolled", window.scrollY > 0);
+  },
+  { passive: true },
+);
 ```
 
 **CSS custom properties consumed by `Header.css`**:
 
-| Token | Usage |
-|---|---|
-| `--header-height-mobile` | Height at < 768 px (48 px) |
-| `--header-height-tablet` | Height at 768–1023 px (56 px) |
-| `--header-height-desktop` | Height at ≥ 1024 px (64 px) |
-| `--header-height` | Per-breakpoint alias for layout offsets |
-| `--color-neutral-100` | Header background |
-| `--color-deep-navy` | Brand name text colour |
-| `--color-primary-blue` | Focus indicator, logo fill |
-| `--font-family-primary` | All header text |
-| `--font-size-lg` | Brand name font size |
-| `--shadow-sm` | Resting shadow |
-| `--shadow-md` | Scrolled shadow |
-| `--transition-fast` | Shadow transition on scroll |
-| `--z-fixed` | z-index (same layer as BottomNav/Sidebar) |
-| `--safe-area-inset-top` | Top padding for notched devices |
-| `--space-4` | Horizontal padding |
-| `--touch-target-min` | Minimum 44 px for interactive elements |
+| Token                     | Usage                                     |
+| ------------------------- | ----------------------------------------- |
+| `--header-height-mobile`  | Height at < 768 px (48 px)                |
+| `--header-height-tablet`  | Height at 768–1023 px (56 px)             |
+| `--header-height-desktop` | Height at ≥ 1024 px (64 px)               |
+| `--header-height`         | Per-breakpoint alias for layout offsets   |
+| `--color-neutral-100`     | Header background                         |
+| `--color-deep-navy`       | Brand name text colour                    |
+| `--color-primary-blue`    | Focus indicator, logo fill                |
+| `--font-family-primary`   | All header text                           |
+| `--font-size-lg`          | Brand name font size                      |
+| `--shadow-sm`             | Resting shadow                            |
+| `--shadow-md`             | Scrolled shadow                           |
+| `--transition-fast`       | Shadow transition on scroll               |
+| `--z-fixed`               | z-index (same layer as BottomNav/Sidebar) |
+| `--safe-area-inset-top`   | Top padding for notched devices           |
+| `--space-4`               | Horizontal padding                        |
+| `--touch-target-min`      | Minimum 44 px for interactive elements    |
 
 **Co-existence edge case — `.has-header` + `.has-sidebar`**:  
 If both classes are applied to the same `<main>` element, the header's `padding-top` and the sidebar's `margin-left` will both apply. This is harmless but redundant on tablet/desktop because the header is hidden and `.has-header` resets `padding-top` to `0` at ≥ 768 px. No corrective action is needed.
@@ -200,12 +212,14 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 **Location**: Fixed on left side  
 **Width**: 240px (tablet), 280px (desktop)  
 **Features**:
+
 - Persistent visibility
 - Security status indicator
 - Version information
 - Notification badges
 
 **Implementation**:
+
 ```html
 <aside class="sidebar">
   <!-- Sidebar content -->
@@ -226,39 +240,44 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 
 **Breakpoint behaviour**:
 
-| Viewport | Header | BottomNav | Sidebar |
-|----------|--------|-----------|---------|
-| < 768px (mobile) | ✓ visible | ✓ visible | ✗ hidden |
-| 768–1023px (tablet) | ✗ hidden | ✗ hidden | ✓ 240px |
-| ≥ 1024px (desktop) | ✗ hidden | ✗ hidden | ✓ 280px |
+| Viewport            | Header    | BottomNav | Sidebar  |
+| ------------------- | --------- | --------- | -------- |
+| < 768px (mobile)    | ✓ visible | ✓ visible | ✗ hidden |
+| 768–1023px (tablet) | ✗ hidden  | ✗ hidden  | ✓ 240px  |
+| ≥ 1024px (desktop)  | ✗ hidden  | ✗ hidden  | ✓ 280px  |
 
 **CSS custom properties consumed**:
 
-| Token | Usage |
-|-------|-------|
-| `--header-height-mobile` | Height at < 768px (48px) |
-| `--header-height-tablet` | Height at 768–1023px (56px) |
-| `--header-height-desktop` | Height at ≥ 1024px (64px) |
-| `--header-height` | Per-breakpoint alias for layout offsets |
-| `--color-neutral-100` | Header background |
-| `--color-deep-navy` | Brand name text |
-| `--color-primary-blue` | Focus indicator, logo fill |
-| `--font-family-primary` | All header text |
-| `--font-size-lg` | Brand name font size |
-| `--shadow-sm` | Resting shadow |
-| `--shadow-md` | Scrolled shadow (`.site-header--scrolled`) |
-| `--transition-fast` | Shadow transition |
-| `--z-fixed` | z-index (same layer as BottomNav/Sidebar) |
-| `--safe-area-inset-top` | Top padding for notched devices |
-| `--space-4` | Horizontal padding |
+| Token                     | Usage                                      |
+| ------------------------- | ------------------------------------------ |
+| `--header-height-mobile`  | Height at < 768px (48px)                   |
+| `--header-height-tablet`  | Height at 768–1023px (56px)                |
+| `--header-height-desktop` | Height at ≥ 1024px (64px)                  |
+| `--header-height`         | Per-breakpoint alias for layout offsets    |
+| `--color-neutral-100`     | Header background                          |
+| `--color-deep-navy`       | Brand name text                            |
+| `--color-primary-blue`    | Focus indicator, logo fill                 |
+| `--font-family-primary`   | All header text                            |
+| `--font-size-lg`          | Brand name font size                       |
+| `--shadow-sm`             | Resting shadow                             |
+| `--shadow-md`             | Scrolled shadow (`.site-header--scrolled`) |
+| `--transition-fast`       | Shadow transition                          |
+| `--z-fixed`               | z-index (same layer as BottomNav/Sidebar)  |
+| `--safe-area-inset-top`   | Top padding for notched devices            |
+| `--space-4`               | Horizontal padding                         |
 
 **Implementation**:
+
 ```html
 <header class="site-header" role="banner">
-  <a href="#main-content" class="site-header__skip-link">Skip to main content</a>
+  <a href="#main-content" class="site-header__skip-link"
+    >Skip to main content</a
+  >
   <div class="site-header__inner">
     <a href="/" class="site-header__brand" aria-label="Stellar Raise — home">
-      <svg class="site-header__logo" aria-hidden="true" focusable="false"><!-- logo --></svg>
+      <svg class="site-header__logo" aria-hidden="true" focusable="false">
+        <!-- logo -->
+      </svg>
       <span class="site-header__brand-name">Stellar Raise</span>
     </a>
     <div class="site-header__actions"><!-- wallet button etc. --></div>
@@ -272,6 +291,7 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 ```
 
 **Content adjustment**:
+
 ```html
 <!-- Mobile: offset for both header (top) and BottomNav (bottom) -->
 <main class="has-header has-bottom-nav">...</main>
@@ -293,6 +313,7 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 **Behavior**: Full-screen takeover  
 **Animation**: Slide up from bottom  
 **Features**:
+
 - Full viewport coverage
 - Safe area inset support
 - Scroll within modal body
@@ -300,13 +321,15 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 ### Tablet/Desktop Modal (≥ 768px)
 
 **Behavior**: Centered with backdrop  
-**Size**: 
+**Size**:
+
 - Tablet: 480px min-width
 - Desktop: 600px min-width
 - Max: 90vw x 90vh
 
 **Animation**: Scale in with fade  
 **Features**:
+
 - Rounded corners (16px radius)
 - Backdrop blur effect
 - Click outside to close
@@ -314,6 +337,7 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 ### Modal Variants
 
 #### Auth Modal
+
 ```html
 <div class="modal modal--auth">
   <!-- Optimized for sign-in/sign-up forms -->
@@ -321,6 +345,7 @@ If both classes are applied to the same `<main>` element, the header's `padding-
 ```
 
 #### Confirmation Modal
+
 ```html
 <div class="modal modal--confirm">
   <!-- Optimized for action confirmations -->
@@ -366,6 +391,7 @@ All forms use a single-column layout across all breakpoints for consistency and 
 ### Form Components
 
 #### Text Input
+
 ```html
 <div class="form__group">
   <label for="email" class="form__label">Email Address</label>
@@ -374,6 +400,7 @@ All forms use a single-column layout across all breakpoints for consistency and 
 ```
 
 #### Input with Prefix/Suffix
+
 ```html
 <div class="form__input-group">
   <span class="form__input-prefix">XLM</span>
@@ -382,6 +409,7 @@ All forms use a single-column layout across all breakpoints for consistency and 
 ```
 
 #### Toggle Switch
+
 ```html
 <div class="form__toggle">
   <span class="form__toggle-label">Enable 2FA</span>
@@ -400,6 +428,7 @@ All forms use a single-column layout across all breakpoints for consistency and 
 - **Border radius**: 8px
 
 #### Button Variants
+
 ```html
 <button class="btn btn--primary">Primary Action</button>
 <button class="btn btn--secondary">Secondary Action</button>
@@ -416,9 +445,11 @@ All forms use a single-column layout across all breakpoints for consistency and 
 Tables transform into card layouts on mobile devices to prevent horizontal scrolling and data clipping.
 
 #### Desktop View (≥ 768px)
+
 Standard table with hover states
 
 #### Mobile View (< 768px)
+
 Each row becomes a card with label-value pairs
 
 ```html
@@ -472,6 +503,7 @@ For campaign lists and similar content on mobile.
 ```
 
 **Behavior**:
+
 - Mobile: Horizontal scroll with touch momentum
 - Tablet/Desktop: Grid layout (no scroll)
 
@@ -524,7 +556,12 @@ For visually small elements that need larger touch areas:
 **Space Grotesk** - Maintains technical, modern feel across all devices
 
 ```css
-font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+font-family:
+  "Space Grotesk",
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  sans-serif;
 ```
 
 ### Fluid Typography Scale
@@ -532,13 +569,13 @@ font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', san
 Uses `clamp()` for responsive scaling without media queries:
 
 ```css
---font-size-xs:   clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
---font-size-sm:   clamp(0.875rem, 0.825rem + 0.25vw, 1rem);
+--font-size-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+--font-size-sm: clamp(0.875rem, 0.825rem + 0.25vw, 1rem);
 --font-size-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
---font-size-lg:   clamp(1.125rem, 1.05rem + 0.375vw, 1.5rem);
---font-size-xl:   clamp(1.25rem, 1.15rem + 0.5vw, 1.875rem);
---font-size-2xl:  clamp(1.5rem, 1.35rem + 0.75vw, 2.25rem);
---font-size-3xl:  clamp(1.875rem, 1.65rem + 1.125vw, 3rem);
+--font-size-lg: clamp(1.125rem, 1.05rem + 0.375vw, 1.5rem);
+--font-size-xl: clamp(1.25rem, 1.15rem + 0.5vw, 1.875rem);
+--font-size-2xl: clamp(1.5rem, 1.35rem + 0.75vw, 2.25rem);
+--font-size-3xl: clamp(1.875rem, 1.65rem + 1.125vw, 3rem);
 ```
 
 ### Usage
@@ -564,6 +601,7 @@ Uses `clamp()` for responsive scaling without media queries:
 #### Color Contrast
 
 All text must meet minimum contrast ratios:
+
 - Normal text: 4.5:1
 - Large text (18px+): 3:1
 - UI components: 3:1
@@ -631,11 +669,11 @@ Support for devices with notches and rounded corners:
 ### Color Palette
 
 ```css
---color-primary-blue:   #0066FF  /* Primary actions, links */
---color-deep-navy:      #0A1929  /* Headings, primary text */
---color-success-green:  #00C853  /* Success states, positive values */
---color-error-red:      #FF3B30  /* Errors, negative values */
---color-warning-orange: #FF9500  /* Warnings, pending states */
+--color-primary-blue: #0066ff /* Primary actions, links */
+  --color-deep-navy: #0a1929 /* Headings, primary text */
+  --color-success-green: #00c853 /* Success states, positive values */
+  --color-error-red: #ff3b30 /* Errors, negative values */
+  --color-warning-orange: #ff9500 /* Warnings, pending states */;
 ```
 
 ### Security Indicators
@@ -723,7 +761,10 @@ The "Secured with End-to-End Encryption" status and version info must remain vis
 Required in all HTML pages:
 
 ```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+/>
 ```
 
 ### Mobile-First CSS

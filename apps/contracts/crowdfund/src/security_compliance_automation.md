@@ -16,28 +16,28 @@ audit log without re-reading raw storage.
 
 ## Security Assumptions
 
-1. **Read-only** — No function in this module writes to storage.  All checks
+1. **Read-only** — No function in this module writes to storage. All checks
    are safe to call from simulation calls that must not alter ledger state.
-2. **Permissionless** — No `require_auth()` is needed.  Automated tooling does
+2. **Permissionless** — No `require_auth()` is needed. Automated tooling does
    not require a privileged key to run compliance checks.
 3. **Deterministic** — Given the same ledger state, every function returns the
-   same result.  The only side-effect is event emission.
+   same result. The only side-effect is event emission.
 4. **Overflow-safe** — All arithmetic uses `checked_*` operations.
 5. **Bounded iteration** — `audit_all_checks` iterates over a fixed array of
    10 checks (O(1) with respect to contributor count).
-6. **Event integrity** — Events are emitted *after* the check result is
+6. **Event integrity** — Events are emitted _after_ the check result is
    computed, so a panicking host never emits a misleading event.
 
 ---
 
 ## Constants
 
-| Constant                   | Value | Description                                      |
-|----------------------------|-------|--------------------------------------------------|
-| `MAX_ALLOWED_FEE_BPS`      | 1 000 | Maximum compliant platform fee (10 %).           |
-| `MIN_COMPLIANT_GOAL`       | 1     | Minimum compliant campaign goal (token units).   |
-| `MIN_COMPLIANT_CONTRIBUTION` | 1   | Minimum compliant contribution floor.            |
-| `MIN_DEADLINE_BUFFER_SECS` | 60    | Minimum deadline buffer used at initialization.  |
+| Constant                     | Value | Description                                     |
+| ---------------------------- | ----- | ----------------------------------------------- |
+| `MAX_ALLOWED_FEE_BPS`        | 1 000 | Maximum compliant platform fee (10 %).          |
+| `MIN_COMPLIANT_GOAL`         | 1     | Minimum compliant campaign goal (token units).  |
+| `MIN_COMPLIANT_CONTRIBUTION` | 1     | Minimum compliant contribution floor.           |
+| `MIN_DEADLINE_BUFFER_SECS`   | 60    | Minimum deadline buffer used at initialization. |
 
 ---
 
@@ -65,7 +65,7 @@ pub struct ComplianceReport {
 }
 ```
 
-Returned by `audit_all_checks`.  `all_passed` is `true` iff `failed == 0`.
+Returned by `audit_all_checks`. `all_passed` is `true` iff `failed == 0`.
 
 ---
 
@@ -74,7 +74,7 @@ Returned by `audit_all_checks`.  `all_passed` is `true` iff `failed == 0`.
 All functions take `env: &Env` and return `CheckResult`.
 
 | Function                          | Invariant verified                                      |
-|-----------------------------------|---------------------------------------------------------|
+| --------------------------------- | ------------------------------------------------------- |
 | `check_admin_initialized`         | `DataKey::Admin` is present in instance storage.        |
 | `check_creator_address_set`       | `DataKey::Creator` is present in instance storage.      |
 | `check_token_address_set`         | `DataKey::Token` is present in instance storage.        |
@@ -105,10 +105,10 @@ event with aggregate counts.
 
 **Events emitted:**
 
-| Topic 0             | Topic 1              | Data                    |
-|---------------------|----------------------|-------------------------|
-| `compliance_audit`  | `<check_name>`       | `bool` (passed/failed)  |
-| `compliance_summary`| —                    | `(u32, u32)` (pass, fail)|
+| Topic 0              | Topic 1        | Data                      |
+| -------------------- | -------------- | ------------------------- |
+| `compliance_audit`   | `<check_name>` | `bool` (passed/failed)    |
+| `compliance_summary` | —              | `(u32, u32)` (pass, fail) |
 
 ---
 
@@ -117,13 +117,13 @@ event with aggregate counts.
 ### `audit_initialization(env) -> bool`
 
 Runs only the six initialization checks (admin, creator, token, status, goal,
-min_contribution).  Returns `true` when all pass.  Useful in post-deployment
+min_contribution). Returns `true` when all pass. Useful in post-deployment
 CI smoke tests.
 
 ### `audit_financial_integrity(env) -> bool`
 
 Runs only the three financial invariant checks (goal, total_raised,
-platform_fee).  Returns `true` when all pass.  Useful for periodic monitoring
+platform_fee). Returns `true` when all pass. Useful for periodic monitoring
 bots focused on fund safety.
 
 ---
@@ -132,7 +132,7 @@ bots focused on fund safety.
 
 ### `describe_check_result(result) -> &'static str`
 
-Returns `"PASSED"` or the violation message.  Intended for off-chain tooling
+Returns `"PASSED"` or the violation message. Intended for off-chain tooling
 that logs compliance results to stdout or a monitoring dashboard.
 
 ---
@@ -192,8 +192,8 @@ if !result.is_passed() {
 - `audit_all_checks` is O(1) with respect to contributor count; it never
   iterates over the contributor list, so it cannot be used to cause
   out-of-gas conditions by inflating the contributor list.
-- Event emission happens after the check result is computed.  A host-level
+- Event emission happens after the check result is computed. A host-level
   panic during event emission does not produce a misleading audit record.
-- The `deadline_in_future` check is informational for Active campaigns.  A
+- The `deadline_in_future` check is informational for Active campaigns. A
   campaign whose deadline has passed but whose status is still `Active` is
   not necessarily broken — it simply needs `finalize()` to be called.

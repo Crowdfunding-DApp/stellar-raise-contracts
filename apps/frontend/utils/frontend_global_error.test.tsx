@@ -50,7 +50,7 @@ afterAll(() => {
 });
 
 // Mock React ErrorInfo for testing
-const mockErrorInfo: ErrorInfo = {
+const mockErrorInfo: React.ErrorInfo = {
   componentStack: "Component stack trace",
 };
 
@@ -523,7 +523,7 @@ describe("withErrorBoundary HOC", () => {
 
 describe("useErrorBoundary hook", () => {
   it("should provide error state and functions", () => {
-    let hookResult: ReturnType<typeof useErrorBoundary>;
+    let hookResult!: ReturnType<typeof useErrorBoundary>;
 
     const TestComponent = () => {
       hookResult = useErrorBoundary();

@@ -20,24 +20,24 @@ actionable message. This script adds:
 
 ## Constants reference
 
-| Constant                  | Value                                          | Purpose                          |
-| :------------------------ | :--------------------------------------------- | :------------------------------- |
-| `EXIT_OK`                 | `0`                                            | Success                          |
-| `EXIT_MISSING_DEP`        | `1`                                            | Missing CLI dependency           |
-| `EXIT_BAD_ARG`            | `2`                                            | Invalid / missing argument       |
-| `EXIT_BUILD_FAIL`         | `3`                                            | `cargo build` failure            |
-| `EXIT_DEPLOY_FAIL`        | `4`                                            | `stellar contract deploy` failure|
-| `EXIT_INIT_FAIL`          | `5`                                            | `stellar contract invoke` failure|
-| `EXIT_NETWORK_FAIL`       | `6`                                            | RPC connectivity failure         |
-| `WASM_TARGET`             | `wasm32-unknown-unknown`                       | Rust compilation target          |
-| `WASM_PATH`               | `target/wasm32-unknown-unknown/release/crowdfund.wasm` | Expected WASM artifact  |
-| `RPC_TESTNET`             | `https://soroban-testnet.stellar.org/health`   | Testnet health endpoint          |
-| `RPC_MAINNET`             | `https://soroban.stellar.org/health`           | Mainnet health endpoint          |
-| `RPC_FUTURENET`           | `https://rpc-futurenet.stellar.org/health`     | Futurenet health endpoint        |
-| `NETWORK_TIMEOUT`         | `10`                                           | curl max-time (seconds)          |
-| `DEFAULT_NETWORK`         | `testnet`                                      | Default Stellar network          |
-| `DEFAULT_DEPLOY_LOG`      | `deploy_errors.log`                            | Default log file path            |
-| `DEFAULT_MIN_CONTRIBUTION`| `1`                                            | Default minimum pledge (stroops) |
+| Constant                   | Value                                                  | Purpose                           |
+| :------------------------- | :----------------------------------------------------- | :-------------------------------- |
+| `EXIT_OK`                  | `0`                                                    | Success                           |
+| `EXIT_MISSING_DEP`         | `1`                                                    | Missing CLI dependency            |
+| `EXIT_BAD_ARG`             | `2`                                                    | Invalid / missing argument        |
+| `EXIT_BUILD_FAIL`          | `3`                                                    | `cargo build` failure             |
+| `EXIT_DEPLOY_FAIL`         | `4`                                                    | `stellar contract deploy` failure |
+| `EXIT_INIT_FAIL`           | `5`                                                    | `stellar contract invoke` failure |
+| `EXIT_NETWORK_FAIL`        | `6`                                                    | RPC connectivity failure          |
+| `WASM_TARGET`              | `wasm32-unknown-unknown`                               | Rust compilation target           |
+| `WASM_PATH`                | `target/wasm32-unknown-unknown/release/crowdfund.wasm` | Expected WASM artifact            |
+| `RPC_TESTNET`              | `https://soroban-testnet.stellar.org/health`           | Testnet health endpoint           |
+| `RPC_MAINNET`              | `https://soroban.stellar.org/health`                   | Mainnet health endpoint           |
+| `RPC_FUTURENET`            | `https://rpc-futurenet.stellar.org/health`             | Futurenet health endpoint         |
+| `NETWORK_TIMEOUT`          | `10`                                                   | curl max-time (seconds)           |
+| `DEFAULT_NETWORK`          | `testnet`                                              | Default Stellar network           |
+| `DEFAULT_DEPLOY_LOG`       | `deploy_errors.log`                                    | Default log file path             |
+| `DEFAULT_MIN_CONTRIBUTION` | `1`                                                    | Default minimum pledge (stroops)  |
 
 - Per-step exit codes (2–5) so CI can distinguish build vs deploy vs init failures.
 - Named `readonly` constants for all exit codes, RPC URLs, WASM paths, and
@@ -54,24 +54,24 @@ actionable message. This script adds:
 
 ## Constants reference
 
-| Constant                  | Value                                          | Purpose                          |
-| :------------------------ | :--------------------------------------------- | :------------------------------- |
-| `EXIT_OK`                 | `0`                                            | Success                          |
-| `EXIT_MISSING_DEP`        | `1`                                            | Missing CLI dependency           |
-| `EXIT_BAD_ARG`            | `2`                                            | Invalid / missing argument       |
-| `EXIT_BUILD_FAIL`         | `3`                                            | `cargo build` failure            |
-| `EXIT_DEPLOY_FAIL`        | `4`                                            | `stellar contract deploy` failure|
-| `EXIT_INIT_FAIL`          | `5`                                            | `stellar contract invoke` failure|
-| `EXIT_NETWORK_FAIL`       | `6`                                            | RPC connectivity failure         |
-| `WASM_TARGET`             | `wasm32-unknown-unknown`                       | Rust compilation target          |
-| `WASM_PATH`               | `target/wasm32-unknown-unknown/release/crowdfund.wasm` | Expected WASM artifact  |
-| `RPC_TESTNET`             | `https://soroban-testnet.stellar.org/health`   | Testnet health endpoint          |
-| `RPC_MAINNET`             | `https://soroban.stellar.org/health`           | Mainnet health endpoint          |
-| `RPC_FUTURENET`           | `https://rpc-futurenet.stellar.org/health`     | Futurenet health endpoint        |
-| `NETWORK_TIMEOUT`         | `10`                                           | curl max-time (seconds)          |
-| `DEFAULT_NETWORK`         | `testnet`                                      | Default Stellar network          |
-| `DEFAULT_DEPLOY_LOG`      | `deploy_errors.log`                            | Default log file path            |
-| `DEFAULT_MIN_CONTRIBUTION`| `1`                                            | Default minimum pledge (stroops) |
+| Constant                   | Value                                                  | Purpose                           |
+| :------------------------- | :----------------------------------------------------- | :-------------------------------- |
+| `EXIT_OK`                  | `0`                                                    | Success                           |
+| `EXIT_MISSING_DEP`         | `1`                                                    | Missing CLI dependency            |
+| `EXIT_BAD_ARG`             | `2`                                                    | Invalid / missing argument        |
+| `EXIT_BUILD_FAIL`          | `3`                                                    | `cargo build` failure             |
+| `EXIT_DEPLOY_FAIL`         | `4`                                                    | `stellar contract deploy` failure |
+| `EXIT_INIT_FAIL`           | `5`                                                    | `stellar contract invoke` failure |
+| `EXIT_NETWORK_FAIL`        | `6`                                                    | RPC connectivity failure          |
+| `WASM_TARGET`              | `wasm32-unknown-unknown`                               | Rust compilation target           |
+| `WASM_PATH`                | `target/wasm32-unknown-unknown/release/crowdfund.wasm` | Expected WASM artifact            |
+| `RPC_TESTNET`              | `https://soroban-testnet.stellar.org/health`           | Testnet health endpoint           |
+| `RPC_MAINNET`              | `https://soroban.stellar.org/health`                   | Mainnet health endpoint           |
+| `RPC_FUTURENET`            | `https://rpc-futurenet.stellar.org/health`             | Futurenet health endpoint         |
+| `NETWORK_TIMEOUT`          | `10`                                                   | curl max-time (seconds)           |
+| `DEFAULT_NETWORK`          | `testnet`                                              | Default Stellar network           |
+| `DEFAULT_DEPLOY_LOG`       | `deploy_errors.log`                                    | Default log file path             |
+| `DEFAULT_MIN_CONTRIBUTION` | `1`                                                    | Default minimum pledge (stroops)  |
 
 ## Usage
 
@@ -79,60 +79,60 @@ actionable message. This script adds:
 ./scripts/deployment_shell_script.sh <creator> <token> <goal> <deadline> [min_contribution]
 ```
 
-| Parameter          | Type    | Description                                    |
-| :----------------- | :------ | :--------------------------------------------- |
-| `creator`          | string  | Stellar address of the campaign creator        |
-| `token`            | string  | Stellar address of the token contract          |
-| `goal`             | integer | Funding goal in stroops                        |
-| `deadline`         | integer | Unix timestamp — must be in the future         |
-| `min_contribution` | integer | Minimum pledge amount (default: `1`)           |
+| Parameter          | Type    | Description                             |
+| :----------------- | :------ | :-------------------------------------- |
+| `creator`          | string  | Stellar address of the campaign creator |
+| `token`            | string  | Stellar address of the token contract   |
+| `goal`             | integer | Funding goal in stroops                 |
+| `deadline`         | integer | Unix timestamp — must be in the future  |
+| `min_contribution` | integer | Minimum pledge amount (default: `1`)    |
 
 ### Environment variables
 
-| Variable          | Default              | Description                                      |
-| :---------------- | :------------------- | :----------------------------------------------- |
-| `NETWORK`         | `testnet`            | Stellar network to target                        |
-| `DEPLOY_LOG`      | `deploy_errors.log`  | Human-readable timestamped log                   |
-| `DEPLOY_JSON_LOG` | `deploy_events.json` | Structured NDJSON event log for the frontend UI  |
-| `DRY_RUN`         | `false`              | Set to `true` to validate without deploying      |
-| Parameter         | Type    | Description                                      |
-| :---------------- | :------ | :----------------------------------------------- |
-| `creator`         | string  | Stellar address of the campaign creator          |
-| `token`           | string  | Stellar address of the token contract            |
-| `goal`            | integer | Funding goal in stroops                          |
-| `deadline`        | integer | Unix timestamp — must be in the future           |
-| `min_contribution`| integer | Minimum pledge amount (default: `1`)             |
-| Parameter          | Type    | Description                                      |
-| :----------------- | :------ | :----------------------------------------------- |
-| `creator`          | string  | Stellar address of the campaign creator          |
-| `token`            | string  | Stellar address of the token contract            |
-| `goal`             | integer | Funding goal in stroops                          |
-| `deadline`         | integer | Unix timestamp — must be in the future           |
-| `min_contribution` | integer | Minimum pledge amount (default: `DEFAULT_MIN_CONTRIBUTION=1`) |
+| Variable           | Default              | Description                                                   |
+| :----------------- | :------------------- | :------------------------------------------------------------ |
+| `NETWORK`          | `testnet`            | Stellar network to target                                     |
+| `DEPLOY_LOG`       | `deploy_errors.log`  | Human-readable timestamped log                                |
+| `DEPLOY_JSON_LOG`  | `deploy_events.json` | Structured NDJSON event log for the frontend UI               |
+| `DRY_RUN`          | `false`              | Set to `true` to validate without deploying                   |
+| Parameter          | Type                 | Description                                                   |
+| :----------------  | :------              | :-----------------------------------------------              |
+| `creator`          | string               | Stellar address of the campaign creator                       |
+| `token`            | string               | Stellar address of the token contract                         |
+| `goal`             | integer              | Funding goal in stroops                                       |
+| `deadline`         | integer              | Unix timestamp — must be in the future                        |
+| `min_contribution` | integer              | Minimum pledge amount (default: `1`)                          |
+| Parameter          | Type                 | Description                                                   |
+| :----------------- | :------              | :-----------------------------------------------              |
+| `creator`          | string               | Stellar address of the campaign creator                       |
+| `token`            | string               | Stellar address of the token contract                         |
+| `goal`             | integer              | Funding goal in stroops                                       |
+| `deadline`         | integer              | Unix timestamp — must be in the future                        |
+| `min_contribution` | integer              | Minimum pledge amount (default: `DEFAULT_MIN_CONTRIBUTION=1`) |
 
 ### Environment variables
 
-| Variable     | Default (`DEFAULT_*` constant) | Description                         |
-| :----------- | :----------------------------- | :---------------------------------- |
-| `NETWORK`    | `testnet`                      | Stellar network to target           |
-| `DEPLOY_LOG` | `deploy_errors.log`            | File that captures all error output |
-| `DRY_RUN`    | `false`                        | Skip build/deploy/init when `true`  |
-| Parameter          | Type    | Description                                    |
-| :----------------- | :------ | :--------------------------------------------- |
-| `creator`          | string  | Stellar address of the campaign creator        |
-| `token`            | string  | Stellar address of the token contract          |
-| `goal`             | integer | Funding goal in stroops                        |
-| `deadline`         | integer | Unix timestamp — must be in the future         |
-| `min_contribution` | integer | Minimum pledge amount (default: `1`)           |
+| Variable           | Default (`DEFAULT_*` constant) | Description                                    |
+| :----------------- | :----------------------------- | :--------------------------------------------- |
+| `NETWORK`          | `testnet`                      | Stellar network to target                      |
+| `DEPLOY_LOG`       | `deploy_errors.log`            | File that captures all error output            |
+| `DRY_RUN`          | `false`                        | Skip build/deploy/init when `true`             |
+| Parameter          | Type                           | Description                                    |
+| :----------------- | :------                        | :--------------------------------------------- |
+| `creator`          | string                         | Stellar address of the campaign creator        |
+| `token`            | string                         | Stellar address of the token contract          |
+| `goal`             | integer                        | Funding goal in stroops                        |
+| `deadline`         | integer                        | Unix timestamp — must be in the future         |
+| `min_contribution` | integer                        | Minimum pledge amount (default: `1`)           |
 
 ### Environment variables
 
-| Variable          | Default              | Description                                      |
-| :---------------- | :------------------- | :----------------------------------------------- |
-| `NETWORK`         | `testnet`            | Stellar network to target                        |
-| `DEPLOY_LOG`      | `deploy_errors.log`  | Human-readable timestamped log                   |
-| `DEPLOY_JSON_LOG` | `deploy_events.json` | Structured NDJSON event log for the frontend UI  |
-| `DRY_RUN`         | `false`              | Set to `true` to validate without deploying      |
+| Variable          | Default              | Description                                     |
+| :---------------- | :------------------- | :---------------------------------------------- |
+| `NETWORK`         | `testnet`            | Stellar network to target                       |
+| `DEPLOY_LOG`      | `deploy_errors.log`  | Human-readable timestamped log                  |
+| `DEPLOY_JSON_LOG` | `deploy_events.json` | Structured NDJSON event log for the frontend UI |
+| `DRY_RUN`         | `false`              | Set to `true` to validate without deploying     |
 
 ### Example
 
@@ -155,32 +155,33 @@ DEADLINE=$(date -d "+30 days" +%s)
 | 6    | Network connectivity failure             |
 
 ## Human-readable log format
-| Code | Meaning                        |
-| :--- | :----------------------------- |
-| 0    | Success                        |
-| 1    | Missing dependency (cargo / stellar CLI) |
-| 2    | Invalid or missing argument    |
-| 3    | `cargo build` failure          |
-| 4    | `stellar contract deploy` failure |
-| 5    | `stellar contract invoke` (init) failure |
-| Constant            | Code | Meaning                                  |
-| :------------------ | :--- | :--------------------------------------- |
-| `EXIT_OK`           | 0    | Success                                  |
-| `EXIT_MISSING_DEP`  | 1    | Missing dependency (cargo / stellar CLI) |
-| `EXIT_BAD_ARG`      | 2    | Invalid or missing argument              |
-| `EXIT_BUILD_FAIL`   | 3    | `cargo build` failure                    |
-| `EXIT_DEPLOY_FAIL`  | 4    | `stellar contract deploy` failure        |
-| `EXIT_INIT_FAIL`    | 5    | `stellar contract invoke` (init) failure |
-| `EXIT_NETWORK_FAIL` | 6    | RPC connectivity check failed            |
-| Code | Meaning                                  |
-| :--- | :--------------------------------------- |
-| 0    | Success                                  |
-| 1    | Missing dependency (`cargo` / `stellar`) |
-| 2    | Invalid or missing argument              |
-| 3    | `cargo build` failure                    |
-| 4    | `stellar contract deploy` failure        |
-| 5    | `stellar contract invoke` (init) failure |
-| 6    | Network connectivity failure             |
+
+| Code                | Meaning                                  |
+| :------------------ | :--------------------------------------- | ---------------------------------------- |
+| 0                   | Success                                  |
+| 1                   | Missing dependency (cargo / stellar CLI) |
+| 2                   | Invalid or missing argument              |
+| 3                   | `cargo build` failure                    |
+| 4                   | `stellar contract deploy` failure        |
+| 5                   | `stellar contract invoke` (init) failure |
+| Constant            | Code                                     | Meaning                                  |
+| :------------------ | :---                                     | :--------------------------------------- |
+| `EXIT_OK`           | 0                                        | Success                                  |
+| `EXIT_MISSING_DEP`  | 1                                        | Missing dependency (cargo / stellar CLI) |
+| `EXIT_BAD_ARG`      | 2                                        | Invalid or missing argument              |
+| `EXIT_BUILD_FAIL`   | 3                                        | `cargo build` failure                    |
+| `EXIT_DEPLOY_FAIL`  | 4                                        | `stellar contract deploy` failure        |
+| `EXIT_INIT_FAIL`    | 5                                        | `stellar contract invoke` (init) failure |
+| `EXIT_NETWORK_FAIL` | 6                                        | RPC connectivity check failed            |
+| Code                | Meaning                                  |
+| :---                | :--------------------------------------- |
+| 0                   | Success                                  |
+| 1                   | Missing dependency (`cargo` / `stellar`) |
+| 2                   | Invalid or missing argument              |
+| 3                   | `cargo build` failure                    |
+| 4                   | `stellar contract deploy` failure        |
+| 5                   | `stellar contract invoke` (init) failure |
+| 6                   | Network connectivity failure             |
 
 ## Human-readable log format
 
@@ -202,11 +203,11 @@ The frontend can tail or stream-read this file to display live progress.
 
 ```json
 {
-  "event":     "step_start | step_ok | step_error | deploy_complete",
-  "step":      "validate | network_check | build | deploy | init | done",
-  "message":   "Human-readable description",
+  "event": "step_start | step_ok | step_error | deploy_complete",
+  "step": "validate | network_check | build | deploy | init | done",
+  "message": "Human-readable description",
   "timestamp": "2026-03-26T03:00:00Z",
-  "network":   "testnet"
+  "network": "testnet"
 }
 ```
 
@@ -231,26 +232,37 @@ The frontend can tail or stream-read this file to display live progress.
 ### Example error event
 
 ```json
-{"event":"step_error","step":"build","message":"cargo build failed – see deploy_errors.log for details","timestamp":"...","network":"testnet","exit_code":3,"context":"cargo build --target wasm32-unknown-unknown --release","error_count":1}
+{
+  "event": "step_error",
+  "step": "build",
+  "message": "cargo build failed – see deploy_errors.log for details",
+  "timestamp": "...",
+  "network": "testnet",
+  "exit_code": 3,
+  "context": "cargo build --target wasm32-unknown-unknown --release",
+  "error_count": 1
+}
 ```
 
 ### Frontend integration example
 
 ```ts
 // Stream-parse NDJSON from the deployment log
-for await (const line of readLines('deploy_events.json')) {
+for await (const line of readLines("deploy_events.json")) {
   const event = JSON.parse(line);
-  if (event.event === 'step_error') {
+  if (event.event === "step_error") {
     // Map to ContractError / NetworkError for the global error boundary
     throw new ContractError(`[${event.step}] ${event.message}`);
   }
-  if (event.event === 'deploy_complete') {
+  if (event.event === "deploy_complete") {
     setContractId(event.contract_id);
   }
 }
 ```
+
 [2026-03-23T16:00:00Z] [INFO|WARN|ERROR] <message>
-```
+
+````
 
 Stderr from `cargo` and `stellar` is appended verbatim, making it easy to
 `grep` for specific failures in CI logs.
@@ -270,7 +282,7 @@ The frontend can tail or stream-read this file to display live progress.
   "timestamp": "2026-03-26T03:00:00Z",
   "network":   "testnet"
 }
-```
+````
 
 `step_ok` for the `deploy` step also includes `"wasm_path"`.  
 `step_ok` for the `deploy` step and `deploy_complete` include `"contract_id"`.  
@@ -293,20 +305,29 @@ The frontend can tail or stream-read this file to display live progress.
 ### Example error event
 
 ```json
-{"event":"step_error","step":"build","message":"cargo build failed – see deploy_errors.log for details","timestamp":"...","network":"testnet","exit_code":3,"context":"cargo build --target wasm32-unknown-unknown --release","error_count":1}
+{
+  "event": "step_error",
+  "step": "build",
+  "message": "cargo build failed – see deploy_errors.log for details",
+  "timestamp": "...",
+  "network": "testnet",
+  "exit_code": 3,
+  "context": "cargo build --target wasm32-unknown-unknown --release",
+  "error_count": 1
+}
 ```
 
 ### Frontend integration example
 
 ```ts
 // Stream-parse NDJSON from the deployment log
-for await (const line of readLines('deploy_events.json')) {
+for await (const line of readLines("deploy_events.json")) {
   const event = JSON.parse(line);
-  if (event.event === 'step_error') {
+  if (event.event === "step_error") {
     // Map to ContractError / NetworkError for the global error boundary
     throw new ContractError(`[${event.step}] ${event.message}`);
   }
-  if (event.event === 'deploy_complete') {
+  if (event.event === "deploy_complete") {
     setContractId(event.contract_id);
   }
 }
@@ -343,17 +364,17 @@ and `curl` so the suite runs fully offline and in CI without network access.
 
 ### Test coverage
 
-| Area                              | Cases |
-| :-------------------------------- | :---- |
-| `require_tool`                    | 2     |
-| `validate_args`                   | 9     |
-| `build_contract`                  | 3     |
-| `deploy_contract`                 | 3     |
-| `init_contract`                   | 2     |
-| `log` / `die`                     | 4     |
-| `emit_event` / `DEPLOY_JSON_LOG`  | 6     |
-| `DEPLOY_LOG` file behaviour       | 2     |
-| **Total**                         | **31**|
+| Area                             | Cases  |
+| :------------------------------- | :----- |
+| `require_tool`                   | 2      |
+| `validate_args`                  | 9      |
+| `build_contract`                 | 3      |
+| `deploy_contract`                | 3      |
+| `init_contract`                  | 2      |
+| `log` / `die`                    | 4      |
+| `emit_event` / `DEPLOY_JSON_LOG` | 6      |
+| `DEPLOY_LOG` file behaviour      | 2      |
+| **Total**                        | **31** |
 
 All 31 tests pass (≥ 95% coverage of every exported function, JSON event
 emission, and both log-truncation behaviours).
@@ -362,32 +383,32 @@ No external test framework is required. The test file stubs `cargo` and
 
 ### Test coverage
 
-| Area                        | Cases |
-| :-------------------------- | :---- |
-| `constants`                 | 16    |
-| `require_tool`              | 2     |
-| `validate_args`             | 9     |
-| `build_contract`            | 3     |
-| `deploy_contract`           | 3     |
-| `init_contract`             | 2     |
-| `check_network`             | 5     |
-| `log` / `die`               | 4     |
-| `DEPLOY_LOG` file behaviour | 2     |
-| **Total**                   | **46**|
+| Area                        | Cases  |
+| :-------------------------- | :----- |
+| `constants`                 | 16     |
+| `require_tool`              | 2      |
+| `validate_args`             | 9      |
+| `build_contract`            | 3      |
+| `deploy_contract`           | 3      |
+| `init_contract`             | 2      |
+| `check_network`             | 5      |
+| `log` / `die`               | 4      |
+| `DEPLOY_LOG` file behaviour | 2      |
+| **Total**                   | **46** |
 
 All 46 tests pass (100% coverage of every exported function, all constants,
 and the `main` entry-point log-truncation behaviour).
-| Area                              | Cases |
+| Area | Cases |
 | :-------------------------------- | :---- |
-| `require_tool`                    | 2     |
-| `validate_args`                   | 9     |
-| `build_contract`                  | 3     |
-| `deploy_contract`                 | 3     |
-| `init_contract`                   | 2     |
-| `log` / `die`                     | 4     |
-| `emit_event` / `DEPLOY_JSON_LOG`  | 6     |
-| `DEPLOY_LOG` file behaviour       | 2     |
-| **Total**                         | **31**|
+| `require_tool` | 2 |
+| `validate_args` | 9 |
+| `build_contract` | 3 |
+| `deploy_contract` | 3 |
+| `init_contract` | 2 |
+| `log` / `die` | 4 |
+| `emit_event` / `DEPLOY_JSON_LOG` | 6 |
+| `DEPLOY_LOG` file behaviour | 2 |
+| **Total** | **31**|
 
 All 31 tests pass (≥ 95% coverage of every exported function, JSON event
 emission, and both log-truncation behaviours).

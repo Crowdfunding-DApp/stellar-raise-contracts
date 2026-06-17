@@ -8,13 +8,13 @@ Stellar Raise development environment.
 
 ## Minimum Requirements
 
-| Requirement  | Minimum | Notes                                      |
-| :----------- | :------ | :----------------------------------------- |
-| OS           | Linux x86-64 or macOS 12+ | WSL2 on Windows          |
-| Rust         | stable ≥ 1.74 | `rustup update stable`               |
-| Stellar CLI  | ≥ 20.0.0 | Renamed from `soroban` in v20           |
-| Node.js      | ≥ 18    | Required for frontend UI and JS tests      |
-| npm          | ≥ 9     | Bundled with Node.js 18+                   |
+| Requirement | Minimum                   | Notes                                 |
+| :---------- | :------------------------ | :------------------------------------ |
+| OS          | Linux x86-64 or macOS 12+ | WSL2 on Windows                       |
+| Rust        | stable ≥ 1.74             | `rustup update stable`                |
+| Stellar CLI | ≥ 20.0.0                  | Renamed from `soroban` in v20         |
+| Node.js     | ≥ 18                      | Required for frontend UI and JS tests |
+| npm         | ≥ 9                       | Bundled with Node.js 18+              |
 
 ---
 
@@ -139,20 +139,20 @@ If CSS custom properties return empty strings at runtime, check:
 
 ```ts
 const value = getComputedStyle(document.documentElement)
-  .getPropertyValue('--color-primary-blue')
+  .getPropertyValue("--color-primary-blue")
   .trim();
 ```
 
 3. Always provide a fallback value when using the `useDocsCssVariable` hook:
 
 ```ts
-const color = useDocsCssVariable('--color-primary-blue', '#4f46e5');
+const color = useDocsCssVariable("--color-primary-blue", "#4f46e5");
 ```
 
 4. SSR guard — the hook checks `typeof window` before accessing `getComputedStyle`:
 
 ```ts
-if (typeof window === 'undefined') return fallback ?? '';
+if (typeof window === "undefined") return fallback ?? "";
 ```
 
 Use `CssVariableValidator` to validate variable names before access, preventing

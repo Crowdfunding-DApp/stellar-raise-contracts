@@ -52,7 +52,7 @@
 }
 
 .bottom-nav__item--active::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 50%;

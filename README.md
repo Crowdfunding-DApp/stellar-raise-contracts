@@ -18,13 +18,13 @@ Stellar Raise is a decentralized crowdfunding application built on the Stellar n
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
-| Node.js | ≥ 20 |
-| pnpm | ≥ 9 |
-| Rust | stable (via rustup) |
-| wasm32 target | `rustup target add wasm32-unknown-unknown` |
-| Soroban CLI / Stellar CLI | latest (`cargo install stellar-cli`) |
+| Tool                      | Version                                    |
+| ------------------------- | ------------------------------------------ |
+| Node.js                   | ≥ 20                                       |
+| pnpm                      | ≥ 9                                        |
+| Rust                      | stable (via rustup)                        |
+| wasm32 target             | `rustup target add wasm32-unknown-unknown` |
+| Soroban CLI / Stellar CLI | latest (`cargo install stellar-cli`)       |
 
 Install pnpm if you don't have it:
 
@@ -192,10 +192,10 @@ Each app is independently runnable from its own directory using the same script 
 
 Copy `.env.example` to `.env` at the repo root and fill in:
 
-| Variable | Description |
-|----------|-------------|
+| Variable          | Description                               |
+| ----------------- | ----------------------------------------- |
 | `STELLAR_RPC_URL` | Soroban RPC endpoint (testnet or mainnet) |
-| `CONTRACT_ID` | Deployed crowdfund contract address |
+| `CONTRACT_ID`     | Deployed crowdfund contract address       |
 
 The frontend may have its own `.env` — see `apps/frontend/` for any Vite-specific env vars (prefixed `VITE_`).
 

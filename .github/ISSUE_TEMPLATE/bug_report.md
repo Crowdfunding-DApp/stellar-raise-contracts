@@ -20,17 +20,19 @@ _Describe what actually happened._
 
 ## Steps to Reproduce
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Environment
+
 - **OS:**
 - **Rust version:**
 - **Soroban CLI version:**
 - **Network:**
 
 ## Contract Details (if applicable)
+
 - **Contract ID:**
 - **Transaction hash:**
 

@@ -5,6 +5,7 @@ The `CSSVariablesUsage` utility acts as the single source of truth for design to
 ## Rationale
 
 Design tokens like colors, spacing, and typography are often defined as CSS variables. However, using these variables directly in TypeScript/JavaScript can be flaky if names change or variables go missing. By defining a "contract" for these variables:
+
 - **Consistency**: All components use the same approved platform colors and spacing.
 - **Reliability**: Any breaking change in a CSS variable name can be detected at the compilation or test level.
 - **Readability**: Using `DESIGN_TOKENS.COLORS.PRIMARY_BLUE` is more readable and less error-prone than hardcoding hex codes.
@@ -19,10 +20,13 @@ Design tokens like colors, spacing, and typography are often defined as CSS vari
 ## Usage Example
 
 ```tsx
-import { CSSVariablesContract, DESIGN_TOKENS } from '../utils/css_variables_usage';
+import {
+  CSSVariablesContract,
+  DESIGN_TOKENS,
+} from "../utils/css_variables_usage";
 
 const MyComponent = () => (
-  <div style={{ padding: CSSVariablesContract.getVar('SPACING', 'SPACE_4') }}>
+  <div style={{ padding: CSSVariablesContract.getVar("SPACING", "SPACE_4") }}>
     <h1 style={{ color: DESIGN_TOKENS.COLORS.PRIMARY_BLUE }}>
       Welcome to Stellar Raise
     </h1>
@@ -34,6 +38,7 @@ const MyComponent = () => (
 
 1. **Approved Design Only**: The `isApprovedColor` method protects against injecting unapproved colors into components that might have security-critical branding (like "Verified Campaign" badges).
 2. **Immutable Constants**: All `DESIGN_TOKENS` are marked as `as const` to prevent mutation at runtime.
+
 # CSS Variables Usage Documentation
 
 The `CSSVariablesUsage` utility acts as the single source of truth for design tokens used across the Stellar Raise platform's frontend. It creates a robust link between the CSS variables defined in `utilities.css` and the logic used in our components and tests.
@@ -41,6 +46,7 @@ The `CSSVariablesUsage` utility acts as the single source of truth for design to
 ## Rationale
 
 Design tokens like colors, spacing, and typography are often defined as CSS variables. However, using these variables directly in TypeScript/JavaScript can be flaky if names change or variables go missing. By defining a "contract" for these variables:
+
 - **Consistency**: All components use the same approved platform colors and spacing.
 - **Reliability**: Any breaking change in a CSS variable name can be detected at the compilation or test level.
 - **Readability**: Using `DESIGN_TOKENS.COLORS.PRIMARY_BLUE` is more readable and less error-prone than hardcoding hex codes.
@@ -55,10 +61,13 @@ Design tokens like colors, spacing, and typography are often defined as CSS vari
 ## Usage Example
 
 ```tsx
-import { CSSVariablesContract, DESIGN_TOKENS } from '../utils/css_variables_usage';
+import {
+  CSSVariablesContract,
+  DESIGN_TOKENS,
+} from "../utils/css_variables_usage";
 
 const MyComponent = () => (
-  <div style={{ padding: CSSVariablesContract.getVar('SPACING', 'SPACE_4') }}>
+  <div style={{ padding: CSSVariablesContract.getVar("SPACING", "SPACE_4") }}>
     <h1 style={{ color: DESIGN_TOKENS.COLORS.PRIMARY_BLUE }}>
       Welcome to Stellar Raise
     </h1>
@@ -117,7 +126,7 @@ CSS variables, while powerful, can be a vector for security vulnerabilities if n
 Main utility class for CSS variable operations.
 
 ```typescript
-import { CssVariablesUsage } from './css_variables_usage';
+import { CssVariablesUsage } from "./css_variables_usage";
 
 const cssVars = new CssVariablesUsage();
 ```
@@ -137,8 +146,8 @@ Creates a new instance. Defaults to `document.documentElement` if no element pro
 Gets a CSS variable value.
 
 ```typescript
-const color = cssVars.get('--color-primary-blue');
-const fontSize = cssVars.get('--font-size-base', '1rem');
+const color = cssVars.get("--color-primary-blue");
+const fontSize = cssVars.get("--font-size-base", "1rem");
 ```
 
 ##### `set(variableName: string, value: string): void`
@@ -146,7 +155,7 @@ const fontSize = cssVars.get('--font-size-base', '1rem');
 Sets a CSS variable value.
 
 ```typescript
-cssVars.set('--color-primary-blue', '#0066FF');
+cssVars.set("--color-primary-blue", "#0066FF");
 ```
 
 ##### `remove(variableName: string): void`
@@ -154,7 +163,7 @@ cssVars.set('--color-primary-blue', '#0066FF');
 Removes a CSS variable.
 
 ```typescript
-cssVars.remove('--color-primary-blue');
+cssVars.remove("--color-primary-blue");
 ```
 
 ##### `has(variableName: string): boolean`
@@ -162,7 +171,7 @@ cssVars.remove('--color-primary-blue');
 Checks if a variable is defined.
 
 ```typescript
-if (cssVars.has('--color-primary-blue')) {
+if (cssVars.has("--color-primary-blue")) {
   // Variable exists
 }
 ```
@@ -172,7 +181,7 @@ if (cssVars.has('--color-primary-blue')) {
 Gets multiple variables at once.
 
 ```typescript
-const values = cssVars.getMultiple(['--color-primary', '--space-4']);
+const values = cssVars.getMultiple(["--color-primary", "--space-4"]);
 ```
 
 ##### `setMultiple(variables: CssVariablesMap): void`
@@ -181,8 +190,8 @@ Sets multiple variables at once.
 
 ```typescript
 cssVars.setMultiple({
-  '--color-primary': '#0066FF',
-  '--space-4': '1rem',
+  "--color-primary": "#0066FF",
+  "--space-4": "1rem",
 });
 ```
 
@@ -191,7 +200,7 @@ cssVars.setMultiple({
 Static validator class for CSS variable operations.
 
 ```typescript
-import { CssVariableValidator } from './css_variables_usage';
+import { CssVariableValidator } from "./css_variables_usage";
 ```
 
 **Methods**
@@ -201,8 +210,8 @@ import { CssVariableValidator } from './css_variables_usage';
 Validates that a variable name is in the allowed list.
 
 ```typescript
-CssVariableValidator.isValidVariableName('--color-primary'); // true
-CssVariableValidator.isValidVariableName('--custom'); // throws CssVariablesError
+CssVariableValidator.isValidVariableName("--color-primary"); // true
+CssVariableValidator.isValidVariableName("--custom"); // throws CssVariablesError
 ```
 
 ##### `isValidValue(value: string): boolean`
@@ -210,8 +219,8 @@ CssVariableValidator.isValidVariableName('--custom'); // throws CssVariablesErro
 Validates that a CSS value is safe.
 
 ```typescript
-CssVariableValidator.isValidValue('#0066FF'); // true
-CssVariableValidator.isValidValue('url(https://evil.com)'); // throws
+CssVariableValidator.isValidValue("#0066FF"); // true
+CssVariableValidator.isValidValue("url(https://evil.com)"); // throws
 ```
 
 ##### `getAllowedVariables(): readonly string[]`
@@ -229,7 +238,7 @@ const allowed = CssVariableValidator.getAllowedVariables();
 Creates a CSS `var()` expression safely.
 
 ```typescript
-const cssExpression = cssVar('color-primary-blue', '#ffffff');
+const cssExpression = cssVar("color-primary-blue", "#ffffff");
 // Returns: 'var(--color-primary-blue, #ffffff)'
 ```
 
@@ -238,18 +247,18 @@ const cssExpression = cssVar('color-primary-blue', '#ffffff');
 Creates a CSS `calc()` expression safely.
 
 ```typescript
-const calcExpression = cssCalc('100% - var(--space-4)');
+const calcExpression = cssCalc("100% - var(--space-4)");
 // Returns: 'calc(100% - var(--space-4))'
 ```
 
 ### Types
 
 ```typescript
-type AllowedCssVariable = 
-  | '--breakpoint-mobile'
-  | '--breakpoint-tablet'
-  | '--color-primary-blue'
-  // ... and 55+ more predefined variables
+type AllowedCssVariable =
+  | "--breakpoint-mobile"
+  | "--breakpoint-tablet"
+  | "--color-primary-blue";
+// ... and 55+ more predefined variables
 
 type CssVariablesMap = Partial<Record<AllowedCssVariable, string>>;
 ```
@@ -262,7 +271,7 @@ Thrown when invalid CSS variable names or values are detected.
 
 ```typescript
 try {
-  CssVariableValidator.isValidVariableName('--invalid');
+  CssVariableValidator.isValidVariableName("--invalid");
 } catch (e) {
   if (e instanceof CssVariablesError) {
     console.error(e.message);
@@ -274,109 +283,109 @@ try {
 
 ### Colors
 
-| Variable | Default Value | Description |
-|----------|---------------|-------------|
-| `--color-primary-blue` | `#0066FF` | Primary brand color |
-| `--color-deep-navy` | `#0A1929` | Deep navy accent |
-| `--color-success-green` | `#00C853` | Success states |
-| `--color-error-red` | `#FF3B30` | Error states |
-| `--color-warning-orange` | `#FF9500` | Warning states |
-| `--color-neutral-100` | `#FFFFFF` | Lightest neutral |
-| `--color-neutral-200` | `#F5F7FA` | Light neutral |
-| `--color-neutral-300` | `#E4E7EB` | Medium neutral |
-| `--color-neutral-700` | `#374151` | Dark neutral |
-| `--color-neutral-900` | `#111827` | Darkest neutral |
+| Variable                 | Default Value | Description         |
+| ------------------------ | ------------- | ------------------- |
+| `--color-primary-blue`   | `#0066FF`     | Primary brand color |
+| `--color-deep-navy`      | `#0A1929`     | Deep navy accent    |
+| `--color-success-green`  | `#00C853`     | Success states      |
+| `--color-error-red`      | `#FF3B30`     | Error states        |
+| `--color-warning-orange` | `#FF9500`     | Warning states      |
+| `--color-neutral-100`    | `#FFFFFF`     | Lightest neutral    |
+| `--color-neutral-200`    | `#F5F7FA`     | Light neutral       |
+| `--color-neutral-300`    | `#E4E7EB`     | Medium neutral      |
+| `--color-neutral-700`    | `#374151`     | Dark neutral        |
+| `--color-neutral-900`    | `#111827`     | Darkest neutral     |
 
 ### Typography
 
-| Variable | Description |
-|----------|-------------|
+| Variable                | Description         |
+| ----------------------- | ------------------- |
 | `--font-family-primary` | Primary font family |
-| `--font-size-xs` | Extra small text |
-| `--font-size-sm` | Small text |
-| `--font-size-base` | Base text size |
-| `--font-size-lg` | Large text |
-| `--font-size-xl` | Extra large text |
-| `--font-size-2xl` | 2x large text |
-| `--font-size-3xl` | 3x large text |
+| `--font-size-xs`        | Extra small text    |
+| `--font-size-sm`        | Small text          |
+| `--font-size-base`      | Base text size      |
+| `--font-size-lg`        | Large text          |
+| `--font-size-xl`        | Extra large text    |
+| `--font-size-2xl`       | 2x large text       |
+| `--font-size-3xl`       | 3x large text       |
 
 ### Spacing
 
-| Variable | Value | Equivalent |
-|----------|-------|-----------|
-| `--space-1` | `0.25rem` | 4px |
-| `--space-2` | `0.5rem` | 8px |
-| `--space-3` | `0.75rem` | 12px |
-| `--space-4` | `1rem` | 16px |
-| `--space-5` | `1.25rem` | 20px |
-| `--space-6` | `1.5rem` | 24px |
-| `--space-8` | `2rem` | 32px |
-| `--space-10` | `2.5rem` | 40px |
-| `--space-12` | `3rem` | 48px |
-| `--space-16` | `4rem` | 64px |
+| Variable     | Value     | Equivalent |
+| ------------ | --------- | ---------- |
+| `--space-1`  | `0.25rem` | 4px        |
+| `--space-2`  | `0.5rem`  | 8px        |
+| `--space-3`  | `0.75rem` | 12px       |
+| `--space-4`  | `1rem`    | 16px       |
+| `--space-5`  | `1.25rem` | 20px       |
+| `--space-6`  | `1.5rem`  | 24px       |
+| `--space-8`  | `2rem`    | 32px       |
+| `--space-10` | `2.5rem`  | 40px       |
+| `--space-12` | `3rem`    | 48px       |
+| `--space-16` | `4rem`    | 64px       |
 
 ### Z-Index Scale
 
-| Variable | Value | Use Case |
-|----------|-------|----------|
-| `--z-base` | 1 | Base layer |
-| `--z-dropdown` | 100 | Dropdowns |
-| `--z-sticky` | 200 | Sticky headers |
-| `--z-fixed` | 300 | Fixed elements |
-| `--z-modal-backdrop` | 400 | Modal overlays |
-| `--z-modal` | 500 | Modal content |
-| `--z-toast` | 600 | Toast notifications |
+| Variable             | Value | Use Case            |
+| -------------------- | ----- | ------------------- |
+| `--z-base`           | 1     | Base layer          |
+| `--z-dropdown`       | 100   | Dropdowns           |
+| `--z-sticky`         | 200   | Sticky headers      |
+| `--z-fixed`          | 300   | Fixed elements      |
+| `--z-modal-backdrop` | 400   | Modal overlays      |
+| `--z-modal`          | 500   | Modal content       |
+| `--z-toast`          | 600   | Toast notifications |
 
 ### Transitions
 
-| Variable | Value |
-|----------|-------|
+| Variable            | Value               |
+| ------------------- | ------------------- |
 | `--transition-fast` | `150ms ease-in-out` |
 | `--transition-base` | `250ms ease-in-out` |
 | `--transition-slow` | `350ms ease-in-out` |
 
 ### Border Radius
 
-| Variable | Value |
-|----------|-------|
-| `--radius-sm` | `0.25rem` |
-| `--radius-md` | `0.5rem` |
-| `--radius-lg` | `0.75rem` |
-| `--radius-xl` | `1rem` |
-| `--radius-full` | `9999px` |
+| Variable        | Value     |
+| --------------- | --------- |
+| `--radius-sm`   | `0.25rem` |
+| `--radius-md`   | `0.5rem`  |
+| `--radius-lg`   | `0.75rem` |
+| `--radius-xl`   | `1rem`    |
+| `--radius-full` | `9999px`  |
 
 ### Shadows
 
-| Variable | Description |
-|----------|-------------|
-| `--shadow-sm` | Small shadow |
-| `--shadow-md` | Medium shadow |
-| `--shadow-lg` | Large shadow |
+| Variable      | Description        |
+| ------------- | ------------------ |
+| `--shadow-sm` | Small shadow       |
+| `--shadow-md` | Medium shadow      |
+| `--shadow-lg` | Large shadow       |
 | `--shadow-xl` | Extra large shadow |
 
 ### Safe Area Insets
 
-| Variable | Description |
-|----------|-------------|
-| `--safe-area-inset-top` | Top safe area |
-| `--safe-area-inset-right` | Right safe area |
+| Variable                   | Description      |
+| -------------------------- | ---------------- |
+| `--safe-area-inset-top`    | Top safe area    |
+| `--safe-area-inset-right`  | Right safe area  |
 | `--safe-area-inset-bottom` | Bottom safe area |
-| `--safe-area-inset-left` | Left safe area |
+| `--safe-area-inset-left`   | Left safe area   |
 
 ### Documentation
 
-| Variable | Description |
-|----------|-------------|
-| `--color-docs-bg` | Documentation background color |
-| `--color-docs-text` | Documentation text color |
-| `--font-docs-code` | Documentation code font family |
+| Variable            | Description                    |
+| ------------------- | ------------------------------ |
+| `--color-docs-bg`   | Documentation background color |
+| `--color-docs-text` | Documentation text color       |
+| `--font-docs-code`  | Documentation code font family |
 
 ## Usage Examples
 
 ### Basic Usage
 
 ```typescript
-import { CssVariablesUsage, THEME } from './css_variables_usage';
+import { CssVariablesUsage, THEME } from "./css_variables_usage";
 
 const cssVars = new CssVariablesUsage();
 
@@ -384,7 +393,7 @@ const cssVars = new CssVariablesUsage();
 const primaryColor = cssVars.get(THEME.colors.primary);
 
 // Set a value
-cssVars.set(THEME.colors.primary, '#ff0000');
+cssVars.set(THEME.colors.primary, "#ff0000");
 
 // Check if defined
 if (cssVars.has(THEME.colors.primary)) {
@@ -399,7 +408,7 @@ import { useCssVariable, THEME } from './css_variables_usage';
 
 function MyComponent() {
   const primaryColor = useCssVariable(THEME.colors.primary, '#0066FF');
-  
+
   return (
     <div style={{ color: primaryColor }}>
       Styled with CSS variable
@@ -411,13 +420,13 @@ function MyComponent() {
 ### Safe CSS Expression Creation
 
 ```typescript
-import { cssVar, cssCalc } from './css_variables_usage';
+import { cssVar, cssCalc } from "./css_variables_usage";
 
 // Safe var() creation
-const expression = cssVar('space-4', '1rem');
+const expression = cssVar("space-4", "1rem");
 
 // Safe calc() creation
-const calcExpression = cssCalc('100% - var(--space-4) * 2');
+const calcExpression = cssCalc("100% - var(--space-4) * 2");
 
 // Use in style
 element.style.width = calcExpression;
@@ -455,12 +464,12 @@ npm test -- --testPathPatterns="css_variables_usage" --coverage
 Current test coverage: **98.57%**
 Current test coverage: **95%+** with caching and typed cssVar tests.
 
-| Metric | Coverage |
-|--------|----------|
-| Statements | 98.57% |
-| Branches | 86.95% |
-| Functions | 100% |
-| Lines | 98.57% |
+| Metric     | Coverage |
+| ---------- | -------- |
+| Statements | 98.57%   |
+| Branches   | 86.95%   |
+| Functions  | 100%     |
+| Lines      | 98.57%   |
 
 ### Test Structure
 
@@ -490,13 +499,14 @@ If new attack vectors are discovered:
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.1.0 | 2026-03-23 | Enhanced test coverage, added setMultiple tests, updated documentation |
-| 1.0.0 | 2026-03-23 | Initial implementation with whitelist validation |
+| Version | Date       | Changes                                                                |
+| ------- | ---------- | ---------------------------------------------------------------------- |
+| 1.1.0   | 2026-03-23 | Enhanced test coverage, added setMultiple tests, updated documentation |
+| 1.0.0   | 2026-03-23 | Initial implementation with whitelist validation                       |
 
 ## License
 
 Part of the Stellar Raise project - see LICENSE file for details.
+
 1. **Approved Design Only**: The `isApprovedColor` method protects against injecting unapproved colors into components that might have security-critical branding (like "Verified Campaign" badges).
 2. **Immutable Constants**: All `DESIGN_TOKENS` are marked as `as const` to prevent mutation at runtime.

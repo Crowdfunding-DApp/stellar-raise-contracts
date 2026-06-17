@@ -1,15 +1,18 @@
 # Campaign Goal Minimum Threshold Enforcement
 
 ## Overview
+
 This documentation outlines the enforcement of a minimum campaign goal threshold in the smart contract. The goal is to prevent campaigns from being created with unrealistic or invalid funding targets.
 
 ## Purpose
+
 - **Prevent Spam**: Discourages the creation of low-value campaigns that could clutter the platform.
 - **Improve User Trust**: Ensures that all campaigns have a minimum feasible target.
 - **Security**: Rejects zero-value or trivially small goals that could be exploited.
 - **UX**: Provides clear feedback when a goal is invalid.
 
 ## Contract Logic
+
 - **Minimum Threshold**: `MIN_CAMPAIGN_GOAL = 100`.
 - **Validation**: Goals below `100` are rejected with a `panic!`.
 - **Zero-Value Guard**: Goals equal to `0` are rejected.
@@ -17,7 +20,9 @@ This documentation outlines the enforcement of a minimum campaign goal threshold
 - **Event Emission**: Publishes a `("campaign", "created")` event upon success.
 
 ## Usage
+
 To create a campaign, call the `create_campaign` function with:
+
 - `creator`: The address of the person starting the campaign.
 - `goal`: The target funding amount (must be >= 100).
 
@@ -26,29 +31,36 @@ pub fn create_campaign(env: Env, creator: Address, goal: u64) { ... }
 ```
 
 ## Security Considerations
+
 - **Authentication**: `creator.require_auth()` is called to ensure the request is authorized.
 - **Validation**: Strict checks for `goal < MIN_CAMPAIGN_GOAL` and `goal == 0`.
 - **Safe Storage**: Goal values are validated before any state changes are committed.
 
 ## Testing Process
+
 Tests are provided in `campaign_goal_minimum.test.rs` and cover:
+
 - Valid goal (>= 100).
 - Below minimum goal (< 100).
 - Zero goal.
 - Exactly at minimum goal.
 - Large boundary values (`u64::MAX`).
+
 # `campaign_goal_minimum` — Extracted Constants for Campaign Goal & Minimum Threshold Enforcement
 
 ## Overview
+
 This documentation outlines the enforcement of a minimum campaign goal threshold in the smart contract. The goal is to prevent campaigns from being created with unrealistic or invalid funding targets.
 
 ## Purpose
+
 - **Prevent Spam**: Discourages the creation of low-value campaigns that could clutter the platform.
 - **Improve User Trust**: Ensures that all campaigns have a minimum feasible target.
 - **Security**: Rejects zero-value or trivially small goals that could be exploited.
 - **UX**: Provides clear feedback when a goal is invalid.
 
 ## Contract Logic
+
 - **Minimum Threshold**: `MIN_CAMPAIGN_GOAL = 100`.
 - **Validation**: Goals below `100` are rejected with a `panic!`.
 - **Zero-Value Guard**: Goals equal to `0` are rejected.
@@ -56,7 +68,9 @@ This documentation outlines the enforcement of a minimum campaign goal threshold
 - **Event Emission**: Publishes a `("campaign", "created")` event upon success.
 
 ## Usage
+
 To create a campaign, call the `create_campaign` function with:
+
 - `creator`: The address of the person starting the campaign.
 - `goal`: The target funding amount (must be >= 100).
 
@@ -65,12 +79,15 @@ pub fn create_campaign(env: Env, creator: Address, goal: u64) { ... }
 ```
 
 ## Security Considerations
+
 - **Authentication**: `creator.require_auth()` is called to ensure the request is authorized.
 - **Validation**: Strict checks for `goal < MIN_CAMPAIGN_GOAL` and `goal == 0`.
 - **Safe Storage**: Goal values are validated before any state changes are committed.
 
 ## Testing Process
+
 Tests are provided in `campaign_goal_minimum.test.rs` and cover:
+
 - Valid goal (>= 100).
 - Below minimum goal (< 100).
 - Zero goal.
@@ -79,7 +96,7 @@ Tests are provided in `campaign_goal_minimum.test.rs` and cover:
 
 `campaign_goal_minimum` centralizes every magic number and threshold used
 during campaign initialization and contribution validation into named,
-documented constants.  It also exposes pure validation helpers that can be
+documented constants. It also exposes pure validation helpers that can be
 called from the contract, from tests, and from off-chain tooling without
 pulling in the full contract dependency.
 
@@ -88,11 +105,11 @@ pulling in the full contract dependency.
 Before this module the contract contained inline literals scattered across
 `initialize()`, `contribute()`, `withdraw()`, and `get_stats()`:
 
-| Literal | Occurrences | Intent |
-|---------|-------------|--------|
-| `10_000` | 4 | Basis-point scale / fee cap |
-| `0` | 6+ | Zero-amount guard / default |
-| `60` | 1 | deadline floor |
+| Literal  | Occurrences | Intent                      |
+| -------- | ----------- | --------------------------- |
+| `10_000` | 4           | Basis-point scale / fee cap |
+| `0`      | 6+          | Zero-amount guard / default |
+| `60`     | 1           | deadline floor              |
 
 Inline literals:
 
@@ -105,14 +122,14 @@ appear in a single place, so a future change touches one line.
 
 ## Constants
 
-| Constant | Type | Value | Description |
-|----------|------|-------|-------------|
-| `MIN_GOAL_AMOUNT` | `i128` | `1` | Minimum campaign goal in token units |
-| `MIN_CONTRIBUTION_AMOUNT` | `i128` | `1` | Minimum value for the `min_contribution` parameter |
-| `MAX_PLATFORM_FEE_BPS` | `u32` | `10_000` | Maximum platform fee (100 % in basis points) |
-| `PROGRESS_BPS_SCALE` | `i128` | `10_000` | Scale factor for all basis-point progress calculations |
-| `MIN_DEADLINE_OFFSET` | `u64` | `60` | Minimum seconds the deadline must be in the future |
-| `MAX_PROGRESS_BPS` | `u32` | `10_000` | Cap on progress value returned to callers |
+| Constant                  | Type   | Value    | Description                                            |
+| ------------------------- | ------ | -------- | ------------------------------------------------------ |
+| `MIN_GOAL_AMOUNT`         | `i128` | `1`      | Minimum campaign goal in token units                   |
+| `MIN_CONTRIBUTION_AMOUNT` | `i128` | `1`      | Minimum value for the `min_contribution` parameter     |
+| `MAX_PLATFORM_FEE_BPS`    | `u32`  | `10_000` | Maximum platform fee (100 % in basis points)           |
+| `PROGRESS_BPS_SCALE`      | `i128` | `10_000` | Scale factor for all basis-point progress calculations |
+| `MIN_DEADLINE_OFFSET`     | `u64`  | `60`     | Minimum seconds the deadline must be in the future     |
+| `MAX_PROGRESS_BPS`        | `u32`  | `10_000` | Cap on progress value returned to callers              |
 
 ## Validation Helpers
 
@@ -196,7 +213,7 @@ Returns `0` when `goal <= 0` to avoid division by zero.
 
 6. **`compute_progress_bps` cap** — Progress is capped at `MAX_PROGRESS_BPS`
    so callers always receive a value in `[0, 10_000]` regardless of how much
-   the goal was exceeded.  This prevents integer overflow in downstream
+   the goal was exceeded. This prevents integer overflow in downstream
    percentage calculations.
 
 ## Integration with `lib.rs`
@@ -216,7 +233,7 @@ use crate::campaign_goal_minimum::{
 ## Test Coverage
 
 See [`campaign_goal_minimum_test.rs`](./campaign_goal_minimum_test.rs) for the
-full test suite.  Tests cover:
+full test suite. Tests cover:
 
 - Constant value stability (regression guard)
 - `PROGRESS_BPS_SCALE == MAX_PROGRESS_BPS` invariant

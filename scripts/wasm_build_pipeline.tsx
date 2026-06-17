@@ -20,12 +20,12 @@
 /**
  * @notice Prefix applied to every general cache entry
  */
-export const CACHE_KEY_PREFIX = 'wasm_build_cache_';
+export const CACHE_KEY_PREFIX = "wasm_build_cache_";
 
 /**
  * @notice Prefix applied to every script-layer cache entry
  */
-export const SCRIPT_CACHE_KEY_PREFIX = 'wasm_script_cache_';
+export const SCRIPT_CACHE_KEY_PREFIX = "wasm_script_cache_";
 
 /**
  * @notice Default TTL for cached WASM artifacts (24 hours in milliseconds)
@@ -55,7 +55,12 @@ export const MAX_CACHE_ENTRIES = 100;
 /**
  * @notice Supported Stellar networks
  */
-export const SUPPORTED_NETWORKS = ['testnet', 'mainnet', 'futurenet', 'localnet'] as const;
+export const SUPPORTED_NETWORKS = [
+  "testnet",
+  "mainnet",
+  "futurenet",
+  "localnet",
+] as const;
 
 /**
  * @notice Regex that valid cache keys must satisfy
@@ -91,7 +96,7 @@ const WASM_PATH_REGEX = /^[a-zA-Z0-9_\-\.\/]+\.wasm$/;
 // Types
 // ---------------------------------------------------------------------------
 
-export type SupportedNetwork = typeof SUPPORTED_NETWORKS[number];
+export type SupportedNetwork = (typeof SUPPORTED_NETWORKS)[number];
 
 /**
  * @notice Metadata stored alongside every cached WASM artifact
@@ -186,7 +191,7 @@ export interface ScriptDeployInput {
 export class WasmCacheError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'WasmCacheError';
+    this.name = "WasmCacheError";
   }
 }
 
@@ -205,11 +210,11 @@ export class WasmCacheValidator {
    */
   static validateKey(key: string): void {
     if (!key || key.trim().length === 0) {
-      throw new WasmCacheError('Cache key must not be empty.');
+      throw new WasmCacheError("Cache key must not be empty.");
     }
     if (!VALID_KEY_REGEX.test(key)) {
       throw new WasmCacheError(
-        `Invalid cache key "${key}". Only alphanumeric characters, hyphens, underscores, and dots are allowed.`
+        `Invalid cache key "${key}". Only alphanumeric characters, hyphens, underscores, and dots are allowed.`,
       );
     }
   }
@@ -219,16 +224,15 @@ export class WasmCacheValidator {
    * @throws WasmCacheError if the value is unsafe or exceeds the size limit
    */
   static validateValue(value: string): void {
-    if (Buffer.byteLength(value, 'utf8') > MAX_CACHE_VALUE_BYTES) {
     if (new TextEncoder().encode(value).length > MAX_CACHE_VALUE_BYTES) {
       throw new WasmCacheError(
-        `Cache value exceeds the maximum allowed size of ${MAX_CACHE_VALUE_BYTES} bytes.`
+        `Cache value exceeds the maximum allowed size of ${MAX_CACHE_VALUE_BYTES} bytes.`,
       );
     }
     for (const pattern of DANGEROUS_VALUE_PATTERNS) {
       if (pattern.test(value)) {
         throw new WasmCacheError(
-          'Cache value contains a potentially dangerous pattern and was rejected.'
+          "Cache value contains a potentially dangerous pattern and was rejected.",
         );
       }
     }
@@ -241,7 +245,7 @@ export class WasmCacheValidator {
   static validateHash(hash: string): void {
     if (!hash || !/^[a-fA-F0-9]+$/.test(hash)) {
       throw new WasmCacheError(
-        `Invalid build hash "${hash}". Hash must be a non-empty hexadecimal string.`
+        `Invalid build hash "${hash}". Hash must be a non-empty hexadecimal string.`,
       );
     }
   }
@@ -253,7 +257,7 @@ export class WasmCacheValidator {
   static validateContractId(contractId: string): void {
     if (!contractId || !CONTRACT_ID_REGEX.test(contractId)) {
       throw new WasmCacheError(
-        `Invalid contract ID "${contractId}". Must be a 56-character Stellar contract address starting with "C".`
+        `Invalid contract ID "${contractId}". Must be a 56-character Stellar contract address starting with "C".`,
       );
     }
   }
@@ -262,10 +266,10 @@ export class WasmCacheValidator {
    * @notice Validates a Stellar account address (G + 55 base32 chars)
    * @throws WasmCacheError if the format is invalid
    */
-  static validateStellarAddress(address: string, fieldName = 'address'): void {
+  static validateStellarAddress(address: string, fieldName = "address"): void {
     if (!address || !STELLAR_ADDRESS_REGEX.test(address)) {
       throw new WasmCacheError(
-        `Invalid Stellar ${fieldName} "${address}". Must be a 56-character address starting with "G".`
+        `Invalid Stellar ${fieldName} "${address}". Must be a 56-character address starting with "G".`,
       );
     }
   }
@@ -277,7 +281,7 @@ export class WasmCacheValidator {
   static validateWasmPath(wasmPath: string): void {
     if (!wasmPath || !WASM_PATH_REGEX.test(wasmPath)) {
       throw new WasmCacheError(
-        `Invalid WASM path "${wasmPath}". Must be a relative or absolute path ending in ".wasm".`
+        `Invalid WASM path "${wasmPath}". Must be a relative or absolute path ending in ".wasm".`,
       );
     }
   }
@@ -289,7 +293,7 @@ export class WasmCacheValidator {
   static validateNetwork(network: string): void {
     if (!SUPPORTED_NETWORKS.includes(network as SupportedNetwork)) {
       throw new WasmCacheError(
-        `Unsupported network "${network}". Must be one of: ${SUPPORTED_NETWORKS.join(', ')}.`
+        `Unsupported network "${network}". Must be one of: ${SUPPORTED_NETWORKS.join(", ")}.`,
       );
     }
   }
@@ -300,23 +304,28 @@ export class WasmCacheValidator {
    */
   static validateDeployInput(input: ScriptDeployInput): void {
     WasmCacheValidator.validateContractId(input.contractId);
-    WasmCacheValidator.validateStellarAddress(input.creator, 'creator');
-    WasmCacheValidator.validateStellarAddress(input.token, 'token');
+    WasmCacheValidator.validateStellarAddress(input.creator, "creator");
+    WasmCacheValidator.validateStellarAddress(input.token, "token");
     WasmCacheValidator.validateNetwork(input.network);
     WasmCacheValidator.validateWasmPath(input.wasmPath);
     WasmCacheValidator.validateHash(input.wasmHash);
 
     if (!Number.isInteger(input.goal) || input.goal <= 0) {
-      throw new WasmCacheError(`goal must be a positive integer, got: ${input.goal}`);
+      throw new WasmCacheError(
+        `goal must be a positive integer, got: ${input.goal}`,
+      );
     }
     if (!Number.isInteger(input.deadline) || input.deadline <= 0) {
       throw new WasmCacheError(
-        `deadline must be a positive Unix timestamp, got: ${input.deadline}`
+        `deadline must be a positive Unix timestamp, got: ${input.deadline}`,
       );
     }
-    if (!Number.isInteger(input.minContribution) || input.minContribution <= 0) {
+    if (
+      !Number.isInteger(input.minContribution) ||
+      input.minContribution <= 0
+    ) {
       throw new WasmCacheError(
-        `minContribution must be a positive integer, got: ${input.minContribution}`
+        `minContribution must be a positive integer, got: ${input.minContribution}`,
       );
     }
   }
@@ -348,7 +357,12 @@ export class WasmBuildCache {
    * @notice Stores a WASM build artifact in the cache
    * @throws WasmCacheError on validation failure
    */
-  set(key: string, value: string, hash: string, opts: WasmCacheSetOptions = {}): void {
+  set(
+    key: string,
+    value: string,
+    hash: string,
+    opts: WasmCacheSetOptions = {},
+  ): void {
     WasmCacheValidator.validateKey(key);
     WasmCacheValidator.validateValue(value);
     WasmCacheValidator.validateHash(hash);
@@ -438,7 +452,7 @@ export class WasmBuildCache {
     const keys: string[] = [];
 
     for (const [k, entry] of this._store.entries()) {
-      keys.push(k.replace(CACHE_KEY_PREFIX, ''));
+      keys.push(k.replace(CACHE_KEY_PREFIX, ""));
       if (now > entry.expiresAt) expired++;
     }
 
@@ -521,7 +535,10 @@ export class ScriptBuildCache {
    * @notice Retrieves a deploy entry; returns null if missing or expired
    * @throws WasmCacheError on invalid inputs
    */
-  getDeployEntry(network: string, contractId: string): ScriptDeployEntry | null {
+  getDeployEntry(
+    network: string,
+    contractId: string,
+  ): ScriptDeployEntry | null {
     WasmCacheValidator.validateNetwork(network);
     WasmCacheValidator.validateContractId(contractId);
 
@@ -547,7 +564,11 @@ export class ScriptBuildCache {
    * @notice Returns true if the cached WASM hash matches the provided hash
    * @dev Use before `interact.sh` to confirm the on-chain binary is current
    */
-  isWasmHashValid(network: string, contractId: string, wasmHash: string): boolean {
+  isWasmHashValid(
+    network: string,
+    contractId: string,
+    wasmHash: string,
+  ): boolean {
     WasmCacheValidator.validateHash(wasmHash);
     const entry = this.getDeployEntry(network, contractId);
     return entry !== null && entry.wasmHash === wasmHash;
@@ -590,7 +611,7 @@ export class ScriptBuildCache {
     const keys: string[] = [];
 
     for (const [k, entry] of this._store.entries()) {
-      keys.push(k.replace(SCRIPT_CACHE_KEY_PREFIX, ''));
+      keys.push(k.replace(SCRIPT_CACHE_KEY_PREFIX, ""));
       if (now > entry.expiresAt) expired++;
     }
 
@@ -618,12 +639,14 @@ export const wasmBuildCache = new WasmBuildCache();
 export const scriptBuildCache = new ScriptBuildCache();
 
 export default WasmBuildCache;
+
+/*
  * WASM Build Pipeline Constants for Stellar Raise Contracts
  * Extracted from Cargo.toml [profile.release], .cargo/config.toml, and build scripts.
- * 
+ *
  * Usage: Import and use in Node scripts for cargo invocations, CI, or testing.
  * Ensures consistent WASM optimization for caching and reproducibility.
- * 
+ *
  * NatSpec-style:
  * @notice Constants for WASM build pipeline to improve testing readability and caching.
  * @dev Optimized for Soroban contracts (crowdfund, factory).
@@ -631,14 +654,14 @@ export default WasmBuildCache;
  */
 
 export interface WasmProfileConfig {
-  opt_level: 'z' | 's' | '0' | '1' | '2' | '3';
+  opt_level: "z" | "s" | "0" | "1" | "2" | "3";
   overflow_checks: boolean;
   debug: 0 | 1 | 2;
-  strip: 'none' | 'symbols' | 'all';
+  strip: "none" | "symbols" | "all";
   debug_assertions: boolean;
-  panic: 'unwind' | 'abort';
+  panic: "unwind" | "abort";
   codegen_units: number;
-  lto: boolean | 'thin' | 'fat';
+  lto: boolean | "thin" | "fat";
 }
 
 export interface WasmRustflags {
@@ -650,19 +673,19 @@ export const WASM_BUILD_CONSTANTS = {
   /**
    * Target triple for Soroban WASM builds.
    */
-  target: 'wasm32-unknown-unknown' as const,
+  target: "wasm32-unknown-unknown" as const,
 
   /**
    * Release profile configuration (from Cargo.toml).
    * Used for production/testing WASM optimization.
    */
   profile: {
-    opt_level: 'z' as const,
+    opt_level: "z" as const,
     overflow_checks: true,
     debug: 0,
-    strip: 'symbols' as const,
+    strip: "symbols" as const,
     debug_assertions: false,
-    panic: 'abort' as const,
+    panic: "abort" as const,
     codegen_units: 1,
     lto: true as const,
   } satisfies WasmProfileConfig,
@@ -671,26 +694,21 @@ export const WASM_BUILD_CONSTANTS = {
    * Rustflags for wasm32 target (from .cargo/config.toml).
    */
   rustflags: [
-    '-C',
-    'link-arg=-zstack-size=65536',
-    '-C',
-    'target-feature=-reference-types,-multivalue',
+    "-C",
+    "link-arg=-zstack-size=65536",
+    "-C",
+    "target-feature=-reference-types,-multivalue",
   ] as const,
 
   /**
    * Default network for deploy/testing.
    */
-  network: 'testnet' as const,
+  network: "testnet" as const,
 
   /**
    * Cargo command flags for release WASM build.
    */
-  cargo_flags: [
-    '--target',
-    'wasm32-unknown-unknown',
-    '--release',
-  ] as const,
+  cargo_flags: ["--target", "wasm32-unknown-unknown", "--release"] as const,
 } as const;
 
 export type WasmBuildConstants = typeof WASM_BUILD_CONSTANTS;
-

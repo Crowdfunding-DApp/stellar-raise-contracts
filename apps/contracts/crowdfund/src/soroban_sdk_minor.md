@@ -20,11 +20,11 @@ audit-friendly. The module covers:
 
 ## What Changed in v22
 
-| Area | Before (v21) | After (v22) |
-| :--- | :--- | :--- |
-| Contract registration in tests | `env.register_contract(None, Contract)` | `env.register(Contract, ())` |
-| Storage keys | Raw `String` values | Typed `#[contracttype]` enums |
-| Auth pattern | Various | `address.require_auth()` is the standard |
+| Area                           | Before (v21)                            | After (v22)                              |
+| :----------------------------- | :-------------------------------------- | :--------------------------------------- |
+| Contract registration in tests | `env.register_contract(None, Contract)` | `env.register(Contract, ())`             |
+| Storage keys                   | Raw `String` values                     | Typed `#[contracttype]` enums            |
+| Auth pattern                   | Various                                 | `address.require_auth()` is the standard |
 
 ## Public API
 
@@ -65,11 +65,11 @@ fn emit_ping_event(env, from, value)
 
 ## CompatibilityStatus
 
-| Variant | Meaning |
-|---------|---------|
-| `Compatible` | Same major version; safe to upgrade |
-| `RequiresMigration` | Different major versions; migration step needed |
-| `Incompatible` | Empty or completely malformed version string; frontend should surface as error |
+| Variant             | Meaning                                                                        |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `Compatible`        | Same major version; safe to upgrade                                            |
+| `RequiresMigration` | Different major versions; migration step needed                                |
+| `Incompatible`      | Empty or completely malformed version string; frontend should surface as error |
 
 ## SdkChangeRecord
 
@@ -166,34 +166,42 @@ validate_upgrade_note(&note_of_257_bytes)  // → false
 ## NatSpec-style Reference
 
 ### `assess_compatibility`
+
 - **@notice** Returns `Compatible`, `RequiresMigration`, or `Incompatible` based on version strings.
 - **@security** Read-only; empty inputs return `Incompatible` to prevent silent major-0 mapping.
 
 ### `parse_minor`
+
 - **@notice** Extracts the minor component from a semver string.
 - **@dev** Returns `0` for any unparseable or missing minor component.
 
 ### `is_minor_bump`
+
 - **@notice** Returns `true` only when `to_version` is a forward minor bump within the same major.
 - **@dev** Pure function; no state access.
 
 ### `pagination_window`
+
 - **@notice** Builds a bounded `PaginationWindow` from an offset and requested limit.
 - **@security** Saturating arithmetic prevents `u32` overflow when `offset` is near `u32::MAX`.
 
 ### `validate_upgrade_note`
+
 - **@notice** Returns `true` when the note fits within `UPGRADE_NOTE_MAX_LEN` (256 bytes).
 - **@dev** Exact boundary (`len == max`) is accepted.
 
 ### `validate_wasm_hash`
+
 - **@notice** Returns `true` for any non-zero 32-byte hash.
 - **@security** Rejects zeroed hashes to prevent upgrade calls that would brick the contract.
 
 ### `build_sdk_change_record`
+
 - **@notice** Constructs a `SdkChangeRecord` for on-chain audit storage.
 - **@dev** `id` is stored as a compact `Symbol`; `description` is a full `String`.
 
 ### `emit_ping_event`
+
 - **@notice** Emits a typed `ping` event demonstrating the Soroban v22 auth pattern.
 - **@security** Requires `from.require_auth()` — only the emitter can trigger this event.
 
@@ -209,25 +217,27 @@ cargo test -p crowdfund -- soroban_sdk_minor
 
 ## Test Coverage Summary
 
-| Group | Tests |
-|-------|-------|
-| Version constants | 1 |
-| `assess_compatibility` | 12 |
-| `parse_minor` | 6 |
-| `is_minor_bump` | 5 |
-| `validate_wasm_hash` | 4 |
-| `clamp_page_size` | 1 |
-| `pagination_window` | 4 |
-| `validate_upgrade_note` | 3 |
-| `build_sdk_change_record` | 3 |
-| `emit_upgrade_audit_event` | 1 |
-| `emit_upgrade_audit_event_with_note` | 3 |
-| `emit_ping_event` | 6 |
-| Integration | 5 |
-| **Total** | **54** |
+| Group                                | Tests  |
+| ------------------------------------ | ------ |
+| Version constants                    | 1      |
+| `assess_compatibility`               | 12     |
+| `parse_minor`                        | 6      |
+| `is_minor_bump`                      | 5      |
+| `validate_wasm_hash`                 | 4      |
+| `clamp_page_size`                    | 1      |
+| `pagination_window`                  | 4      |
+| `validate_upgrade_note`              | 3      |
+| `build_sdk_change_record`            | 3      |
+| `emit_upgrade_audit_event`           | 1      |
+| `emit_upgrade_audit_event_with_note` | 3      |
+| `emit_ping_event`                    | 6      |
+| Integration                          | 5      |
+| **Total**                            | **54** |
 
 Expected coverage: ≥ 95% statements, branches, and functions.
+
 # Soroban SDK Minor Version Bump Review
+
 Documents the edge cases and helpers introduced for the Soroban SDK v22 minor version bump, with a focus on frontend UI safety and scalability.
 
 ## Overview
@@ -246,11 +256,11 @@ audit-friendly. The module covers:
 
 ## What Changed in v22
 
-| Area | Before (v21) | After (v22) |
-| :--- | :--- | :--- |
-| Contract registration in tests | `env.register_contract(None, Contract)` | `env.register(Contract, ())` |
-| Storage keys | Raw `String` values | Typed `#[contracttype]` enums |
-| Auth pattern | Various | `address.require_auth()` is the standard |
+| Area                           | Before (v21)                            | After (v22)                              |
+| :----------------------------- | :-------------------------------------- | :--------------------------------------- |
+| Contract registration in tests | `env.register_contract(None, Contract)` | `env.register(Contract, ())`             |
+| Storage keys                   | Raw `String` values                     | Typed `#[contracttype]` enums            |
+| Auth pattern                   | Various                                 | `address.require_auth()` is the standard |
 
 ## Public API
 
@@ -291,11 +301,11 @@ fn emit_ping_event(env, from, value)
 
 ## CompatibilityStatus
 
-| Variant | Meaning |
-|---------|---------|
-| `Compatible` | Same major version; safe to upgrade |
-| `RequiresMigration` | Different major versions; migration step needed |
-| `Incompatible` | Empty or completely malformed version string; frontend should surface as error |
+| Variant             | Meaning                                                                        |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `Compatible`        | Same major version; safe to upgrade                                            |
+| `RequiresMigration` | Different major versions; migration step needed                                |
+| `Incompatible`      | Empty or completely malformed version string; frontend should surface as error |
 
 ## SdkChangeRecord
 
@@ -392,34 +402,42 @@ validate_upgrade_note(&note_of_257_bytes)  // → false
 ## NatSpec-style Reference
 
 ### `assess_compatibility`
+
 - **@notice** Returns `Compatible`, `RequiresMigration`, or `Incompatible` based on version strings.
 - **@security** Read-only; empty inputs return `Incompatible` to prevent silent major-0 mapping.
 
 ### `parse_minor`
+
 - **@notice** Extracts the minor component from a semver string.
 - **@dev** Returns `0` for any unparseable or missing minor component.
 
 ### `is_minor_bump`
+
 - **@notice** Returns `true` only when `to_version` is a forward minor bump within the same major.
 - **@dev** Pure function; no state access.
 
 ### `pagination_window`
+
 - **@notice** Builds a bounded `PaginationWindow` from an offset and requested limit.
 - **@security** Saturating arithmetic prevents `u32` overflow when `offset` is near `u32::MAX`.
 
 ### `validate_upgrade_note`
+
 - **@notice** Returns `true` when the note fits within `UPGRADE_NOTE_MAX_LEN` (256 bytes).
 - **@dev** Exact boundary (`len == max`) is accepted.
 
 ### `validate_wasm_hash`
+
 - **@notice** Returns `true` for any non-zero 32-byte hash.
 - **@security** Rejects zeroed hashes to prevent upgrade calls that would brick the contract.
 
 ### `build_sdk_change_record`
+
 - **@notice** Constructs a `SdkChangeRecord` for on-chain audit storage.
 - **@dev** `id` is stored as a compact `Symbol`; `description` is a full `String`.
 
 ### `emit_ping_event`
+
 - **@notice** Emits a typed `ping` event demonstrating the Soroban v22 auth pattern.
 - **@security** Requires `from.require_auth()` — only the emitter can trigger this event.
 
@@ -445,6 +463,7 @@ cargo test -p crowdfund -- soroban_sdk_minor
 - [x] `.cargo/config.toml` WASM flags verified unchanged
 - [x] Security assumptions documented
 - [x] Audit event helper available for on-chain governance records
+
 # soroban_sdk_minor
 
 Gas-efficiency and readability improvements for the Soroban SDK minor version bump.
@@ -465,31 +484,31 @@ This module centralises those patterns into small, well-tested helpers.
 
 ### Storage helpers
 
-| Function | Storage tier | Description |
-|---|---|---|
-| `instance_get_or(env, key, default)` | Instance | Returns stored value or `default` in one call |
-| `persistent_get_or(env, key, default)` | Persistent | Same for persistent storage |
+| Function                               | Storage tier | Description                                   |
+| -------------------------------------- | ------------ | --------------------------------------------- |
+| `instance_get_or(env, key, default)`   | Instance     | Returns stored value or `default` in one call |
+| `persistent_get_or(env, key, default)` | Persistent   | Same for persistent storage                   |
 
 ### Arithmetic helpers
 
-| Function | Description |
-|---|---|
-| `progress_bps(total_raised, goal)` | Progress toward goal in basis points (0–10 000), division-by-zero safe |
-| `compute_fee(total, fee_bps)` | Platform fee amount; panics on overflow (unreachable for realistic amounts) |
+| Function                           | Description                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| `progress_bps(total_raised, goal)` | Progress toward goal in basis points (0–10 000), division-by-zero safe      |
+| `compute_fee(total, fee_bps)`      | Platform fee amount; panics on overflow (unreachable for realistic amounts) |
 
 ### Deadline helpers
 
-| Function | Description |
-|---|---|
+| Function                | Description                               |
+| ----------------------- | ----------------------------------------- |
 | `is_past_deadline(env)` | `true` when `ledger.timestamp > deadline` |
-| `is_active_window(env)` | Inverse of `is_past_deadline` |
+| `is_active_window(env)` | Inverse of `is_past_deadline`             |
 
 ### Contributor helpers
 
-| Function | Description |
-|---|---|
-| `get_contribution(env, contributor)` | Reads persistent contribution, returns 0 if absent |
-| `set_contribution(env, contributor, amount, ttl_ledgers)` | Writes contribution and refreshes TTL atomically |
+| Function                                                  | Description                                        |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| `get_contribution(env, contributor)`                      | Reads persistent contribution, returns 0 if absent |
+| `set_contribution(env, contributor, amount, ttl_ledgers)` | Writes contribution and refreshes TTL atomically   |
 
 ## Security Notes
 
@@ -507,21 +526,21 @@ Tests live in `soroban_sdk_minor_test.rs` and cover:
 - `is_past_deadline` / `is_active_window`: no deadline set, future deadline, past deadline.
 - `get_contribution` / `set_contribution`: absent key, set and read, overwrite, zero.
 - `instance_get_or` / `persistent_get_or`: absent key, stored value.
-| Group | Tests |
-|-------|-------|
-| Version constants | 1 |
-| `assess_compatibility` | 12 |
-| `parse_minor` | 6 |
-| `is_minor_bump` | 5 |
-| `validate_wasm_hash` | 4 |
-| `clamp_page_size` | 1 |
-| `pagination_window` | 4 |
-| `validate_upgrade_note` | 3 |
-| `build_sdk_change_record` | 3 |
-| `emit_upgrade_audit_event` | 1 |
-| `emit_upgrade_audit_event_with_note` | 3 |
-| `emit_ping_event` | 6 |
-| Integration | 5 |
-| **Total** | **54** |
+  | Group | Tests |
+  |-------|-------|
+  | Version constants | 1 |
+  | `assess_compatibility` | 12 |
+  | `parse_minor` | 6 |
+  | `is_minor_bump` | 5 |
+  | `validate_wasm_hash` | 4 |
+  | `clamp_page_size` | 1 |
+  | `pagination_window` | 4 |
+  | `validate_upgrade_note` | 3 |
+  | `build_sdk_change_record` | 3 |
+  | `emit_upgrade_audit_event` | 1 |
+  | `emit_upgrade_audit_event_with_note` | 3 |
+  | `emit_ping_event` | 6 |
+  | Integration | 5 |
+  | **Total** | **54** |
 
 Expected coverage: ≥ 95% statements, branches, and functions.

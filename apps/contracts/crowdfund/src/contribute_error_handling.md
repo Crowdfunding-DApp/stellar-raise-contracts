@@ -13,14 +13,14 @@ This module replaces ad-hoc panic strings with typed `ContractError` variants an
 
 ## Error Reference
 
-| Code | Variant            | Trigger                              | Retryable |
-|------|--------------------|--------------------------------------|-----------|
-| 2    | `CampaignEnded`    | `ledger.timestamp > deadline`        | No        |
-| 6    | `Overflow`         | checked_add would overflow           | No        |
-| 8    | `ZeroAmount`       | `amount == 0`                        | Yes       |
-| 9    | `BelowMinimum`     | `amount < min_contribution`          | Yes       |
-| 10   | `CampaignNotActive`| campaign status ≠ `Active`           | No        |
-| 11   | `NegativeAmount`   | `amount < 0`                         | Yes       |
+| Code | Variant             | Trigger                       | Retryable |
+| ---- | ------------------- | ----------------------------- | --------- |
+| 2    | `CampaignEnded`     | `ledger.timestamp > deadline` | No        |
+| 6    | `Overflow`          | checked_add would overflow    | No        |
+| 8    | `ZeroAmount`        | `amount == 0`                 | Yes       |
+| 9    | `BelowMinimum`      | `amount < min_contribution`   | Yes       |
+| 10   | `CampaignNotActive` | campaign status ≠ `Active`    | No        |
+| 11   | `NegativeAmount`    | `amount < 0`                  | Yes       |
 
 ## Validation Order in `contribute()`
 
@@ -37,9 +37,9 @@ This module replaces ad-hoc panic strings with typed `ContractError` variants an
 
 Each error path emits a `contribute_error` event before returning:
 
-| Topic 0            | Topic 1                  | Data   |
-|--------------------|--------------------------|--------|
-| `contribute_error` | `Symbol(<VariantName>)`  | `u32`  |
+| Topic 0            | Topic 1                 | Data  |
+| ------------------ | ----------------------- | ----- |
+| `contribute_error` | `Symbol(<VariantName>)` | `u32` |
 
 Off-chain indexers can subscribe to `contribute_error` to observe failures without parsing host-level error codes.
 
@@ -49,6 +49,7 @@ Off-chain indexers can subscribe to `contribute_error` to observe failures witho
 - Negative amounts are rejected before zero/minimum checks to prevent unexpected token-level behaviour.
 - The deadline check uses strict `>`: contributions at exactly the deadline timestamp are accepted.
 - `log_contribute_error` is read-only and cannot be called externally.
+
 # contribute() Error Handling
 
 ## Overview
@@ -62,14 +63,14 @@ This module replaces ad-hoc panic strings with typed `ContractError` variants an
 
 ## Error Reference
 
-| Code | Variant            | Trigger                              | Retryable |
-|------|--------------------|--------------------------------------|-----------|
-| 2    | `CampaignEnded`    | `ledger.timestamp > deadline`        | No        |
-| 6    | `Overflow`         | checked_add would overflow           | No        |
-| 8    | `ZeroAmount`       | `amount == 0`                        | Yes       |
-| 9    | `BelowMinimum`     | `amount < min_contribution`          | Yes       |
-| 10   | `CampaignNotActive`| campaign status ≠ `Active`           | No        |
-| 11   | `NegativeAmount`   | `amount < 0`                         | Yes       |
+| Code | Variant             | Trigger                       | Retryable |
+| ---- | ------------------- | ----------------------------- | --------- |
+| 2    | `CampaignEnded`     | `ledger.timestamp > deadline` | No        |
+| 6    | `Overflow`          | checked_add would overflow    | No        |
+| 8    | `ZeroAmount`        | `amount == 0`                 | Yes       |
+| 9    | `BelowMinimum`      | `amount < min_contribution`   | Yes       |
+| 10   | `CampaignNotActive` | campaign status ≠ `Active`    | No        |
+| 11   | `NegativeAmount`    | `amount < 0`                  | Yes       |
 
 ## Validation Order in `contribute()`
 
@@ -86,12 +87,13 @@ This module replaces ad-hoc panic strings with typed `ContractError` variants an
 
 Each error path emits a `contribute_error` event before returning:
 
-match client.try_contribute(&contributor, &amount) {
-    Ok(_) => println!("contributed"),
-    Err(Ok(e)) => eprintln!("contract error {}: {}", e as u32, describe_error(e as u32)),
-    Err(Err(e)) => eprintln!("host error: {:?}", e),
+match client.try*contribute(&contributor, &amount) {
+Ok(*) => println!("contributed"),
+Err(Ok(e)) => eprintln!("contract error {}: {}", e as u32, describe_error(e as u32)),
+Err(Err(e)) => eprintln!("host error: {:?}", e),
 }
-```
+
+````
 Documents every typed error path in `contribute()`, provides off-chain helper
 utilities for scripts, and records the security assumptions for the contribution
 flow.
@@ -126,16 +128,16 @@ match client.try_contribute(&contributor, &amount) {
     }
     Err(Err(e)) => eprintln!("host error: {:?}", e),
 }
-```
+````
 
 ### Error Code Quick Reference
 
-| Code | Meaning                              | Script Action                          |
-| :--- | :----------------------------------- | :------------------------------------- |
-| 2    | Campaign has ended                   | Do not retry; campaign is closed       |
-| 6    | Arithmetic overflow                  | Do not retry; amount is unreasonably large |
-| 9    | Amount below campaign minimum        | Prompt user for a higher amount        |
-| 10   | Amount is zero                       | Prompt user for a non-zero amount      |
+| Code | Meaning                       | Script Action                              |
+| :--- | :---------------------------- | :----------------------------------------- |
+| 2    | Campaign has ended            | Do not retry; campaign is closed           |
+| 6    | Arithmetic overflow           | Do not retry; amount is unreasonably large |
+| 9    | Amount below campaign minimum | Prompt user for a higher amount            |
+| 10   | Amount is zero                | Prompt user for a non-zero amount          |
 
 ## Security Assumptions
 
@@ -159,9 +161,9 @@ All numeric thresholds used in `contribute()` are stored in instance storage
 under `DataKey::MinContribution` and set at initialization time via
 `initialize(..., min_contribution, ...)`. There are no hardcoded numeric
 thresholds in the contribution logic itself.
-| Topic 0            | Topic 1                  | Data   |
+| Topic 0 | Topic 1 | Data |
 |--------------------|--------------------------|--------|
-| `contribute_error` | `Symbol(<VariantName>)`  | `u32`  |
+| `contribute_error` | `Symbol(<VariantName>)` | `u32` |
 
 Off-chain indexers can subscribe to `contribute_error` to observe failures without parsing host-level error codes.
 
@@ -198,24 +200,27 @@ is_retryable_returns_false_for_all_known_errors          ok
 16 tests — all passing:
 
 ```
-contribute_happy_path                                    ok
-contribute_zero_amount_returns_zero_amount_error         ok
-contribute_below_minimum_returns_amount_too_low          ok
-contribute_one_below_minimum_returns_amount_too_low      ok
-contribute_after_deadline_returns_campaign_ended         ok
-contribute_exactly_at_deadline_is_accepted               ok
-overflow_error_code_matches_enum_repr                    ok
-error_code_constants_match_enum_reprs                    ok
-describe_error_campaign_ended                            ok
-describe_error_overflow                                  ok
-describe_error_amount_too_low                            ok
-describe_error_zero_amount                               ok
-describe_error_unknown                                   ok
-is_retryable_amount_too_low_and_zero_amount_are_retryable  ok
+
+contribute_happy_path ok
+contribute_zero_amount_returns_zero_amount_error ok
+contribute_below_minimum_returns_amount_too_low ok
+contribute_one_below_minimum_returns_amount_too_low ok
+contribute_after_deadline_returns_campaign_ended ok
+contribute_exactly_at_deadline_is_accepted ok
+overflow_error_code_matches_enum_repr ok
+error_code_constants_match_enum_reprs ok
+describe_error_campaign_ended ok
+describe_error_overflow ok
+describe_error_amount_too_low ok
+describe_error_zero_amount ok
+describe_error_unknown ok
+is_retryable_amount_too_low_and_zero_amount_are_retryable ok
 is_retryable_campaign_ended_and_overflow_are_not_retryable ok
-is_retryable_returns_false_for_negative_amount           ok
+is_retryable_returns_false_for_negative_amount ok
+
 ```
 - `contributor.require_auth()` is called before any validation — auth failure is always the first gate.
 - Negative amounts are rejected before zero/minimum checks to prevent unexpected token-level behaviour.
 - The deadline check uses strict `>`: contributions at exactly the deadline timestamp are accepted.
 - `log_contribute_error` is read-only and cannot be called externally.
+```

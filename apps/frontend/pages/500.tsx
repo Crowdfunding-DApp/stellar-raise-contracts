@@ -1,9 +1,6 @@
 import React from "react";
-import { useRouter } from "next/router";
 
 const ServerErrorPage = () => {
-  const router = useRouter();
-
   return (
     <div style={styles.container}>
       <div style={styles.content}>
@@ -14,12 +11,15 @@ const ServerErrorPage = () => {
           we work on fixing the issue.
         </p>
         <div style={styles.actions}>
-          <button style={styles.primaryButton} onClick={() => router.reload()}>
+          <button
+            style={styles.primaryButton}
+            onClick={() => window.location.reload()}
+          >
             Try Again
           </button>
           <button
             style={styles.secondaryButton}
-            onClick={() => router.push("/")}
+            onClick={() => (window.location.href = "/")}
           >
             Return to Home
           </button>

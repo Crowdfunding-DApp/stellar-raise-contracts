@@ -103,3 +103,26 @@ export function useDocsCssVariable(
 }
 
 export default CSSVariablesContract;
+
+export type CssVariablesMap = Record<string, string>;
+
+export class CssVariablesUsage {
+  setMultiple(map: CssVariablesMap): void {
+    const root = document.documentElement;
+    for (const [key, value] of Object.entries(map)) {
+      root.style.setProperty(key, value);
+    }
+  }
+
+  get(variableName: string): string {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(variableName)
+      .trim();
+  }
+}
+
+export const THEME = {
+  LIGHT: "light",
+  DARK: "dark",
+  SYSTEM: "system",
+} as const;

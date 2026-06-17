@@ -78,6 +78,7 @@ A transition map enforces allowed movement between states when `strictTransition
 6. `aria-busy` and `aria-live` semantics are set for assistive technology reliability.
 
 ## Usage Example
+
 This ensures only approved states are used in consuming code and avoids ad-hoc string behavior.
 
 ## Security assumptions and safeguards
@@ -105,6 +106,7 @@ This ensures only approved states are used in consuming code and avoids ad-hoc s
    `aria-busy` is enabled only while submitting; `aria-live="polite"` allows assistive technologies to announce state text changes.
 
 ## Usage example
+
 # React Submit Button Component
 
 ## NatSpec-Style Documentation
@@ -124,31 +126,32 @@ The `ReactSubmitButton` component provides a standardized submit button with con
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `children` | `React.ReactNode` | — | Button label (required). |
-| `isLoading` | `boolean` | `false` | When true, shows spinner and prevents click (double-submit prevention). |
-| `disabled` | `boolean` | `false` | Explicit disabled state (e.g. form validation). |
-| `variant` | `"primary" \| "secondary" \| "danger" \| "outline"` | `"primary"` | Visual variant matching Forms.css. |
-| `fullWidth` | `boolean` | `false` | Full-width layout. |
-| `loadingLabel` | `string` | `"Loading..."` | Accessible label when loading. |
-| `form` | `string` | — | Form id to associate with (optional). |
-| `className` | `string` | `""` | Additional CSS classes. |
-| `onClick` | `(e) => void` | — | Click handler (not called when disabled or loading). |
+| Prop           | Type                                                | Default        | Description                                                             |
+| -------------- | --------------------------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| `children`     | `React.ReactNode`                                   | —              | Button label (required).                                                |
+| `isLoading`    | `boolean`                                           | `false`        | When true, shows spinner and prevents click (double-submit prevention). |
+| `disabled`     | `boolean`                                           | `false`        | Explicit disabled state (e.g. form validation).                         |
+| `variant`      | `"primary" \| "secondary" \| "danger" \| "outline"` | `"primary"`    | Visual variant matching Forms.css.                                      |
+| `fullWidth`    | `boolean`                                           | `false`        | Full-width layout.                                                      |
+| `loadingLabel` | `string`                                            | `"Loading..."` | Accessible label when loading.                                          |
+| `form`         | `string`                                            | —              | Form id to associate with (optional).                                   |
+| `className`    | `string`                                            | `""`           | Additional CSS classes.                                                 |
+| `onClick`      | `(e) => void`                                       | —              | Click handler (not called when disabled or loading).                    |
 
 ---
 
 ## States
 
-| State | Condition | Behavior |
-|-------|-----------|----------|
-| **idle** | `!isLoading && !disabled` | Clickable, shows `children`. |
-| **loading** | `isLoading` | Disabled, shows spinner + `loadingLabel`, `aria-busy="true"`. |
-| **disabled** | `disabled` | Disabled, shows `children`. |
+| State        | Condition                 | Behavior                                                      |
+| ------------ | ------------------------- | ------------------------------------------------------------- |
+| **idle**     | `!isLoading && !disabled` | Clickable, shows `children`.                                  |
+| **loading**  | `isLoading`               | Disabled, shows spinner + `loadingLabel`, `aria-busy="true"`. |
+| **disabled** | `disabled`                | Disabled, shows `children`.                                   |
 
 ---
 
 ## Usage
+
 A transition map enforces allowed movement between states when `strictTransitions` is enabled.
 
 ## Security Assumptions
@@ -197,13 +200,14 @@ import ReactSubmitButton from "../components/react_submit_button";
 
 - The component exports pure helper functions (`resolveSubmitButtonLabel`, `isSubmitButtonDisabled`, `isSubmitButtonBusy`) to keep tests deterministic and lightweight.
 - Styling is state-mapped via a single lookup table to make future variants easy to add and review.
-// Basic
-<ReactSubmitButton>Submit</ReactSubmitButton>
+  // Basic
+  <ReactSubmitButton>Submit</ReactSubmitButton>
 
 // Loading state
 <ReactSubmitButton isLoading>Submit</ReactSubmitButton>
 
 // With form
+
 <form id="campaign-form">
   {/* fields */}
 </form>
@@ -213,7 +217,8 @@ import ReactSubmitButton from "../components/react_submit_button";
 <ReactSubmitButton variant="secondary">Cancel</ReactSubmitButton>
 <ReactSubmitButton variant="danger">Delete</ReactSubmitButton>
 <ReactSubmitButton variant="outline" fullWidth>Submit</ReactSubmitButton>
-```
+
+````
 
 ---
 
@@ -231,7 +236,7 @@ Run tests:
 
 ```bash
 npm test -- react_submit_button
-```
+````
 
 With coverage:
 
@@ -266,6 +271,7 @@ Tests:       30 passed, 30 total
 - Forms.css: `frontend/components/forms/Forms.css`
 - Component: `frontend/components/react_submit_button.tsx`
 - Tests: `frontend/components/react_submit_button.test.tsx`
+
 ## Test Coverage
 
 `react_submit_button.test.tsx` verifies:
@@ -293,6 +299,7 @@ Snapshots:   0 total
 - Hostile strings are intentionally preserved as plain text labels to rely on React escaping semantics.
 - The component does not expose raw HTML rendering APIs.
 - If future requirements need rich text labels, add explicit sanitization before rendering.
+
 ## Testing coverage
 
 `react_submit_button.test.tsx` validates:

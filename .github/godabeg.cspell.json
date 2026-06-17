@@ -1,11 +1,6 @@
 {
   "version": "0.2",
   "language": "en",
-  "words": [
-    "cspell",
-    "streetside"
-  ],
-  "ignorePaths": [
-    "node_modules/**"
-  ]
+  "words": ["cspell", "streetside"],
+  "ignorePaths": ["node_modules/**"]
 }
