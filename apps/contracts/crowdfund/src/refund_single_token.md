@@ -57,11 +57,7 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
    as the sender and the contributor as the recipient. This prevents parameter-order
    typos and ensures the direction cannot be reversed by a caller.
 
-3. **Direction Lock** — The token transfer explicitly uses the contract's address
-   as the sender and the contributor as the recipient. This prevents parameter-order
-   typos and ensures the direction cannot be reversed by a caller.
-
-4. **Checks-Effects-Interactions** — The contribution record is zeroed in
+3. **Checks-Effects-Interactions** — The contribution record is zeroed in
    storage _before_ the token transfer is executed. This prevents re-entrancy
    and double-claim attacks even if the token contract calls back into the
    crowdfund contract.
@@ -72,6 +68,21 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
 6. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
    rejected. A `Refunded` campaign (set by the deprecated batch path) is
    allowed so that any contributor not swept by the batch can still claim.
+
+## Security Invariants
+
+These invariants are enforced by `validate_refund_preconditions` and
+`execute_refund_single`, and are exercised directly by
+`refund_single_token_security_tests.rs`:
+
+| Invariant                                                                         | Enforcement                                                                                                                       | Test                                                     |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| A backer cannot refund twice                                                      | The contribution record is zeroed before transfer; a second call reads `0` and returns `NothingToRefund`                          | `test_double_refund_rejected`                            |
+| Refund is rejected while the campaign is `Active` and the deadline has not passed | `validate_refund_preconditions` returns `CampaignStillActive`                                                                     | `test_refund_rejected_while_active`                      |
+| Refund is rejected once the campaign is `Successful`                              | `validate_refund_preconditions` panics with `"campaign is not active"` — the creator withdraws instead                            | `test_refund_rejected_when_successful`                   |
+| A non-contributor cannot refund                                                   | Stored contribution defaults to `0`, returning `NothingToRefund`                                                                  | `test_refund_rejected_for_non_contributor`               |
+| The refund amount cannot be forged                                                | `execute_refund_single` reads the amount to refund from storage itself; it no longer accepts a caller-supplied `amount` parameter | `test_execute_refund_single_derives_amount_from_storage` |
+| No dust is left behind once every backer has claimed                              | After all contributors call `refund_single`, the contract's token balance and `total_raised` both reach exactly `0`               | `test_all_backers_refunded_leaves_zero_contract_balance` |
 
 ## Events
 
