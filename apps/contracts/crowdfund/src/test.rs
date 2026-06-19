@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{CrowdfundContract, CrowdfundContractClient};
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient, Status};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -234,4 +234,279 @@ fn test_empty_registry() {
     // Verify empty state - these should be default values before initialization
     assert_eq!(client.total_raised(), 0);
     assert_eq!(client.contributors().len(), 0);
+}
+
+#[test]
+fn test_lifecycle_successful_campaign_withdraw() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    assert_eq!(client.total_raised(), goal);
+    assert_eq!(client.contributors().len(), 1);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.withdraw();
+
+    assert_eq!(client.total_raised(), 0);
+}
+
+/// Underfunded path: Contributions below goal → deadline passes → Refund available
+#[test]
+fn test_lifecycle_underfunded_refunds() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+    let contrib_amount = 100_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &contrib_amount);
+    client.contribute(&contributor, &contrib_amount);
+
+    assert_eq!(client.total_raised(), contrib_amount);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.refund_single(&contributor);
+
+    assert_eq!(client.contribution(&contributor), 0);
+}
+
+/// Multiple backers: Each tracked independently and refunded correctly
+#[test]
+fn test_lifecycle_multiple_backers_refund() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contrib1 = Address::generate(&env);
+    let contrib2 = Address::generate(&env);
+    let contrib3 = Address::generate(&env);
+
+    let amt1 = 50_000;
+    let amt2 = 75_000;
+    let amt3 = 40_000;
+
+    token_client.mint(&contrib1, &amt1);
+    token_client.mint(&contrib2, &amt2);
+    token_client.mint(&contrib3, &amt3);
+
+    client.contribute(&contrib1, &amt1);
+    client.contribute(&contrib2, &amt2);
+    client.contribute(&contrib3, &amt3);
+
+    let total = amt1 + amt2 + amt3;
+    assert_eq!(client.total_raised(), total);
+    assert_eq!(client.contributors().len(), 3);
+
+    assert_eq!(client.contribution(&contrib1), amt1);
+    assert_eq!(client.contribution(&contrib2), amt2);
+    assert_eq!(client.contribution(&contrib3), amt3);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.refund_single(&contrib1);
+    client.refund_single(&contrib2);
+    client.refund_single(&contrib3);
+
+    assert_eq!(client.contribution(&contrib1), 0);
+    assert_eq!(client.contribution(&contrib2), 0);
+    assert_eq!(client.contribution(&contrib3), 0);
+}
+
+/// Contribution after deadline is rejected
+#[test]
+fn test_contribution_after_deadline_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &100_000);
+
+    let result = client.try_contribute(&contributor, &10_000);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignEnded
+    );
+}
+
+/// Contribution below min_contribution is rejected
+#[test]
+fn test_contribution_below_minimum_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let min_contrib = 5_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &min_contrib,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &100_000);
+
+    let result = client.try_contribute(&contributor, &(min_contrib - 1));
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::BelowMinimum
+    );
+}
+
+/// Zero-amount contribution is rejected
+#[test]
+fn test_contribution_zero_amount_rejected() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+
+    let result = client.try_contribute(&contributor, &0);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::ZeroAmount
+    );
+}
+
+/// Status transitions: Active → Successful after goal met and funds withdrawn
+#[test]
+fn test_status_transition_to_successful() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 500_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.withdraw();
+
+    let result = client.try_contribute(&contributor, &1_000);
+    assert!(result.is_err());
+}
+
+/// Multiple accumulated contributions: Same backer contributes multiple times
+#[test]
+fn test_multiple_contributions_same_backer() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &500_000);
+
+    client.contribute(&contributor, &100_000);
+    assert_eq!(client.contribution(&contributor), 100_000);
+    assert_eq!(client.total_raised(), 100_000);
+    assert_eq!(client.contributors().len(), 1);
+
+    client.contribute(&contributor, &200_000);
+    assert_eq!(client.contribution(&contributor), 300_000);
+    assert_eq!(client.total_raised(), 300_000);
+    assert_eq!(client.contributors().len(), 1);
+
+    client.contribute(&contributor, &150_000);
+    assert_eq!(client.contribution(&contributor), 450_000);
+    assert_eq!(client.total_raised(), 450_000);
 }
