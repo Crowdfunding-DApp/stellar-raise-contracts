@@ -110,6 +110,31 @@
   flex-shrink: 0;
 }
 
+.form__status {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.form__status--loading {
+  color: var(--color-primary-blue);
+  background-color: rgba(0, 102, 255, 0.08);
+  border: 1px solid rgba(0, 102, 255, 0.32);
+}
+
+.form__status--success {
+  color: #0f7a3b;
+  background-color: rgba(18, 183, 106, 0.1);
+  border: 1px solid rgba(18, 183, 106, 0.36);
+}
+
+.form__status--error {
+  color: var(--color-error-red);
+  background-color: rgba(255, 59, 48, 0.08);
+  border: 1px solid rgba(255, 59, 48, 0.32);
+}
+
 /* Checkbox and Radio */
 .form__checkbox,
 .form__radio {

@@ -1,100 +1,196 @@
-//! Additional security tests for refund_single_transfer bounds/logging improvements.
-///
-/// Run with:
-///   cargo test -p crowdfund refund_single -- --nocapture
+//! Security regression tests for the `refund_single` pull-based refund path.
+//!
+//! These tests exercise the highest-risk fund-movement code in the
+//! contract: double-refund prevention, campaign-status guards, and the
+//! end-state invariant that the contract holds zero tokens once every
+//! backer has claimed their refund.
+//!
+//! Run with:
+//!   cargo test -p crowdfund refund_single_token_security -- --nocapture
 
-use super::*;
-use crate::refund_single_token::refund_single_transfer;
-use soroban_sdk::{Symbol, testutils::Events};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Env,
+};
 
-#[test]
-fn test_refund_single_transfer_skips_zero_amount_no_transfer() {
+extern crate std;
+use std::panic;
+
+use crate::refund_single_token::execute_refund_single;
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
+
+// === Helpers
+
+fn setup() -> (
+    Env,
+    CrowdfundContractClient<'static>,
+    Address,
+    Address,
+    token::StellarAssetClient<'static>,
+) {
     let env = Env::default();
     env.mock_all_auths();
 
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_address = token_id.address();
-    let token_client = token::Client::new(&env, &token_address);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+    let token_client = token::StellarAssetClient::new(&env, &token_address);
 
-    let contract_address = Address::generate(&env);
-    let contributor = Address::generate(&env);
-
-    // amount = 0 should skip transfer (no token client call, no event)
-    let events_before = env.events().all();
-    refund_single_transfer(&token_client, &contract_address, &contributor, 0);
-    let events_after = env.events().all();
-
-    // No debug event emitted for zero amount
-    assert_eq!(events_before, events_after);
-    // No balance change
-    assert_eq!(token_client.balance(&contributor), 0);
+    (env, client, creator, token_address, token_client)
 }
 
-#[test]
-fn test_refund_single_transfer_skips_negative_amount_no_transfer() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_address = token_id.address();
-    let token_client = token::Client::new(&env, &token_address);
-
-    let contract_address = Address::generate(&env);
-    let contributor = Address::generate(&env);
-
-    // amount < 0 should skip
-    let events_before = env.events().all();
-    refund_single_transfer(&token_client, &contract_address, &contributor, -1);
-    let events_after = env.events().all();
-
-    assert_eq!(events_before, events_after);
+fn init_campaign(
+    client: &CrowdfundContractClient,
+    creator: &Address,
+    token: &Address,
+    goal: i128,
+    deadline: u64,
+) {
+    client.initialize(
+        creator, creator, token, &goal, &deadline, &1_000, &None, &None, &None,
+    );
 }
 
-#[test]
-fn test_refund_single_transfer_emits_debug_event_positive_amount() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_address = token_id.address();
-    let token_client = token::Client::new(&env, &token_address);
-
-    token_admin.clone().mint(&contract_address, &1000);  // Mint to contract first
-
-    let contract_address = Address::generate(&env);
-    let contributor = Address::generate(&env);
-    let amount = 500i128;
-
-    refund_single_transfer(&token_client, &contract_address, &contributor, amount);
-
-    let events = env.events().all();
-    let debug_event = events.last().unwrap();
-    assert_eq!(debug_event.0, (Symbol::short("debug"), Symbol::short("refund_transfer_attempt")));
-    assert_eq!(debug_event.1, (contributor, amount));
-}
+// === Double refund
 
 #[test]
-fn test_refund_single_end_to_end_zero_skip_gas_optimization() {
-    let (env, client, creator, token_address, admin) = setup();
-    let deadline = env.ledger().timestamp() + 3600;
-    init_campaign(&client, &admin, &creator, &token_address, 1_000_000, deadline);
+fn test_double_refund_rejected() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    init_campaign(&client, &creator, &token, 1_000_000, deadline);
 
-    let contributor = Address::generate(&env);
-    // Intentionally NO mint/contribute - simulate zero balance case
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &500_000);
+    client.contribute(&alice, &500_000);
 
     env.ledger().set_timestamp(deadline + 1);
 
-    // Should succeed without transfer (uses helper now, which skips)
-    client.refund_single(&contributor);
+    client.refund_single(&alice);
+    let second = client.try_refund_single(&alice);
 
-    // No events emitted beyond normal (debug skipped for zero)
-    let campaign_events: Vec<_> = env.events()
-        .iter()
-        .filter(|e| e.0 == (("campaign", "refund_single"), (contributor.clone(), 0i128)))
-        .collect();
-    assert_eq!(campaign_events.len(), 1);
+    assert_eq!(second.unwrap_err().unwrap(), ContractError::NothingToRefund);
 }
 
+// === Status guards
+
+#[test]
+fn test_refund_rejected_while_active() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    init_campaign(&client, &creator, &token, 1_000_000, deadline);
+
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &500_000);
+    client.contribute(&alice, &500_000);
+
+    // Deadline has not passed - campaign is still Active.
+    let result = client.try_refund_single(&alice);
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignStillActive
+    );
+}
+
+#[test]
+fn test_refund_rejected_when_successful() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    let goal = 1_000_000;
+    init_campaign(&client, &creator, &token, goal, deadline);
+
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &goal);
+    client.contribute(&alice, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    client.withdraw(); // Active -> Successful
+
+    let alice_for_panic = alice.clone();
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        client.refund_single(&alice_for_panic);
+    }));
+
+    assert!(
+        result.is_err(),
+        "refund_single must panic once the campaign is Successful"
+    );
+}
+
+// === Non-contributor
+
+#[test]
+fn test_refund_rejected_for_non_contributor() {
+    let (env, client, creator, token, _token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    init_campaign(&client, &creator, &token, 1_000_000, deadline);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let stranger = Address::generate(&env);
+    let result = client.try_refund_single(&stranger);
+
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::NothingToRefund);
+}
+
+// === Defense in depth: execute_refund_single can no longer be handed a forged amount
+
+#[test]
+fn test_execute_refund_single_derives_amount_from_storage() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    init_campaign(&client, &creator, &token, 1_000_000, deadline);
+
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &250_000);
+    client.contribute(&alice, &250_000);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    // execute_refund_single no longer accepts a caller-supplied amount; it
+    // always refunds exactly what is on record for the contributor.
+    let refunded = env.as_contract(&client.address, || {
+        execute_refund_single(&env, &alice).unwrap()
+    });
+
+    assert_eq!(refunded, 250_000);
+
+    let token_client = token::Client::new(&env, &token);
+    assert_eq!(token_client.balance(&alice), 250_000);
+    assert_eq!(client.contribution(&alice), 0);
+}
+
+// === Zero dust after all backers refund
+
+#[test]
+fn test_all_backers_refunded_leaves_zero_contract_balance() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    init_campaign(&client, &creator, &token, 1_000_000, deadline);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let carol = Address::generate(&env);
+
+    token_admin_client.mint(&alice, &200_000);
+    token_admin_client.mint(&bob, &150_000);
+    token_admin_client.mint(&carol, &75_000);
+
+    client.contribute(&alice, &200_000);
+    client.contribute(&bob, &150_000);
+    client.contribute(&carol, &75_000);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    client.refund_single(&alice);
+    client.refund_single(&bob);
+    client.refund_single(&carol);
+
+    let token_client = token::Client::new(&env, &token);
+    assert_eq!(token_client.balance(&client.address), 0);
+    assert_eq!(client.total_raised(), 0);
+}

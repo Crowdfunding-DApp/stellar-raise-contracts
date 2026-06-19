@@ -112,16 +112,20 @@ pub fn validate_refund_preconditions(
 /// `validate_refund_preconditions` (or be certain preconditions hold).
 ///
 /// @notice Storage is zeroed **before** the token transfer (CEI).
+/// @notice The refund amount is derived from storage internally rather than
+///         accepted as a caller-supplied parameter, so a caller cannot force
+///         an over- or under-refund by passing a mismatched amount.
 /// @param env Soroban environment.
 /// @param contributor The address to refund.
-/// @param amount The amount returned by `validate_refund_preconditions`.
-/// @return `Ok(())` on success, `Err(ContractError::Overflow)` on underflow.
-pub fn execute_refund_single(
-    env: &Env,
-    contributor: &Address,
-    amount: i128,
-) -> Result<(), ContractError> {
+/// @return `Ok(amount)` with the amount refunded on success,
+///         `Err(ContractError::Overflow)` on underflow.
+pub fn execute_refund_single(env: &Env, contributor: &Address) -> Result<i128, ContractError> {
     let contribution_key = DataKey::Contribution(contributor.clone());
+    let amount: i128 = env
+        .storage()
+        .persistent()
+        .get(&contribution_key)
+        .unwrap_or(0);
 
     // ── Effects (zero storage before transfer) ────────────────────────────
     env.storage().persistent().set(&contribution_key, &0i128);
@@ -151,5 +155,5 @@ pub fn execute_refund_single(
 
     emit_refunded(env, contributor, amount);
 
-    Ok(())
+    Ok(amount)
 }

@@ -33,7 +33,7 @@ use refund_single_token::{
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]
-mod crowdfund_initialize_function_test;
+mod refund_single_token_security_tests;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -657,8 +657,9 @@ impl CrowdfundContract {
     /// * Uses `checked_sub` to prevent underflow on `total_raised`.
     pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
         contributor.require_auth();
-        let amount = validate_refund_preconditions(&env, &contributor)?;
-        execute_refund_single(&env, &contributor, amount)
+        validate_refund_preconditions(&env, &contributor)?;
+        execute_refund_single(&env, &contributor)?;
+        Ok(())
     }
 
     /// Cancel the campaign and refund all contributors — callable only by
