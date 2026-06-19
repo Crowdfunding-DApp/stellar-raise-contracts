@@ -28,7 +28,7 @@
 
 use soroban_sdk::{token, Address, Env};
 
-use crate::{ContractError, DataKey, Status};
+use crate::{withdraw_event_emission::emit_refunded, ContractError, DataKey, Status};
 
 // ── Transfer primitive ────────────────────────────────────────────────────────
 
@@ -149,8 +149,7 @@ pub fn execute_refund_single(
         amount,
     );
 
-    env.events()
-        .publish(("campaign", "refund_single"), (contributor.clone(), amount));
+    emit_refunded(env, contributor, amount);
 
     Ok(())
 }
