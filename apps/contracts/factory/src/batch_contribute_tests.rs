@@ -99,6 +99,23 @@ fn batch_multiple_campaigns_all_funded() {
 }
 
 #[test]
+fn batch_routes_repeated_entries_to_their_target_campaigns() {
+    let (env, contributor) = setup();
+    let c1 = register_campaign(&env);
+    let c2 = register_campaign(&env);
+
+    let mut entries = Vec::new(&env);
+    entries.push_back(entry(c1.clone(), 250));
+    entries.push_back(entry(c2.clone(), 750));
+    entries.push_back(entry(c1.clone(), 1_250));
+
+    batch_contribute(&env, &contributor, entries);
+
+    assert_eq!(MockCampaignClient::new(&env, &c1).total(), 1_500);
+    assert_eq!(MockCampaignClient::new(&env, &c2).total(), 750);
+}
+
+#[test]
 fn batch_at_max_size_succeeds() {
     let (env, contributor) = setup();
     let mut entries = Vec::new(&env);
