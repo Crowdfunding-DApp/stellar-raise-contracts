@@ -84,7 +84,7 @@ jobs:
         # feature itself is unused. Round-tripping through wasm-opt re-emits
         # the binary with canonical (minimal) LEB128 encoding.
         run: |
-          wasm-opt -O0 \
+          wasm-opt -O0 --enable-sign-ext \
             target/wasm32-unknown-unknown/release/crowdfund.wasm \
             -o target/wasm32-unknown-unknown/release/crowdfund.wasm
 
