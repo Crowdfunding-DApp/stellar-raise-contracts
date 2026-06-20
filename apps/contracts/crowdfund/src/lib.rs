@@ -4,8 +4,12 @@
 #![allow(deprecated)]
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, token, Address, Env, IntoVal, String,
-    Symbol, Vec,
+    contract, contractclient, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
+};
+
+use withdraw_event_emission::{
+    emit_cancelled, emit_contributed, emit_fee_transferred, emit_goal_reached, emit_refunded,
+    emit_withdrawn, mint_nfts_in_batch,
 };
 
 // --- Modules ---
@@ -18,6 +22,7 @@ pub mod crowdfund_initialize_function;
 pub mod proptest_generator_boundary;
 pub mod refund_single_token;
 pub mod soroban_sdk_minor;
+pub mod withdraw_event_emission;
 
 // --- Imports from Modules ---
 use refund_single_token::{
@@ -31,6 +36,8 @@ mod auth_tests;
 mod refund_single_token_security_tests;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod withdraw_event_emission_test;
 // #[cfg(test)]
 // mod cargo_toml_rust_test;
 // #[cfg(test)]
@@ -111,6 +118,7 @@ pub enum DataKey {
     BonusGoal,
     BonusGoalDescription,
     BonusGoalReachedEmitted,
+    GoalReachedEmitted,
     Pledgers,
     Roadmap,
     Admin,
@@ -291,6 +299,20 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::TotalRaised, &new_total);
 
+        // Emit goal_reached exactly once when the primary goal is first met.
+        let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
+        let goal_already_emitted = env
+            .storage()
+            .instance()
+            .get::<_, bool>(&DataKey::GoalReachedEmitted)
+            .unwrap_or(false);
+        if !goal_already_emitted && total < goal && new_total >= goal {
+            emit_goal_reached(&env, new_total, goal);
+            env.storage()
+                .instance()
+                .set(&DataKey::GoalReachedEmitted, &true);
+        }
+
         if let Some(bg) = env.storage().instance().get::<_, i128>(&DataKey::BonusGoal) {
             let already_emitted = env
                 .storage()
@@ -298,7 +320,7 @@ impl CrowdfundContract {
                 .get::<_, bool>(&DataKey::BonusGoalReachedEmitted)
                 .unwrap_or(false);
             if !already_emitted && total < bg && new_total >= bg {
-                env.events().publish(("campaign", "bonus_goal_reached"), bg);
+                env.events().publish(("crowdfund", "bonus_goal_reached"), bg);
                 env.storage()
                     .instance()
                     .set(&DataKey::BonusGoalReachedEmitted, &true);
@@ -323,9 +345,7 @@ impl CrowdfundContract {
                 .extend_ttl(&DataKey::Contributors, 100, 100);
         }
 
-        // Emit contribution event
-        env.events()
-            .publish(("campaign", "contributed"), (contributor, amount));
+        emit_contributed(&env, &contributor, amount, new_total);
 
         Ok(())
     }
@@ -411,9 +431,8 @@ impl CrowdfundContract {
                 .extend_ttl(&DataKey::Pledgers, 100, 100);
         }
 
-        // Emit pledge event
         env.events()
-            .publish(("campaign", "pledged"), (pledger, amount));
+            .publish(("crowdfund", "pledged"), (pledger, amount));
 
         Ok(())
     }
@@ -478,9 +497,8 @@ impl CrowdfundContract {
         // Reset total pledged
         env.storage().instance().set(&DataKey::TotalPledged, &0i128);
 
-        // Emit pledges collected event
         env.events()
-            .publish(("campaign", "pledges_collected"), total_pledged);
+            .publish(("crowdfund", "pledges_collected"), total_pledged);
 
         Ok(())
     }
@@ -516,7 +534,7 @@ impl CrowdfundContract {
         let platform_config: Option<PlatformConfig> =
             env.storage().instance().get(&DataKey::PlatformConfig);
 
-        let creator_payout = if let Some(config) = platform_config {
+        let (creator_payout, platform_fee) = if let Some(config) = platform_config {
             let fee = total
                 .checked_mul(config.fee_bps as i128)
                 .expect("fee calculation overflow")
@@ -524,11 +542,13 @@ impl CrowdfundContract {
                 .expect("fee division by zero");
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
-            env.events()
-                .publish(("campaign", "fee_transferred"), (&config.address, fee));
-            total.checked_sub(fee).expect("creator payout underflow")
+            emit_fee_transferred(&env, &config.address, fee);
+            (
+                total.checked_sub(fee).expect("creator payout underflow"),
+                fee,
+            )
         } else {
-            total
+            (total, 0)
         };
 
         token_client.transfer(&env.current_contract_address(), &creator, &creator_payout);
@@ -538,57 +558,11 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::Status, &Status::Successful);
 
-        // Bounded NFT minting: process at most MAX_NFT_MINT_BATCH contributors
-        // per withdraw() call to cap event emission and gas consumption.
-        let nft_minted_count: u32 = if let Some(nft_contract) = env
-            .storage()
-            .instance()
-            .get::<_, Address>(&DataKey::NFTContract)
-        {
-            let contributors: Vec<Address> = env
-                .storage()
-                .persistent()
-                .get(&DataKey::Contributors)
-                .unwrap_or_else(|| Vec::new(&env));
-            let mut token_id: u64 = 1;
-            let mut minted: u32 = 0;
-            for contributor in contributors.iter() {
-                if minted >= MAX_NFT_MINT_BATCH {
-                    break;
-                }
-                let contribution: i128 = env
-                    .storage()
-                    .persistent()
-                    .get(&DataKey::Contribution(contributor.clone()))
-                    .unwrap_or(0);
-                if contribution > 0 {
-                    env.invoke_contract::<()>(
-                        &nft_contract,
-                        &Symbol::new(&env, "mint"),
-                        Vec::from_array(
-                            &env,
-                            [contributor.into_val(&env), token_id.into_val(&env)],
-                        ),
-                    );
-                    token_id += 1;
-                    minted += 1;
-                }
-            }
-            // Single summary event instead of one event per contributor.
-            if minted > 0 {
-                env.events()
-                    .publish(("campaign", "nft_batch_minted"), minted);
-            }
-            minted
-        } else {
-            0
-        };
+        let nft_contract: Option<Address> =
+            env.storage().instance().get(&DataKey::NFTContract);
+        mint_nfts_in_batch(&env, &nft_contract);
 
-        // Single withdrawal event carrying payout, fee info, and mint count.
-        env.events().publish(
-            ("campaign", "withdrawn"),
-            (creator.clone(), creator_payout, nft_minted_count),
-        );
+        emit_withdrawn(&env, &creator, creator_payout, platform_fee);
 
         Ok(())
     }
@@ -652,6 +626,7 @@ impl CrowdfundContract {
                 env.storage()
                     .persistent()
                     .extend_ttl(&contribution_key, 100, 100);
+                emit_refunded(&env, &contributor, amount);
             }
         }
 
@@ -722,6 +697,7 @@ impl CrowdfundContract {
                     &contributor,
                     amount,
                 );
+                emit_refunded(&env, &contributor, amount);
             }
         }
 
@@ -729,6 +705,7 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::Status, &Status::Cancelled);
+        emit_cancelled(&env);
     }
 
     /// Upgrade the contract to a new WASM implementation — admin-only.
@@ -746,10 +723,8 @@ impl CrowdfundContract {
         let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
         admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
 
-        env.events().publish(
-            (soroban_sdk::Symbol::new(&env, "upgrade"), admin),
-            new_wasm_hash,
-        );
+        env.events()
+            .publish(("crowdfund", "upgrade"), (admin, new_wasm_hash));
     }
 
     /// Update campaign metadata — only callable by the creator while the
@@ -845,11 +820,8 @@ impl CrowdfundContract {
             updated_fields.push_back(Symbol::new(&env, "socials"));
         }
 
-        // Emit event with updated fields.
-        env.events().publish(
-            (Symbol::new(&env, "metadata_updated"), creator.clone()),
-            updated_fields,
-        );
+        env.events()
+            .publish(("crowdfund", "metadata_updated"), (creator.clone(), updated_fields));
     }
 
     pub fn add_roadmap_item(env: Env, date: u64, description: String) {
@@ -889,7 +861,7 @@ impl CrowdfundContract {
 
         env.storage().instance().set(&DataKey::Roadmap, &roadmap);
         env.events()
-            .publish(("campaign", "roadmap_item_added"), (date, description));
+            .publish(("crowdfund", "roadmap_item_added"), (date, description));
     }
 
     pub fn roadmap(env: Env) -> Vec<RoadmapItem> {
