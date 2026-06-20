@@ -46,13 +46,30 @@ impl MockCampaign {
     }
 }
 
+// ── Harness ──────────────────────────────────────────────────────────────────
+// `batch_contribute` calls `env.invoke_contract`, which requires a currently
+// executing contract. Production code only ever calls it from within
+// `FactoryContract`, so the harness reproduces that calling context.
+
+#[contract]
+struct Harness;
+
+#[contractimpl]
+impl Harness {
+    pub fn run(env: Env, contributor: Address, entries: Vec<ContributeEntry>) {
+        batch_contribute(&env, &contributor, entries);
+    }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn setup() -> (Env, Address) {
+fn setup() -> (Env, HarnessClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    let harness_id = env.register(Harness, ());
+    let harness = HarnessClient::new(&env, &harness_id);
     let contributor = Address::generate(&env);
-    (env, contributor)
+    (env, harness, contributor)
 }
 
 fn register_campaign(env: &Env) -> Address {
@@ -67,13 +84,13 @@ fn entry(campaign: Address, amount: i128) -> ContributeEntry {
 
 #[test]
 fn batch_single_entry_succeeds() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let c1 = register_campaign(&env);
 
     let mut entries = Vec::new(&env);
     entries.push_back(entry(c1.clone(), 1_000));
 
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 
     let client = MockCampaignClient::new(&env, &c1);
     assert_eq!(client.total(), 1_000);
@@ -81,7 +98,7 @@ fn batch_single_entry_succeeds() {
 
 #[test]
 fn batch_multiple_campaigns_all_funded() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let c1 = register_campaign(&env);
     let c2 = register_campaign(&env);
     let c3 = register_campaign(&env);
@@ -91,7 +108,7 @@ fn batch_multiple_campaigns_all_funded() {
     entries.push_back(entry(c2.clone(), 1_500));
     entries.push_back(entry(c3.clone(), 2_000));
 
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 
     assert_eq!(MockCampaignClient::new(&env, &c1).total(), 500);
     assert_eq!(MockCampaignClient::new(&env, &c2).total(), 1_500);
@@ -100,7 +117,7 @@ fn batch_multiple_campaigns_all_funded() {
 
 #[test]
 fn batch_routes_repeated_entries_to_their_target_campaigns() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let c1 = register_campaign(&env);
     let c2 = register_campaign(&env);
 
@@ -109,7 +126,7 @@ fn batch_routes_repeated_entries_to_their_target_campaigns() {
     entries.push_back(entry(c2.clone(), 750));
     entries.push_back(entry(c1.clone(), 1_250));
 
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 
     assert_eq!(MockCampaignClient::new(&env, &c1).total(), 1_500);
     assert_eq!(MockCampaignClient::new(&env, &c2).total(), 750);
@@ -117,52 +134,52 @@ fn batch_routes_repeated_entries_to_their_target_campaigns() {
 
 #[test]
 fn batch_at_max_size_succeeds() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let mut entries = Vec::new(&env);
     for _ in 0..MAX_BATCH_SIZE {
         let c = register_campaign(&env);
         entries.push_back(entry(c, 100));
     }
     // Must not panic.
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 }
 
 #[test]
 #[should_panic(expected = "batch exceeds MAX_BATCH_SIZE")]
 fn batch_over_max_size_panics() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let mut entries = Vec::new(&env);
     for _ in 0..MAX_BATCH_SIZE + 1 {
         let c = register_campaign(&env);
         entries.push_back(entry(c, 100));
     }
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 }
 
 #[test]
 #[should_panic(expected = "batch is empty")]
 fn batch_empty_panics() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let entries: Vec<ContributeEntry> = Vec::new(&env);
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 }
 
 #[test]
 #[should_panic(expected = "batch entry amount must be positive")]
 fn batch_zero_amount_entry_panics() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let c1 = register_campaign(&env);
     let mut entries = Vec::new(&env);
     entries.push_back(entry(c1, 0));
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 }
 
 #[test]
 #[should_panic(expected = "batch entry amount must be positive")]
 fn batch_negative_amount_entry_panics() {
-    let (env, contributor) = setup();
+    let (env, harness, contributor) = setup();
     let c1 = register_campaign(&env);
     let mut entries = Vec::new(&env);
     entries.push_back(entry(c1, -500));
-    batch_contribute(&env, &contributor, entries);
+    harness.run(&contributor, &entries);
 }
