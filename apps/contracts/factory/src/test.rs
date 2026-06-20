@@ -61,8 +61,14 @@ fn test_create_single_campaign_registers_returned_address() {
     let goal = 1000i128;
     let deadline = 100u64;
 
-    let campaign_addr =
-        create_campaign(&factory, &creator, &token_address, &wasm_hash, goal, deadline);
+    let campaign_addr = create_campaign(
+        &factory,
+        &creator,
+        &token_address,
+        &wasm_hash,
+        goal,
+        deadline,
+    );
 
     assert_ne!(campaign_addr, factory_id);
     assert_ne!(campaign_addr, token_address);
@@ -144,8 +150,14 @@ fn test_factory_deployed_campaign_is_callable() {
     let goal = 5000i128;
     let deadline = 600u64;
 
-    let campaign_addr =
-        create_campaign(&factory, &creator, &token_address, &wasm_hash, goal, deadline);
+    let campaign_addr = create_campaign(
+        &factory,
+        &creator,
+        &token_address,
+        &wasm_hash,
+        goal,
+        deadline,
+    );
     let campaign = crowdfund_wasm::Client::new(&env, &campaign_addr);
 
     assert_eq!(campaign.goal(), goal);
@@ -158,13 +170,8 @@ fn test_create_campaign_rejects_missing_creator_auth() {
     let factory = FactoryContractClient::new(&env, &factory_id);
     let creator = Address::generate(&env);
 
-    let result = factory.try_create_campaign(
-        &creator,
-        &token_address,
-        &1000i128,
-        &100u64,
-        &wasm_hash,
-    );
+    let result =
+        factory.try_create_campaign(&creator, &token_address, &1000i128, &100u64, &wasm_hash);
 
     assert!(result.is_err());
     assert_eq!(factory.campaign_count(), 0);
@@ -208,17 +215,11 @@ fn test_duplicate_creator_salt_collision_is_rejected_without_registry_mutation()
     let factory = FactoryContractClient::new(&env, &factory_id);
     let creator = Address::generate(&env);
 
-    let first_campaign =
-        create_campaign(&factory, &creator, &token_address, &wasm_hash, 1000, 100);
+    let first_campaign = create_campaign(&factory, &creator, &token_address, &wasm_hash, 1000, 100);
     assert_eq!(factory.campaign_count(), 1);
 
-    let result = factory.try_create_campaign(
-        &creator,
-        &token_address,
-        &2000i128,
-        &200u64,
-        &wasm_hash,
-    );
+    let result =
+        factory.try_create_campaign(&creator, &token_address, &2000i128, &200u64, &wasm_hash);
 
     assert!(result.is_err());
     let campaigns = factory.campaigns();

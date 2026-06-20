@@ -7,8 +7,10 @@ use crate::{DataKey, NftContractClient, MAX_NFT_MINT_BATCH};
 // ── contributed ───────────────────────────────────────────────────────────────
 
 pub fn emit_contributed(env: &Env, backer: &Address, amount: i128, total_raised: i128) {
-    env.events()
-        .publish(("crowdfund", "contributed"), (backer.clone(), amount, total_raised));
+    env.events().publish(
+        ("crowdfund", "contributed"),
+        (backer.clone(), amount, total_raised),
+    );
 }
 
 // ── goal_reached ──────────────────────────────────────────────────────────────
@@ -22,8 +24,10 @@ pub fn emit_goal_reached(env: &Env, total_raised: i128, goal: i128) {
 
 pub fn emit_withdrawn(env: &Env, creator: &Address, amount: i128, platform_fee: i128) {
     assert!(amount > 0, "withdrawn: amount must be positive");
-    env.events()
-        .publish(("crowdfund", "withdrawn"), (creator.clone(), amount, platform_fee));
+    env.events().publish(
+        ("crowdfund", "withdrawn"),
+        (creator.clone(), amount, platform_fee),
+    );
 }
 
 // ── refunded ─────────────────────────────────────────────────────────────────

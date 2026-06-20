@@ -105,6 +105,7 @@ pub fn batch_contribute(env: &Env, contributor: &Address, entries: Vec<Contribut
     }
 
     // Emit a single summary event — cheaper than one event per campaign.
+    #[allow(deprecated)]
     env.events().publish(
         (Symbol::new(env, "batch"), Symbol::new(env, "contributed")),
         (contributor.clone(), len),

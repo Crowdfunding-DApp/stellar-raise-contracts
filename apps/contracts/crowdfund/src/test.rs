@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{ContractError, CrowdfundContract, CrowdfundContractClient, Status};
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -380,10 +380,7 @@ fn test_contribution_after_deadline_rejected() {
 
     let result = client.try_contribute(&contributor, &10_000);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::CampaignEnded
-    );
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::CampaignEnded);
 }
 
 /// Contribution below min_contribution is rejected
@@ -410,10 +407,7 @@ fn test_contribution_below_minimum_rejected() {
 
     let result = client.try_contribute(&contributor, &(min_contrib - 1));
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::BelowMinimum
-    );
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::BelowMinimum);
 }
 
 /// Zero-amount contribution is rejected
@@ -438,10 +432,7 @@ fn test_contribution_zero_amount_rejected() {
 
     let result = client.try_contribute(&contributor, &0);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::ZeroAmount
-    );
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::ZeroAmount);
 }
 
 /// Status transitions: Active → Successful after goal met and funds withdrawn

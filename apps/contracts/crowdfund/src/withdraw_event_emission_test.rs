@@ -140,15 +140,17 @@ fn setup_no_nft(
 }
 
 fn topics_match(e: &soroban_sdk::xdr::ContractEvent, ns: &str, action: &str) -> bool {
-    let ContractEventBody::V0(body) = &e.body else { return false; };
-    if body.topics.len() < 2 { return false; }
+    let ContractEventBody::V0(body) = &e.body;
+    if body.topics.len() < 2 {
+        return false;
+    }
     let ns_str = ScVal::String(ScString(ns.try_into().unwrap()));
     let act_str = ScVal::String(ScString(action.try_into().unwrap()));
     body.topics[0] == ns_str && body.topics[1] == act_str
 }
 
 fn event_data_as_val(env: &Env, e: &soroban_sdk::xdr::ContractEvent) -> Val {
-    let ContractEventBody::V0(body) = &e.body else { unreachable!() };
+    let ContractEventBody::V0(body) = &e.body;
     Val::try_from_val(env, &body.data).unwrap()
 }
 
@@ -195,7 +197,15 @@ fn contributed_event_is_emitted_on_contribution() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let backer = Address::generate(&env);
@@ -215,7 +225,15 @@ fn contributed_event_data_has_backer_amount_total_raised() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let backer = Address::generate(&env);
@@ -240,7 +258,15 @@ fn contributed_event_total_raised_accumulates() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let b1 = Address::generate(&env);
@@ -276,7 +302,15 @@ fn goal_reached_event_emitted_exactly_once_when_goal_met() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &500, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &500,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let b1 = Address::generate(&env);
@@ -294,8 +328,7 @@ fn goal_reached_event_emitted_exactly_once_when_goal_met() {
 
     // Verify data: total_raised and goal
     let data = first_event_data(&env, "goal_reached").expect("goal_reached not found");
-    let (total_raised, goal): (i128, i128) =
-        TryFromVal::try_from_val(&env, &data).expect("decode");
+    let (total_raised, goal): (i128, i128) = TryFromVal::try_from_val(&env, &data).expect("decode");
     assert_eq!(total_raised, 500);
     assert_eq!(goal, 500);
 }
@@ -310,7 +343,15 @@ fn goal_reached_not_emitted_when_goal_not_met() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let backer = Address::generate(&env);
@@ -330,7 +371,15 @@ fn goal_reached_not_emitted_twice_when_exceeded() {
     let creator = Address::generate(&env);
     let deadline = env.ledger().timestamp() + 3_600;
     client.initialize(
-        &admin, &creator, &token_addr, &100, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &100,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     // Events are scoped to the last invocation: check per-call.
@@ -455,8 +504,7 @@ fn fee_transferred_event_emitted_when_platform_configured() {
     assert_eq!(count_events(&env, "fee_transferred"), 1);
 
     let data = first_event_data(&env, "fee_transferred").expect("fee_transferred not found");
-    let (_, got_fee): (Address, i128) =
-        TryFromVal::try_from_val(&env, &data).expect("decode");
+    let (_, got_fee): (Address, i128) = TryFromVal::try_from_val(&env, &data).expect("decode");
     // 2% of 1_000_000 = 20_000
     assert_eq!(got_fee, 20_000);
 }
@@ -535,7 +583,15 @@ fn refunded_event_emitted_by_refund_single() {
     let deadline = env.ledger().timestamp() + 3_600;
 
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let backer = Address::generate(&env);
@@ -567,7 +623,15 @@ fn refunded_event_emitted_per_backer_in_batch_refund() {
 
     // goal = 1000, total contributions = 600 (goal not met)
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let mut backers: std::vec::Vec<Address> = std::vec::Vec::new();
@@ -598,7 +662,15 @@ fn cancelled_event_emitted_on_cancel() {
     let deadline = env.ledger().timestamp() + 3_600;
 
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     let b = Address::generate(&env);
@@ -621,7 +693,15 @@ fn cancel_emits_refunded_for_each_contributor() {
     let deadline = env.ledger().timestamp() + 3_600;
 
     client.initialize(
-        &admin, &creator, &token_addr, &1_000, &deadline, &1_i128, &None, &None, &None,
+        &admin,
+        &creator,
+        &token_addr,
+        &1_000,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
     );
 
     for _ in 0..3 {
