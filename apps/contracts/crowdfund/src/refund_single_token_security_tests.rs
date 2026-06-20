@@ -14,7 +14,6 @@ use soroban_sdk::{
 };
 
 extern crate std;
-use std::panic;
 
 use crate::refund_single_token::execute_refund_single;
 use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
@@ -110,14 +109,12 @@ fn test_refund_rejected_when_successful() {
     env.ledger().set_timestamp(deadline + 1);
     client.withdraw(); // Active -> Successful
 
-    let alice_for_panic = alice.clone();
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        client.refund_single(&alice_for_panic);
-    }));
+    let result = client.try_refund_single(&alice);
 
-    assert!(
-        result.is_err(),
-        "refund_single must panic once the campaign is Successful"
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignNotActive,
+        "refund_single must return CampaignNotActive once the campaign is Successful"
     );
 }
 
