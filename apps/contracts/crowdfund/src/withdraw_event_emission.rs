@@ -2,7 +2,7 @@
 
 use soroban_sdk::{Address, Env, Vec};
 
-use crate::{DataKey, NftContractClient, MAX_NFT_MINT_BATCH};
+use crate::{ContractError, DataKey, NftContractClient, MAX_NFT_MINT_BATCH};
 
 // ── contributed ───────────────────────────────────────────────────────────────
 
@@ -23,7 +23,9 @@ pub fn emit_goal_reached(env: &Env, total_raised: i128, goal: i128) {
 // ── withdrawn ─────────────────────────────────────────────────────────────────
 
 pub fn emit_withdrawn(env: &Env, creator: &Address, amount: i128, platform_fee: i128) {
-    assert!(amount > 0, "withdrawn: amount must be positive");
+    if amount <= 0 {
+        env.panic_with_error(ContractError::InvalidParameter);
+    }
     env.events().publish(
         ("crowdfund", "withdrawn"),
         (creator.clone(), amount, platform_fee),
@@ -46,7 +48,9 @@ pub fn emit_cancelled(env: &Env) {
 // ── fee_transferred ──────────────────────────────────────────────────────────
 
 pub fn emit_fee_transferred(env: &Env, platform: &Address, fee: i128) {
-    assert!(fee > 0, "fee_transferred: fee must be positive");
+    if fee <= 0 {
+        env.panic_with_error(ContractError::InvalidParameter);
+    }
     env.events()
         .publish(("crowdfund", "fee_transferred"), (platform.clone(), fee));
 }
@@ -54,10 +58,9 @@ pub fn emit_fee_transferred(env: &Env, platform: &Address, fee: i128) {
 // ── nft_batch_minted ─────────────────────────────────────────────────────────
 
 pub fn emit_nft_batch_minted(env: &Env, minted_count: u32) {
-    assert!(
-        minted_count > 0,
-        "nft_batch_minted: minted_count must be positive"
-    );
+    if minted_count == 0 {
+        env.panic_with_error(ContractError::InvalidParameter);
+    }
     env.events()
         .publish(("crowdfund", "nft_batch_minted"), minted_count);
 }
@@ -108,14 +111,14 @@ mod unit_tests {
     use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
-    #[should_panic(expected = "fee_transferred: fee must be positive")]
+    #[should_panic]
     fn emit_fee_transferred_rejects_zero() {
         let env = Env::default();
         emit_fee_transferred(&env, &Address::generate(&env), 0);
     }
 
     #[test]
-    #[should_panic(expected = "fee_transferred: fee must be positive")]
+    #[should_panic]
     fn emit_fee_transferred_rejects_negative() {
         let env = Env::default();
         emit_fee_transferred(&env, &Address::generate(&env), -1);
@@ -128,7 +131,7 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "nft_batch_minted: minted_count must be positive")]
+    #[should_panic]
     fn emit_nft_batch_minted_rejects_zero() {
         let env = Env::default();
         emit_nft_batch_minted(&env, 0);
@@ -141,14 +144,14 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "withdrawn: amount must be positive")]
+    #[should_panic]
     fn emit_withdrawn_rejects_zero_payout() {
         let env = Env::default();
         emit_withdrawn(&env, &Address::generate(&env), 0, 0);
     }
 
     #[test]
-    #[should_panic(expected = "withdrawn: amount must be positive")]
+    #[should_panic]
     fn emit_withdrawn_rejects_negative_payout() {
         let env = Env::default();
         emit_withdrawn(&env, &Address::generate(&env), -100, 0);

@@ -74,7 +74,7 @@ pub fn validate_refund_preconditions(
 ) -> Result<i128, ContractError> {
     let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
     if status == Status::Successful || status == Status::Cancelled {
-        panic!("campaign is not active");
+        return Err(ContractError::CampaignNotActive);
     }
 
     let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();

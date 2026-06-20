@@ -730,14 +730,14 @@ fn double_withdraw_panics() {
 // ── Security unit tests for emit helpers ──────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "fee_transferred: fee must be positive")]
+#[should_panic]
 fn emit_fee_transferred_panics_on_zero_fee() {
     let env = Env::default();
     emit_fee_transferred(&env, &Address::generate(&env), 0);
 }
 
 #[test]
-#[should_panic(expected = "fee_transferred: fee must be positive")]
+#[should_panic]
 fn emit_fee_transferred_panics_on_negative_fee() {
     let env = Env::default();
     emit_fee_transferred(&env, &Address::generate(&env), -1);
@@ -750,7 +750,7 @@ fn emit_fee_transferred_accepts_positive_fee() {
 }
 
 #[test]
-#[should_panic(expected = "nft_batch_minted: minted_count must be positive")]
+#[should_panic]
 fn emit_nft_batch_minted_panics_on_zero() {
     let env = Env::default();
     emit_nft_batch_minted(&env, 0);
@@ -763,14 +763,14 @@ fn emit_nft_batch_minted_accepts_positive() {
 }
 
 #[test]
-#[should_panic(expected = "withdrawn: amount must be positive")]
+#[should_panic]
 fn emit_withdrawn_panics_on_zero_payout() {
     let env = Env::default();
     emit_withdrawn(&env, &Address::generate(&env), 0, 0);
 }
 
 #[test]
-#[should_panic(expected = "withdrawn: amount must be positive")]
+#[should_panic]
 fn emit_withdrawn_panics_on_negative_payout() {
     let env = Env::default();
     emit_withdrawn(&env, &Address::generate(&env), -100, 0);

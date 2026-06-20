@@ -159,6 +159,8 @@ pub enum ContractError {
     ZeroAmount = 14,
     BelowMinimum = 15,
     CampaignNotActive = 16,
+    Unauthorized = 17,
+    InvalidParameter = 18,
 }
 
 #[contractclient(name = "NftContractClient")]
@@ -262,7 +264,7 @@ impl CrowdfundContract {
         if is_new_contributor
             && !contract_state_size::validate_contributor_capacity(contributors.len())
         {
-            panic!("Too many contributors");
+            return Err(ContractError::InvalidParameter);
         }
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
@@ -336,7 +338,8 @@ impl CrowdfundContract {
 
         if !contributors.contains(&contributor) {
             // Enforce contributor list size limit before appending.
-            contract_state_size::check_contributor_limit(&env).expect("contributor limit exceeded");
+            contract_state_size::check_contributor_limit(&env)
+                .map_err(|_| ContractError::InvalidParameter)?;
             contributors.push_back(contributor.clone());
             env.storage()
                 .persistent()
@@ -354,15 +357,20 @@ impl CrowdfundContract {
     /// Sets the NFT contract address used for reward minting.
     ///
     /// Only the campaign creator can configure this value.
-    pub fn set_nft_contract(env: Env, creator: Address, nft_contract: Address) {
+    pub fn set_nft_contract(
+        env: Env,
+        creator: Address,
+        nft_contract: Address,
+    ) -> Result<(), ContractError> {
         let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         if creator != stored_creator {
-            panic!("not authorized");
+            return Err(ContractError::Unauthorized);
         }
         creator.require_auth();
         env.storage()
             .instance()
             .set(&DataKey::NFTContract, &nft_contract);
+        Ok(())
     }
 
     /// Pledge tokens to the campaign without transferring them immediately.
@@ -378,7 +386,7 @@ impl CrowdfundContract {
             .get(&DataKey::MinContribution)
             .unwrap();
         if amount < min_contribution {
-            panic!("amount below minimum");
+            return Err(ContractError::BelowMinimum);
         }
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
@@ -393,7 +401,7 @@ impl CrowdfundContract {
             .unwrap_or_else(|| Vec::new(&env));
         let is_new_pledger = !pledgers.contains(&pledger);
         if is_new_pledger && !contract_state_size::validate_pledger_capacity(pledgers.len()) {
-            panic!("Too many pledgers");
+            return Err(ContractError::InvalidParameter);
         }
 
         // Update the pledger's running total.
@@ -422,7 +430,8 @@ impl CrowdfundContract {
             .unwrap_or_else(|| Vec::new(&env));
         if !pledgers.contains(&pledger) {
             // Enforce pledger list size limit before appending.
-            contract_state_size::check_pledger_limit(&env).expect("pledger limit exceeded");
+            contract_state_size::check_pledger_limit(&env)
+                .map_err(|_| ContractError::InvalidParameter)?;
             pledgers.push_back(pledger.clone());
             env.storage()
                 .persistent()
@@ -446,7 +455,7 @@ impl CrowdfundContract {
     pub fn collect_pledges(env: Env) -> Result<(), ContractError> {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
-            panic!("campaign is not active");
+            return Err(ContractError::CampaignNotActive);
         }
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
@@ -512,7 +521,7 @@ impl CrowdfundContract {
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
-            panic!("campaign is not active");
+            return Err(ContractError::CampaignNotActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -585,7 +594,7 @@ impl CrowdfundContract {
     pub fn refund(env: Env) -> Result<(), ContractError> {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
-            panic!("campaign is not active");
+            return Err(ContractError::CampaignNotActive);
         }
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
@@ -664,10 +673,10 @@ impl CrowdfundContract {
 
     /// Cancel the campaign and refund all contributors — callable only by
     /// the creator while the campaign is still Active.
-    pub fn cancel(env: Env) {
+    pub fn cancel(env: Env) -> Result<(), ContractError> {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
-            panic!("campaign is not active");
+            return Err(ContractError::CampaignNotActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -706,6 +715,7 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::Status, &Status::Cancelled);
         emit_cancelled(&env);
+        Ok(())
     }
 
     /// Upgrade the contract to a new WASM implementation — admin-only.
@@ -741,17 +751,17 @@ impl CrowdfundContract {
         title: Option<String>,
         description: Option<String>,
         socials: Option<String>,
-    ) {
+    ) -> Result<(), ContractError> {
         // Check campaign is active.
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
-            panic!("campaign is not active");
+            return Err(ContractError::CampaignNotActive);
         }
 
         // Require creator authentication and verify caller is the creator.
         let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         if creator != stored_creator {
-            panic!("not authorized");
+            return Err(ContractError::Unauthorized);
         }
         creator.require_auth();
 
@@ -786,13 +796,13 @@ impl CrowdfundContract {
         if !contract_state_size::validate_metadata_total_length(
             title_length + description_length + socials_length,
         ) {
-            panic!("Metadata too long");
+            return Err(ContractError::InvalidParameter);
         }
 
         // Update title if provided.
         if let Some(new_title) = title {
             if !contract_state_size::validate_title(&new_title) {
-                panic!("Title too long");
+                return Err(ContractError::InvalidParameter);
             }
             env.storage().instance().set(&DataKey::Title, &new_title);
             updated_fields.push_back(Symbol::new(&env, "title"));
@@ -801,7 +811,7 @@ impl CrowdfundContract {
         // Update description if provided.
         if let Some(new_description) = description {
             if !contract_state_size::validate_description(&new_description) {
-                panic!("Description too long");
+                return Err(ContractError::InvalidParameter);
             }
             env.storage()
                 .instance()
@@ -812,7 +822,7 @@ impl CrowdfundContract {
         // Update social links if provided.
         if let Some(new_socials) = socials {
             if !contract_state_size::validate_social_links(&new_socials) {
-                panic!("Social links too long");
+                return Err(ContractError::InvalidParameter);
             }
             env.storage()
                 .instance()
@@ -824,23 +834,26 @@ impl CrowdfundContract {
             ("crowdfund", "metadata_updated"),
             (creator.clone(), updated_fields),
         );
+        Ok(())
     }
 
-    pub fn add_roadmap_item(env: Env, date: u64, description: String) {
+    pub fn add_roadmap_item(env: Env, date: u64, description: String) -> Result<(), ContractError> {
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
 
         if date <= env.ledger().timestamp() {
-            panic!("date must be in the future");
+            return Err(ContractError::InvalidParameter);
         }
 
         if description.is_empty() {
-            panic!("description cannot be empty");
+            return Err(ContractError::InvalidParameter);
         }
 
         // Enforce string length and roadmap list size limits.
-        contract_state_size::check_string_len(&description).expect("description too long");
-        contract_state_size::check_roadmap_limit(&env).expect("roadmap limit exceeded");
+        contract_state_size::check_string_len(&description)
+            .map_err(|_| ContractError::InvalidParameter)?;
+        contract_state_size::check_roadmap_limit(&env)
+            .map_err(|_| ContractError::InvalidParameter)?;
 
         let mut roadmap: Vec<RoadmapItem> = env
             .storage()
@@ -848,11 +861,11 @@ impl CrowdfundContract {
             .get(&DataKey::Roadmap)
             .unwrap_or_else(|| Vec::new(&env));
         if !contract_state_size::validate_roadmap_capacity(roadmap.len()) {
-            panic!("Too many roadmap items");
+            return Err(ContractError::InvalidParameter);
         }
         for item in roadmap.iter() {
             if !contract_state_size::validate_roadmap_description(&item.description) {
-                panic!("Roadmap description too long");
+                return Err(ContractError::InvalidParameter);
             }
         }
 
@@ -864,6 +877,7 @@ impl CrowdfundContract {
         env.storage().instance().set(&DataKey::Roadmap, &roadmap);
         env.events()
             .publish(("crowdfund", "roadmap_item_added"), (date, description));
+        Ok(())
     }
 
     pub fn roadmap(env: Env) -> Vec<RoadmapItem> {
@@ -877,17 +891,18 @@ impl CrowdfundContract {
     ///
     /// Only the creator can add stretch goals. The milestone must be greater
     /// than the primary goal.
-    pub fn add_stretch_goal(env: Env, milestone: i128) {
+    pub fn add_stretch_goal(env: Env, milestone: i128) -> Result<(), ContractError> {
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
 
         let goal: i128 = env.storage().instance().get(&DataKey::Goal).unwrap();
         if milestone <= goal {
-            panic!("stretch goal must be greater than primary goal");
+            return Err(ContractError::InvalidParameter);
         }
 
         // Enforce stretch-goal list size limit.
-        contract_state_size::check_stretch_goal_limit(&env).expect("stretch goal limit exceeded");
+        contract_state_size::check_stretch_goal_limit(&env)
+            .map_err(|_| ContractError::InvalidParameter)?;
 
         let mut stretch_goals: Vec<i128> = env
             .storage()
@@ -895,13 +910,14 @@ impl CrowdfundContract {
             .get(&DataKey::StretchGoals)
             .unwrap_or_else(|| Vec::new(&env));
         if !contract_state_size::validate_stretch_goal_capacity(stretch_goals.len()) {
-            panic!("Too many stretch goals");
+            return Err(ContractError::InvalidParameter);
         }
 
         stretch_goals.push_back(milestone);
         env.storage()
             .instance()
             .set(&DataKey::StretchGoals, &stretch_goals);
+        Ok(())
     }
 
     /// Returns the next unmet stretch goal milestone.
