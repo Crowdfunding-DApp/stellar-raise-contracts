@@ -74,6 +74,20 @@ jobs:
         timeout-minutes: 10
         run: cargo build --release --target wasm32-unknown-unknown -p crowdfund
 
+      - name: Install wasm-opt (Binaryen)
+        run: sudo apt-get install -y binaryen
+
+      - name: Canonicalize WASM encoding
+        # Some rustc/LLVM releases emit call_indirect with an overlong LEB128
+        # table-index immediate. soroban-env-host's wasm parser rejects that
+        # ("reference-types not enabled: zero byte expected") even though the
+        # feature itself is unused. Round-tripping through wasm-opt re-emits
+        # the binary with canonical (minimal) LEB128 encoding.
+        run: |
+          wasm-opt -O0 --enable-sign-ext \
+            target/wasm32-unknown-unknown/release/crowdfund.wasm \
+            -o target/wasm32-unknown-unknown/release/crowdfund.wasm
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -107,9 +121,6 @@ jobs:
 
       - name: Report WASM binary size
         run: ls -lh target/wasm32-unknown-unknown/release/crowdfund.wasm
-
-      - name: Install wasm-opt (Binaryen)
-        run: sudo apt-get install -y binaryen
 
       - name: Optimize WASM with wasm-opt
         run: |
