@@ -320,7 +320,8 @@ impl CrowdfundContract {
                 .get::<_, bool>(&DataKey::BonusGoalReachedEmitted)
                 .unwrap_or(false);
             if !already_emitted && total < bg && new_total >= bg {
-                env.events().publish(("crowdfund", "bonus_goal_reached"), bg);
+                env.events()
+                    .publish(("crowdfund", "bonus_goal_reached"), bg);
                 env.storage()
                     .instance()
                     .set(&DataKey::BonusGoalReachedEmitted, &true);
@@ -558,8 +559,7 @@ impl CrowdfundContract {
             .instance()
             .set(&DataKey::Status, &Status::Successful);
 
-        let nft_contract: Option<Address> =
-            env.storage().instance().get(&DataKey::NFTContract);
+        let nft_contract: Option<Address> = env.storage().instance().get(&DataKey::NFTContract);
         mint_nfts_in_batch(&env, &nft_contract);
 
         emit_withdrawn(&env, &creator, creator_payout, platform_fee);
@@ -820,8 +820,10 @@ impl CrowdfundContract {
             updated_fields.push_back(Symbol::new(&env, "socials"));
         }
 
-        env.events()
-            .publish(("crowdfund", "metadata_updated"), (creator.clone(), updated_fields));
+        env.events().publish(
+            ("crowdfund", "metadata_updated"),
+            (creator.clone(), updated_fields),
+        );
     }
 
     pub fn add_roadmap_item(env: Env, date: u64, description: String) {

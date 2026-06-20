@@ -25,13 +25,13 @@ The previous `deploy.sh` used `set -e` but swallowed error context — a failed 
 ./scripts/deploy.sh [--dry-run] [--help] <creator> <token> <goal> <deadline> [min_contribution]
 ```
 
-| Argument          | Type    | Description                             |
-| :---------------- | :------ | :-------------------------------------- |
-| `creator`         | string  | Stellar address or identity of the campaign creator |
-| `token`           | string  | Stellar address of the token contract   |
-| `goal`            | integer | Funding goal in stroops                 |
-| `deadline`        | integer | Unix timestamp — must be in the future  |
-| `min_contribution`| integer | Minimum pledge amount (default: `1`)    |
+| Argument           | Type    | Description                                         |
+| :----------------- | :------ | :-------------------------------------------------- |
+| `creator`          | string  | Stellar address or identity of the campaign creator |
+| `token`            | string  | Stellar address of the token contract               |
+| `goal`             | integer | Funding goal in stroops                             |
+| `deadline`         | integer | Unix timestamp — must be in the future              |
+| `min_contribution` | integer | Minimum pledge amount (default: `1`)                |
 
 ### Flags
 
@@ -42,12 +42,12 @@ The previous `deploy.sh` used `set -e` but swallowed error context — a failed 
 
 ### Environment variables
 
-| Variable                    | Default    | Description                              |
-| :-------------------------- | :--------- | :--------------------------------------- |
-| `NETWORK`                   | `testnet`  | Stellar network to target                |
-| `STELLAR_RPC_URL`           | —          | Optional custom RPC endpoint             |
-| `STELLAR_NETWORK_PASSPHRASE`| —          | Optional network passphrase override     |
-| `SOURCE_ACCOUNT`            | —          | Optional override for the source account |
+| Variable                     | Default   | Description                              |
+| :--------------------------- | :-------- | :--------------------------------------- |
+| `NETWORK`                    | `testnet` | Stellar network to target                |
+| `STELLAR_RPC_URL`            | —         | Optional custom RPC endpoint             |
+| `STELLAR_NETWORK_PASSPHRASE` | —         | Optional network passphrase override     |
+| `SOURCE_ACCOUNT`             | —         | Optional override for the source account |
 
 ### WASM artifact check
 
@@ -71,13 +71,13 @@ A non-zero exit from this call indicates the contract did not deploy correctly a
 
 ### Exit codes
 
-| Code | Meaning                                        |
-| :--- | :--------------------------------------------- |
-| 0    | Success (or `--dry-run` / `--help`)            |
-| 1    | Missing WASM artifact                          |
-| 4    | `stellar contract deploy` failure              |
-| 5    | `stellar contract invoke initialize` failure   |
-| 6    | Post-deploy smoke check (`goal`) failed        |
+| Code | Meaning                                      |
+| :--- | :------------------------------------------- |
+| 0    | Success (or `--dry-run` / `--help`)          |
+| 1    | Missing WASM artifact                        |
+| 4    | `stellar contract deploy` failure            |
+| 5    | `stellar contract invoke initialize` failure |
+| 6    | Post-deploy smoke check (`goal`) failed      |
 
 ### Example
 
@@ -103,23 +103,23 @@ Invokes contract actions (contribute, withdraw, refund) after deployment.
 
 ### Actions
 
-| Action      | Additional args              | Description                                        |
-| :---------- | :--------------------------- | :------------------------------------------------- |
-| `contribute`| `<contributor> <amount>`     | Contribute tokens to the campaign                  |
-| `withdraw`  | `<creator>`                  | Withdraw funds (goal met and deadline passed)      |
-| `refund`    | `<caller>`                   | Refund a single contributor via `refund_single`    |
+| Action       | Additional args          | Description                                     |
+| :----------- | :----------------------- | :---------------------------------------------- |
+| `contribute` | `<contributor> <amount>` | Contribute tokens to the campaign               |
+| `withdraw`   | `<creator>`              | Withdraw funds (goal met and deadline passed)   |
+| `refund`     | `<caller>`               | Refund a single contributor via `refund_single` |
 
 ### Flags
 
-| Flag     | Description                          |
-| :------- | :----------------------------------- |
-| `--help` | Print usage documentation and exit.  |
+| Flag     | Description                         |
+| :------- | :---------------------------------- |
+| `--help` | Print usage documentation and exit. |
 
 ### Environment variables
 
-| Variable  | Default   | Description                     |
-| :-------- | :-------- | :------------------------------ |
-| `NETWORK` | `testnet` | Stellar network to target       |
+| Variable  | Default   | Description               |
+| :-------- | :-------- | :------------------------ |
+| `NETWORK` | `testnet` | Stellar network to target |
 
 ### Error output
 
@@ -156,10 +156,10 @@ All checks run before exiting — a single failure does not short-circuit the re
 
 ### Exit codes
 
-| Code | Meaning                              |
-| :--- | :----------------------------------- |
-| 0    | All checks passed                    |
-| 1    | One or more checks failed            |
+| Code | Meaning                   |
+| :--- | :------------------------ |
+| 0    | All checks passed         |
+| 1    | One or more checks failed |
 
 ---
 

@@ -62,10 +62,10 @@ pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError
    and double-claim attacks even if the token contract calls back into the
    crowdfund contract.
 
-5. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
+4. **Overflow protection** — `total_raised` is decremented with `checked_sub`,
    panicking on underflow rather than silently wrapping.
 
-6. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
+5. **Status guard** — `Successful` and `Cancelled` campaigns are explicitly
    rejected. A `Refunded` campaign (set by the deprecated batch path) is
    allowed so that any contributor not swept by the batch can still claim.
 

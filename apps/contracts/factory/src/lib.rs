@@ -5,11 +5,11 @@ use soroban_sdk::{
 };
 
 #[cfg(test)]
-mod test;
-#[cfg(test)]
 mod batch_contribute;
 #[cfg(test)]
 mod batch_contribute_tests;
+#[cfg(test)]
+mod test;
 
 #[derive(Clone)]
 #[contracttype]
