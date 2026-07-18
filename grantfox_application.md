@@ -1,0 +1,3 @@
+# Why Apply for GrantFox
+
+Stellar Raise aims to build a decentralized crowdfunding platform on Stellar using Soroban smart contracts. GrantFox's support will accelerate our development by funding security audits, testing, and deployment infrastructure for the crowdfund contract. This aligns with GrantFox's mission to advance blockchain innovation while enabling real-world use cases for decentralized finance on the Stellar network. The grant will help us complete critical milestones: finalizing contract security validation, optimizing gas usage, and launching the first testnet deployment.
