@@ -174,6 +174,7 @@ fn test_initialize_stores_admin_address() {
         &None,
         &None,
         &None,
+        &7,
     );
 }
 
@@ -201,6 +202,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
     admin
 }
@@ -275,6 +277,7 @@ fn test_initialize_twice_returns_already_initialized() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -294,6 +297,7 @@ fn test_initialize_rejects_zero_goal() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -306,6 +310,7 @@ fn test_initialize_rejects_negative_goal() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &-1, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -318,6 +323,7 @@ fn test_initialize_accepts_minimum_goal() {
 
     client.initialize(
         &creator, &creator, &token, &1, &deadline, &1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1);
 }
@@ -333,6 +339,7 @@ fn test_initialize_rejects_zero_min_contribution() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &0, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -348,6 +355,7 @@ fn test_initialize_rejects_negative_min_contribution() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &-1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -363,6 +371,7 @@ fn test_initialize_accepts_minimum_min_contribution() {
 
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.min_contribution(), 1);
 }
@@ -389,6 +398,7 @@ fn test_initialize_rejects_past_deadline() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -414,6 +424,7 @@ fn test_initialize_rejects_deadline_below_min_offset() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -427,6 +438,7 @@ fn test_initialize_accepts_deadline_at_min_offset() {
 
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.deadline(), deadline);
 }
@@ -460,6 +472,7 @@ fn test_initialize_rejects_fee_over_100_percent() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -492,6 +505,7 @@ fn test_initialize_accepts_fee_at_100_percent() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -538,6 +552,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
     admin
 }
@@ -612,6 +627,7 @@ fn test_initialize_twice_returns_already_initialized() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -631,6 +647,7 @@ fn test_initialize_rejects_zero_goal() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -643,6 +660,7 @@ fn test_initialize_rejects_negative_goal() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &-1, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -655,6 +673,7 @@ fn test_initialize_accepts_minimum_goal() {
 
     client.initialize(
         &creator, &creator, &token, &1, &deadline, &1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1);
 }
@@ -670,6 +689,7 @@ fn test_initialize_rejects_zero_min_contribution() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &0, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -685,6 +705,7 @@ fn test_initialize_rejects_negative_min_contribution() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &-1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -700,6 +721,7 @@ fn test_initialize_accepts_minimum_min_contribution() {
 
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.min_contribution(), 1);
 }
@@ -733,6 +755,7 @@ fn default_init_params(env: &Env, creator: &Address, token: &Address) -> InitPar
         platform_config: None,
         bonus_goal: None,
         bonus_goal_description: None,
+        expected_token_decimals: 7,
     }
 }
 
@@ -826,6 +849,7 @@ fn test_initialize_stores_admin_address() {
         &None,
         &None,
         &None,
+        &7,
     );
 }
 
@@ -850,6 +874,7 @@ fn test_initialize_stores_creator_address() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -875,6 +900,7 @@ fn test_initialize_rejects_deadline_below_min_offset() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -888,6 +914,7 @@ fn test_initialize_accepts_deadline_at_min_offset() {
 
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.deadline(), deadline);
 }
@@ -937,6 +964,7 @@ fn test_initialize_with_platform_config_stores_fee() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -970,6 +998,7 @@ fn test_initialize_accepts_fee_at_100_percent() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -997,6 +1026,7 @@ fn test_initialize_rejects_bonus_goal_equal_to_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1024,6 +1054,7 @@ fn test_initialize_rejects_bonus_goal_below_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1088,6 +1119,7 @@ fn test_initialize_platform_fee_exact_max_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1112,6 +1144,7 @@ fn test_initialize_platform_fee_zero_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1136,6 +1169,7 @@ fn test_initialize_platform_fee_one_bps_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1160,6 +1194,7 @@ fn test_initialize_platform_fee_over_max_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1187,6 +1222,7 @@ fn test_initialize_platform_fee_u32_max_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1218,6 +1254,7 @@ fn test_initialize_with_bonus_goal_stores_values() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -1246,6 +1283,7 @@ fn test_initialize_rejects_bonus_goal_equal_to_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.bonus_goal(), Some(1_000_001));
 }
@@ -1265,6 +1303,7 @@ fn test_initialize_stores_bonus_goal_with_description() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1292,6 +1331,7 @@ fn test_initialize_bonus_goal_equal_to_goal_returns_error() {
         &Some(1_000_000i128), // equal, not greater
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1325,6 +1365,7 @@ fn test_initialize_bonus_goal_less_than_goal_returns_error() {
         &Some(500_000i128),
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1354,6 +1395,7 @@ fn test_initialize_bonus_goal_one_above_goal_accepted() {
         &Some(1_000_001i128),
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.bonus_goal(), Some(1_000_001));
@@ -1378,6 +1420,7 @@ fn test_initialize_bonus_goal_without_description() {
         &Some(2_000_000i128),
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.bonus_goal(), Some(2_000_000));
     assert_eq!(client.bonus_goal_description(), None);
@@ -1399,6 +1442,7 @@ fn test_initialize_bonus_goal_i128_max_accepted() {
         &Some(i128::MAX),
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1425,6 +1469,7 @@ fn test_initialize_twice_returns_already_initialized() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.bonus_goal(), Some(1_000_001));
 }
@@ -1460,6 +1505,7 @@ fn test_initialize_twice_different_params_still_errors() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1488,6 +1534,7 @@ fn test_initialize_twice_preserves_original_values() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Verify original values unchanged
@@ -1517,6 +1564,7 @@ fn test_initialize_goal_minimum_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.goal(), 1);
@@ -1538,6 +1586,7 @@ fn test_initialize_goal_zero_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -1558,6 +1607,7 @@ fn test_initialize_goal_negative_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -1578,6 +1628,7 @@ fn test_initialize_goal_i128_min_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -1598,6 +1649,7 @@ fn test_initialize_goal_i128_max_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1622,6 +1674,7 @@ fn test_initialize_min_contribution_minimum_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.min_contribution(), 1);
@@ -1643,6 +1696,7 @@ fn test_initialize_min_contribution_zero_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1666,6 +1720,7 @@ fn test_initialize_min_contribution_negative_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1693,6 +1748,7 @@ fn test_initialize_deadline_exactly_60_seconds_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -1713,6 +1769,7 @@ fn test_initialize_deadline_59_seconds_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -1733,6 +1790,7 @@ fn test_initialize_deadline_equal_to_now_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -1753,6 +1811,7 @@ fn test_initialize_deadline_in_past_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -1773,6 +1832,7 @@ fn test_initialize_deadline_far_future_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.deadline(), deadline);
@@ -1794,6 +1854,7 @@ fn test_initialize_deadline_u64_max_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -2034,6 +2095,7 @@ fn test_initialize_with_all_optional_params() {
         &Some(2_000_000),
         &Some(desc.clone()),
         &None,
+        &7,
     );
 
     // Verify all values stored
@@ -2150,6 +2212,7 @@ fn test_initialize_bonus_goal_reached_flag_starts_false() {
         &None,
         &None,
         &None,
+        &7,
     );
 
         &Some(2_000_000),
@@ -2157,6 +2220,7 @@ fn test_initialize_bonus_goal_reached_flag_starts_false() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.bonus_goal(), Some(2_000_000));
@@ -2216,6 +2280,7 @@ fn test_initialize_stores_separate_admin() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Admin is not directly queryable via a view fn, but the contract
@@ -2248,6 +2313,7 @@ fn test_initialize_all_optional_fields_populated() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.goal(), 5_000_000);
@@ -2286,12 +2352,14 @@ fn test_initialize_no_event_on_failure() {
     // Attempt with invalid goal — should fail before any storage write or event.
     let result = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert!(result.is_err());
 
     // Contract must still be uninitialised — a second valid call must succeed.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -2642,6 +2710,7 @@ fn test_initialize_stores_separate_admin() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Admin is not directly queryable via a view fn, but the contract
@@ -2674,6 +2743,7 @@ fn test_initialize_all_optional_fields_populated() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.goal(), 5_000_000);
@@ -2712,12 +2782,14 @@ fn test_initialize_no_event_on_failure() {
     // Attempt with invalid goal — should fail before any storage write or event.
     let result = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert!(result.is_err());
 
     // Contract must still be uninitialised — a second valid call must succeed.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -2794,6 +2866,7 @@ fn test_initialize_accepts_max_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), i128::MAX);
 }
@@ -2817,6 +2890,7 @@ fn test_initialize_accepts_max_deadline() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.deadline(), u64::MAX);
 }
@@ -2831,6 +2905,7 @@ fn test_initialize_allows_min_contribution_greater_than_goal() {
     // goal = 100, min_contribution = 1_000 — unusual but not forbidden.
     client.initialize(
         &creator, &creator, &token, &100, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 100);
     assert_eq!(client.min_contribution(), 1_000);
@@ -2846,11 +2921,13 @@ fn test_initialize_failed_call_leaves_contract_uninitialised() {
     // First call fails.
     let _ = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
 
     // Second call with valid params must succeed.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -2880,11 +2957,13 @@ fn test_initialize_failed_platform_fee_leaves_contract_uninitialised() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Contract must still be uninitialised.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 // ── bool-returning compat wrapper ────────────────────────────────────────────
@@ -2933,6 +3012,7 @@ fn test_initialize_accepts_max_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), i128::MAX);
 }
@@ -2956,6 +3036,7 @@ fn test_initialize_accepts_max_deadline() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.deadline(), u64::MAX);
 }
@@ -2970,6 +3051,7 @@ fn test_initialize_allows_min_contribution_greater_than_goal() {
     // goal = 100, min_contribution = 1_000 — unusual but not forbidden.
     client.initialize(
         &creator, &creator, &token, &100, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 100);
     assert_eq!(client.min_contribution(), 1_000);
@@ -2985,11 +3067,13 @@ fn test_initialize_failed_call_leaves_contract_uninitialised() {
     // First call fails.
     let _ = client.try_initialize(
         &creator, &creator, &token, &0, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
 
     // Second call with valid params must succeed.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -3019,16 +3103,19 @@ fn test_initialize_failed_platform_fee_leaves_contract_uninitialised() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Contract must still be uninitialised.
     client.initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None, &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
         &None,
         &None,
+        &7,
     );
 
     assert!(!client.bonus_goal_reached());

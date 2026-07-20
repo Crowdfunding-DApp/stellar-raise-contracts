@@ -34,6 +34,8 @@ pub struct InitParams {
     pub creator: Address,
     /// SEP-41 token contract address used for contributions.
     pub token: Address,
+    /// The expected number of decimals for the configured token.
+    pub expected_token_decimals: u32,
     /// Funding goal in token's smallest unit. Must be >= 1.
     pub goal: i128,
     /// Campaign deadline as a Unix ledger timestamp. Must be >= now + 60s.
@@ -96,12 +98,20 @@ pub fn execute_initialize(env: &Env, params: InitParams) -> Result<(), ContractE
     // 3. Validate — no writes if any check fails.
     validate_init_params(env, &params)?;
 
+    let token_client = soroban_sdk::token::Client::new(env, &params.token);
+    if token_client.decimals() != params.expected_token_decimals {
+        return Err(ContractError::InvalidParameter);
+    }
+
     // 4. Write required fields.
     env.storage().instance().set(&DataKey::Admin, &params.admin);
     env.storage()
         .instance()
         .set(&DataKey::Creator, &params.creator);
     env.storage().instance().set(&DataKey::Token, &params.token);
+    env.storage()
+        .instance()
+        .set(&DataKey::TokenDecimals, &params.expected_token_decimals);
     env.storage().instance().set(&DataKey::Goal, &params.goal);
     env.storage()
         .instance()
@@ -147,6 +157,7 @@ pub fn execute_initialize(env: &Env, params: InitParams) -> Result<(), ContractE
         env,
         &params.creator,
         &params.token,
+        params.expected_token_decimals,
         params.goal,
         params.deadline,
         params.min_contribution,
@@ -164,6 +175,7 @@ pub fn log_initialize(
     env: &Env,
     creator: &Address,
     token: &Address,
+    expected_token_decimals: u32,
     goal: i128,
     deadline: u64,
     min_contribution: i128,
@@ -176,6 +188,7 @@ pub fn log_initialize(
         (
             creator.clone(),
             token.clone(),
+            expected_token_decimals,
             goal,
             deadline,
             min_contribution,

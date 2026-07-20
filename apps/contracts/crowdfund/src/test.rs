@@ -103,6 +103,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
     admin
 }
@@ -122,6 +123,7 @@ fn test_initialize() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Verify initialization was successful
@@ -146,6 +148,7 @@ fn test_contribute() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -176,6 +179,7 @@ fn test_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -210,6 +214,7 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let result = client.try_initialize(
@@ -222,9 +227,32 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_token_decimals() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    // Provide mismatched expected decimals (actual token defaults to 7)
+    let result = client.try_initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+        &6,
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidParameter);
 }
 
 #[test]
@@ -252,6 +280,7 @@ fn test_lifecycle_successful_campaign_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -286,6 +315,7 @@ fn test_lifecycle_underfunded_refunds() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -318,6 +348,7 @@ fn test_lifecycle_multiple_backers_refund() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contrib1 = Address::generate(&env);
@@ -371,6 +402,7 @@ fn test_contribution_after_deadline_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     env.ledger().set_timestamp(deadline + 1);
@@ -400,6 +432,7 @@ fn test_contribution_below_minimum_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -426,6 +459,7 @@ fn test_contribution_zero_amount_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -452,6 +486,7 @@ fn test_status_transition_to_successful() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -482,6 +517,7 @@ fn test_multiple_contributions_same_backer() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
