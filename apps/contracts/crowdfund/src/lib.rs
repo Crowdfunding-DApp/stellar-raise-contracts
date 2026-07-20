@@ -127,6 +127,7 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
+    PreviousWasmHash,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -725,16 +726,53 @@ impl CrowdfundContract {
     /// provided and the caller must be authorized as the admin.
     ///
     /// # Arguments
-    /// * `new_wasm_hash` – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `new_wasm_hash`     – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `current_wasm_hash` – The SHA-256 hash of the currently deployed WASM binary.
+    ///                         This is stored as the rollback point before the upgrade
+    ///                         is applied. If the new WASM is broken, call
+    ///                         `rollback_upgrade` to restore this hash.
     ///
     /// # Panics
     /// * If the caller is not the admin.
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
+    /// * If `new_wasm_hash` is all zeros.
+    pub fn upgrade(
+        env: Env,
+        new_wasm_hash: soroban_sdk::BytesN<32>,
+        current_wasm_hash: soroban_sdk::BytesN<32>,
+    ) {
         let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+
+        // Store the current WASM hash as the rollback point before applying the upgrade.
+        // This ensures we can always restore the previous working implementation.
+        admin_upgrade_mechanism::store_current_wasm_hash(&env, &current_wasm_hash);
+
         admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
 
         env.events()
-            .publish(("crowdfund", "upgrade"), (admin, new_wasm_hash));
+            .publish(("crowdfund", "upgrade"), (admin, current_wasm_hash, new_wasm_hash));
+    }
+
+    /// Rollback the contract to the previous WASM implementation — admin-only.
+    ///
+    /// This function restores the WASM implementation that was stored as the rollback
+    /// point during the last successful `upgrade()` call. If the new WASM introduced
+    /// a bug or storage layout mismatch, this allows the admin to recover without
+    /// losing access to contract funds.
+    ///
+    /// # Panics
+    /// * If the caller is not the admin.
+    /// * If no previous WASM hash is stored (no prior upgrade was performed).
+    ///
+    /// # Returns
+    /// The restored WASM hash.
+    pub fn rollback_upgrade(env: Env) -> soroban_sdk::BytesN<32> {
+        let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+        let restored_hash = admin_upgrade_mechanism::rollback_upgrade(&env);
+
+        env.events()
+            .publish(("crowdfund", "rollback"), (admin, restored_hash.clone()));
+
+        restored_hash
     }
 
     /// Update campaign metadata — only callable by the creator while the
