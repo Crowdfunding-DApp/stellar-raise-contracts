@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -500,4 +500,75 @@ fn test_multiple_contributions_same_backer() {
     client.contribute(&contributor, &150_000);
     assert_eq!(client.contribution(&contributor), 450_000);
     assert_eq!(client.total_raised(), 450_000);
+}
+
+// ── Audit #31 regression: fee_bps == 10_000 (100%) full-drain config ──────────
+
+/// A `fee_bps` of exactly 10_000 (100%) must be rejected at `initialize()`.
+///
+/// Before the fix, `validate_platform_fee` accepted `fee_bps ==
+/// MAX_PLATFORM_FEE_BPS`, so this platform config would pass validation and
+/// leave `creator_payout = total - fee == 0` in `withdraw()` — a full drain
+/// to the platform address.
+#[test]
+fn test_initialize_rejects_full_drain_platform_fee() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    let result = client.try_initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 10_000,
+        }),
+        &None,
+        &None,
+    );
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidPlatformFee
+    );
+}
+
+/// The new maximum valid fee (`MAX_PLATFORM_FEE_BPS - 1` = 9_999 bps) must
+/// still leave the creator with a strictly positive payout after `withdraw()`.
+#[test]
+fn test_withdraw_with_max_valid_fee_leaves_nonzero_creator_payout() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 9_999,
+        }),
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    client.withdraw();
+
+    let token = token::Client::new(&env, &token_address);
+    assert!(
+        token.balance(&creator) > 0,
+        "creator payout must be strictly positive, even at the maximum valid fee"
+    );
 }

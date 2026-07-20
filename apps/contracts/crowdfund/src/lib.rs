@@ -150,7 +150,7 @@ pub enum ContractError {
     InvalidMinContribution = 9,
     /// deadline must be at least MIN_DEADLINE_OFFSET seconds in the future
     DeadlineTooSoon = 10,
-    /// platform fee_bps must be <= 10_000
+    /// platform fee_bps must be < 10_000 (100% is rejected, audit #31)
     InvalidPlatformFee = 11,
     /// bonus_goal must be strictly greater than goal
     InvalidBonusGoal = 12,
@@ -185,7 +185,8 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If already initialized.
-    /// * If platform fee exceeds 10,000 (100%).
+    /// * If platform fee is >= 10,000 (100%) — a fee of exactly 100% would
+    ///   leave the creator with a zero payout (audit #31).
     /// * If bonus goal is not greater than the primary goal.
     pub fn initialize(
         env: Env,

@@ -40,7 +40,9 @@ pub struct InitParams {
     pub deadline: u64,
     /// Minimum single contribution. Must be >= 1.
     pub min_contribution: i128,
-    /// Optional platform fee configuration. `fee_bps` must be <= 10_000.
+    /// Optional platform fee configuration. `fee_bps` must be < 10_000 (100%
+    /// is rejected — see audit #31, a fee of exactly 100% leaves the creator
+    /// with a zero payout).
     pub platform_config: Option<PlatformConfig>,
     /// Optional bonus goal. When provided, must be > `goal`.
     pub bonus_goal: Option<i128>,
@@ -193,7 +195,7 @@ pub fn describe_init_error(code: u32) -> &'static str {
         8 => "Campaign goal must be at least 1",
         9 => "Minimum contribution must be at least 1",
         10 => "Deadline must be at least 60 seconds in the future",
-        11 => "Platform fee cannot exceed 100% (10,000 bps)",
+        11 => "Platform fee must be below 100% (10,000 bps)",
         12 => "Bonus goal must be strictly greater than the primary goal",
         _ => "Unknown initialization error",
     }

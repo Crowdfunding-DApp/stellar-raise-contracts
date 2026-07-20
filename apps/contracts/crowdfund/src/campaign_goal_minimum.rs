@@ -33,8 +33,9 @@
 //!    allow the creator to withdraw dust amounts.
 //! 2. `MIN_CONTRIBUTION_AMOUNT` prevents zero-amount contributions that waste
 //!    gas on a no-op token transfer and pollute the contributors list.
-//! 3. `MAX_PLATFORM_FEE_BPS` caps the platform fee at 100 % (10 000 bps) so
-//!    the contract can never be configured to steal all contributor funds.
+//! 3. `MAX_PLATFORM_FEE_BPS` caps the platform fee *below* 100 % (10 000 bps)
+//!    so the contract can never be configured to leave the creator with a
+//!    zero payout — a fee equal to 100 % is rejected, not just fees above it.
 //! 4. `PROGRESS_BPS_SCALE` is the single authoritative scale factor for all
 //!    basis-point progress calculations; using it everywhere prevents
 //!    off-by-one errors when the scale changes.
@@ -59,7 +60,7 @@
 //!        │                              ──► Ok / Err::DeadlineTooSoon
 //!        │
 //!        └─► validate_platform_fee(fee_bps)
-//!                └─ fee_bps <= MAX_PLATFORM_FEE_BPS
+//!                └─ fee_bps < MAX_PLATFORM_FEE_BPS
 //!                               ──► Ok / Err::FeeTooHigh
 //! ```
 
@@ -79,10 +80,13 @@ pub const MIN_GOAL_AMOUNT: i128 = 1;
 /// would allow zero-amount contributions to waste gas and pollute storage.
 pub const MIN_CONTRIBUTION_AMOUNT: i128 = 1;
 
-/// Maximum platform fee expressed in basis points (1 bps = 0.01 %).
+/// Basis-point scale representing 100 % — also the exclusive ceiling for
+/// `fee_bps` (1 bps = 0.01 %).
 ///
-/// 10 000 bps == 100 %.  A fee above this would mean the platform takes more
-/// than the total raised, leaving the creator with a negative payout.
+/// `validate_platform_fee` rejects `fee_bps >= MAX_PLATFORM_FEE_BPS`, not just
+/// `>`. A fee *equal to* 10 000 bps (100 %) would let the platform take the
+/// entire amount raised, leaving the creator with a payout of exactly zero —
+/// audit #31. The valid range is therefore `[0, MAX_PLATFORM_FEE_BPS)`.
 pub const MAX_PLATFORM_FEE_BPS: u32 = 10_000;
 
 /// Scale factor used for all basis-point progress calculations.
@@ -151,14 +155,19 @@ pub fn validate_deadline(now: u64, deadline: u64) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Validates that a platform fee does not exceed the maximum allowed.
+/// Validates that a platform fee stays strictly below 100 %.
 ///
 /// @param  fee_bps  Platform fee in basis points.
-/// @return          `Ok(())` if `fee_bps <= MAX_PLATFORM_FEE_BPS`.
+/// @return          `Ok(())` if `fee_bps < MAX_PLATFORM_FEE_BPS`.
+///
+/// @dev    Uses `>=` rather than `>` so that `fee_bps == MAX_PLATFORM_FEE_BPS`
+///         (100 %) is rejected. A 100 % fee would leave the creator with a
+///         payout of exactly zero — i.e. a full-drain platform config
+///         (audit #31) — even though it never exceeds the nominal cap.
 #[inline]
 pub fn validate_platform_fee(fee_bps: u32) -> Result<(), &'static str> {
-    if fee_bps > MAX_PLATFORM_FEE_BPS {
-        return Err("platform fee cannot exceed MAX_PLATFORM_FEE_BPS (100%)");
+    if fee_bps >= MAX_PLATFORM_FEE_BPS {
+        return Err("platform fee must be strictly below MAX_PLATFORM_FEE_BPS (100%)");
     }
     Ok(())
 }
@@ -186,5 +195,52 @@ pub fn compute_progress_bps(total_raised: i128, goal: i128) -> u32 {
         MAX_PROGRESS_BPS
     } else {
         raw as u32
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    // ── validate_platform_fee ───────────────────────────────────────────────
+    //
+    // Regression coverage for audit #31: `fee_bps == MAX_PLATFORM_FEE_BPS`
+    // (100%) must be rejected, not accepted. A 100% fee means
+    // `creator_payout = total - fee == 0` in `lib.rs::withdraw` — a full
+    // drain to the platform address.
+
+    #[test]
+    fn validate_platform_fee_accepts_zero() {
+        assert!(validate_platform_fee(0).is_ok());
+    }
+
+    #[test]
+    fn validate_platform_fee_accepts_typical_fee() {
+        assert!(validate_platform_fee(250).is_ok()); // 2.5%
+    }
+
+    #[test]
+    fn validate_platform_fee_accepts_one_below_cap() {
+        assert!(validate_platform_fee(MAX_PLATFORM_FEE_BPS - 1).is_ok());
+    }
+
+    #[test]
+    fn validate_platform_fee_rejects_exact_cap() {
+        // This is the audit #31 regression case: 100% must NOT validate.
+        let err = validate_platform_fee(MAX_PLATFORM_FEE_BPS).unwrap_err();
+        assert!(
+            err.contains("MAX_PLATFORM_FEE_BPS"),
+            "error should mention MAX_PLATFORM_FEE_BPS, got: {err}"
+        );
+    }
+
+    #[test]
+    fn validate_platform_fee_rejects_one_above_cap() {
+        assert!(validate_platform_fee(MAX_PLATFORM_FEE_BPS + 1).is_err());
+    }
+
+    #[test]
+    fn validate_platform_fee_rejects_u32_max() {
+        assert!(validate_platform_fee(u32::MAX).is_err());
     }
 }
