@@ -51,6 +51,7 @@ fn init_campaign(
 ) {
     client.initialize(
         creator, creator, token, &goal, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
 }
 

@@ -45,6 +45,21 @@ pub fn emit_cancelled(env: &Env) {
     env.events().publish(("crowdfund", "cancelled"), ());
 }
 
+// ── stretch_goal_reached ─────────────────────────────────────────────────────
+
+/// Emitted when a contribution pushes `total_raised` past a stretch-goal milestone.
+/// This is a purely informational (UI-driven) event; reaching a stretch goal does
+/// **not** automatically alter fee schedules, minting, or fund-release logic.
+/// Downstream consumers (e.g. front-ends, indexers) should treat this event as a
+/// progress indicator only. If future protocol upgrades require on-chain enforcement
+/// (e.g. extra token minting, tiered fees), a new event or storage flag should be
+/// added alongside this one — the existing event must keep its informational semantics
+/// for backward compatibility.
+pub fn emit_stretch_goal_reached(env: &Env, milestone: i128, total_raised: i128) {
+    env.events()
+        .publish(("crowdfund", "stretch_goal_reached"), (milestone, total_raised));
+}
+
 // ── fee_transferred ──────────────────────────────────────────────────────────
 
 pub fn emit_fee_transferred(env: &Env, platform: &Address, fee: i128) {

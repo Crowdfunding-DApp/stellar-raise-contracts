@@ -150,6 +150,7 @@ fn setup_full() -> (
         &None,
         &None,
         &None,
+        &7,
     );
 
     (env, contract_id, client, admin, creator, token_addr)
@@ -220,6 +221,7 @@ fn setup_simple() -> (Env, CrowdfundContractClient<'static>, Address) {
         &None,
         &None,
         &None,
+        &7,
     );
 
     (env, client, admin)
@@ -551,6 +553,7 @@ fn test_initialization_with_minimum_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Admin should still work
@@ -608,6 +611,7 @@ fn test_contract_instance_isolation() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Verify both contracts are functional (can call upgrade)
@@ -825,6 +829,7 @@ fn setup() -> (
         &None,
         &None,
         &None,
+        &7,
     );
 
     (env, contract_id, client, admin, creator, token_addr)

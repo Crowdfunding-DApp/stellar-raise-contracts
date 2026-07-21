@@ -9,13 +9,12 @@ use soroban_sdk::{
 
 use withdraw_event_emission::{
     emit_cancelled, emit_contributed, emit_fee_transferred, emit_goal_reached, emit_refunded,
-    emit_withdrawn, mint_nfts_in_batch,
+    emit_stretch_goal_reached, emit_withdrawn, mint_nfts_in_batch,
 };
 
 // --- Modules ---
 pub mod admin_upgrade_mechanism;
 pub mod campaign_goal_minimum;
-pub mod cargo_toml_rust;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
@@ -47,8 +46,6 @@ mod test;
 #[cfg(test)]
 mod withdraw_event_emission_test;
 // #[cfg(test)]
-// mod cargo_toml_rust_test;
-// #[cfg(test)]
 // mod contract_state_size_test;
 // #[cfg(test)]
 // mod refund_single_token_test;
@@ -71,6 +68,38 @@ const CONTRACT_VERSION: u32 = 3;
 const CONTRIBUTION_COOLDOWN: u64 = 60;
 
 pub const MAX_NFT_MINT_BATCH: u32 = 50;
+
+// ── TTL / Rent-extension policy ───────────────────────────────────────────────
+//
+// Soroban persistent-storage entries are archived when their live-until ledger
+// drops to zero.  The constants below define the bump amounts used uniformly
+// across every `extend_ttl` call so that the policy can be reviewed, tested, and
+// updated in a single location rather than being scattered as magic numbers.
+//
+// Chosen values (in ledgers, ~5 s/ledger on Stellar mainnet):
+//   LEDGER_THRESHOLD     = 100_000 ledgers ≈ ~578 days.
+//     The TTL is extended only when remaining TTL falls *below* this threshold.
+//   LEDGER_BUMP_AMOUNT   = 535_000 ledgers ≈ ~31 days extended per bump.
+//     After bumping, the entry lives for at least this many additional ledgers.
+//
+// Instance storage (all keys live together under one entry) is bumped on every
+// public entry-point via `extend_instance_ttl`.
+// Persistent per-contributor/per-pledger keys are bumped on every write.
+/// Minimum remaining TTL (in ledgers) before a persistent-storage entry is bumped.
+pub const LEDGER_THRESHOLD: u32 = 100_000;
+/// Number of ledgers by which to extend a storage entry's TTL on each bump.
+pub const LEDGER_BUMP_AMOUNT: u32 = 535_000;
+
+/// Extend the TTL for the contract's **instance** storage bucket.
+///
+/// Call this at the top of every public entry-point so that a long-dormant
+/// campaign never loses its instance-storage keys to archival.
+#[inline]
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP_AMOUNT);
+}
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
@@ -203,6 +232,9 @@ pub enum DataKey {
     Pledge(Address),
     TotalPledged,
     StretchGoals,
+    /// Tracks which stretch-goal milestones have already emitted their
+    /// `stretch_goal_reached` event (purely informational, no on-chain enforcement).
+    StretchGoalReachedEmitted,
     BonusGoal,
     BonusGoalDescription,
     BonusGoalReachedEmitted,
@@ -215,12 +247,18 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
-    Milestones,
-    MilestoneBasis,
-    MilestoneVote(MilestoneVoteKey),
-    MilestoneRefundClaimed(MilestoneRefundKey),
-    /// Optional [`KycGateConfig`] for this campaign. Absent by default.
-    KycGate,
+    TokenDecimals,
+}
+
+/// Extend the TTL for a single **persistent** storage key.
+///
+/// Call this after every `persistent().set(key, …)` that touches a
+/// per-contributor or per-pledger entry.
+#[inline]
+pub fn bump_persistent(env: &Env, key: &DataKey) {
+    env.storage()
+        .persistent()
+        .extend_ttl(key, LEDGER_THRESHOLD, LEDGER_BUMP_AMOUNT);
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -244,7 +282,7 @@ pub enum ContractError {
     InvalidMinContribution = 9,
     /// deadline must be at least MIN_DEADLINE_OFFSET seconds in the future
     DeadlineTooSoon = 10,
-    /// platform fee_bps must be <= 10_000
+    /// platform fee_bps must be < 10_000 (100% is rejected, audit #31)
     InvalidPlatformFee = 11,
     /// bonus_goal must be strictly greater than goal
     InvalidBonusGoal = 12,
@@ -315,7 +353,8 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If already initialized.
-    /// * If platform fee exceeds 10,000 (100%).
+    /// * If platform fee is >= 10,000 (100%) — a fee of exactly 100% would
+    ///   leave the creator with a zero payout (audit #31).
     /// * If bonus goal is not greater than the primary goal.
     pub fn initialize(
         env: Env,
@@ -328,6 +367,7 @@ impl CrowdfundContract {
         platform_config: Option<PlatformConfig>,
         bonus_goal: Option<i128>,
         bonus_goal_description: Option<String>,
+        expected_token_decimals: u32,
     ) -> Result<(), ContractError> {
         use crowdfund_initialize_function::{execute_initialize, InitParams};
         execute_initialize(
@@ -336,6 +376,7 @@ impl CrowdfundContract {
                 admin,
                 creator,
                 token,
+                expected_token_decimals,
                 goal,
                 deadline,
                 min_contribution,
@@ -348,6 +389,7 @@ impl CrowdfundContract {
 
     /// Returns the list of all contributor addresses.
     pub fn contributors(env: Env) -> Vec<Address> {
+        extend_instance_ttl(&env);
         env.storage()
             .persistent()
             .get(&DataKey::Contributors)
@@ -360,6 +402,7 @@ impl CrowdfundContract {
     /// after the deadline has passed or if the campaign is not active.
     pub fn contribute(env: Env, contributor: Address, amount: i128) -> Result<(), ContractError> {
         contributor.require_auth();
+        extend_instance_ttl(&env);
 
         // Guard: campaign must be active.
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
@@ -404,6 +447,10 @@ impl CrowdfundContract {
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
+        let stored_decimals: u32 = env.storage().instance().get(&DataKey::TokenDecimals).unwrap();
+        if token_client.decimals() != stored_decimals {
+            return Err(ContractError::InvalidParameter);
+        }
 
         // Transfer tokens from the contributor to this contract.
         token_client.transfer(&contributor, env.current_contract_address(), &amount);
@@ -423,9 +470,7 @@ impl CrowdfundContract {
         env.storage()
             .persistent()
             .set(&contribution_key, &new_contribution);
-        env.storage()
-            .persistent()
-            .extend_ttl(&contribution_key, 100, 100);
+        bump_persistent(&env, &contribution_key);
 
         // Update the global total raised with overflow protection.
         let total: i128 = env.storage().instance().get(&DataKey::TotalRaised).unwrap();
@@ -465,6 +510,28 @@ impl CrowdfundContract {
             }
         }
 
+        // Emit stretch_goal_reached for each newly-reached stretch-goal milestone.
+        // Stretch goals are purely informational — see `add_stretch_goal` docs.
+        let stretch_goals: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StretchGoals)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut already_reached: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StretchGoalReachedEmitted)
+            .unwrap_or_else(|| Vec::new(&env));
+        for milestone in stretch_goals.iter() {
+            if new_total >= milestone && !already_reached.contains(&milestone) {
+                emit_stretch_goal_reached(&env, milestone, new_total);
+                already_reached.push_back(milestone);
+            }
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::StretchGoalReachedEmitted, &already_reached);
+
         let mut contributors: Vec<Address> = env
             .storage()
             .persistent()
@@ -479,9 +546,7 @@ impl CrowdfundContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Contributors, &contributors);
-            env.storage()
-                .persistent()
-                .extend_ttl(&DataKey::Contributors, 100, 100);
+            bump_persistent(&env, &DataKey::Contributors);
         }
 
         emit_contributed(&env, &contributor, amount, new_total);
@@ -497,6 +562,7 @@ impl CrowdfundContract {
         creator: Address,
         nft_contract: Address,
     ) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         if creator != stored_creator {
             return Err(ContractError::Unauthorized);
@@ -514,6 +580,7 @@ impl CrowdfundContract {
     /// and only collected if the goal is met after the deadline.
     pub fn pledge(env: Env, pledger: Address, amount: i128) -> Result<(), ContractError> {
         pledger.require_auth();
+        extend_instance_ttl(&env);
 
         let min_contribution: i128 = env
             .storage()
@@ -548,7 +615,7 @@ impl CrowdfundContract {
         env.storage()
             .persistent()
             .set(&pledge_key, &(prev + amount));
-        env.storage().persistent().extend_ttl(&pledge_key, 100, 100);
+        bump_persistent(&env, &pledge_key);
 
         // Update the global total pledged.
         let total_pledged: i128 = env
@@ -574,9 +641,7 @@ impl CrowdfundContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Pledgers, &pledgers);
-            env.storage()
-                .persistent()
-                .extend_ttl(&DataKey::Pledgers, 100, 100);
+            bump_persistent(&env, &DataKey::Pledgers);
         }
 
         env.events()
@@ -591,6 +656,7 @@ impl CrowdfundContract {
     /// Only callable after the deadline and when the combined total of
     /// contributions and pledges meets or exceeds the goal.
     pub fn collect_pledges(env: Env) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
@@ -642,7 +708,7 @@ impl CrowdfundContract {
 
                 // Clear the pledge
                 env.storage().persistent().set(&pledge_key, &0i128);
-                env.storage().persistent().extend_ttl(&pledge_key, 100, 100);
+                bump_persistent(&env, &pledge_key);
             }
         }
 
@@ -666,6 +732,7 @@ impl CrowdfundContract {
     /// If a platform fee is configured, deducts the fee and transfers it to
     /// the platform address, then sends the remainder to the creator.
     pub fn withdraw(env: Env) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
@@ -748,6 +815,7 @@ impl CrowdfundContract {
     /// `refund_single`.
     #[allow(deprecated)]
     pub fn refund(env: Env) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
@@ -788,9 +856,7 @@ impl CrowdfundContract {
                     amount,
                 );
                 env.storage().persistent().set(&contribution_key, &0i128);
-                env.storage()
-                    .persistent()
-                    .extend_ttl(&contribution_key, 100, 100);
+                bump_persistent(&env, &contribution_key);
                 emit_refunded(&env, &contributor, amount);
             }
         }
@@ -822,6 +888,7 @@ impl CrowdfundContract {
     /// * Uses `checked_sub` to prevent underflow on `total_raised`.
     pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
         contributor.require_auth();
+        extend_instance_ttl(&env);
         validate_refund_preconditions(&env, &contributor)?;
         execute_refund_single(&env, &contributor)?;
         Ok(())
@@ -830,6 +897,7 @@ impl CrowdfundContract {
     /// Cancel the campaign and refund all contributors — callable only by
     /// the creator while the campaign is still Active.
     pub fn cancel(env: Env) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
@@ -890,16 +958,53 @@ impl CrowdfundContract {
     /// provided and the caller must be authorized as the admin.
     ///
     /// # Arguments
-    /// * `new_wasm_hash` – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `new_wasm_hash`     – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `current_wasm_hash` – The SHA-256 hash of the currently deployed WASM binary.
+    ///                         This is stored as the rollback point before the upgrade
+    ///                         is applied. If the new WASM is broken, call
+    ///                         `rollback_upgrade` to restore this hash.
     ///
     /// # Panics
     /// * If the caller is not the admin.
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
+    /// * If `new_wasm_hash` is all zeros.
+    pub fn upgrade(
+        env: Env,
+        new_wasm_hash: soroban_sdk::BytesN<32>,
+        current_wasm_hash: soroban_sdk::BytesN<32>,
+    ) {
         let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+
+        // Store the current WASM hash as the rollback point before applying the upgrade.
+        // This ensures we can always restore the previous working implementation.
+        admin_upgrade_mechanism::store_current_wasm_hash(&env, &current_wasm_hash);
+
         admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
 
         env.events()
-            .publish(("crowdfund", "upgrade"), (admin, new_wasm_hash));
+            .publish(("crowdfund", "upgrade"), (admin, current_wasm_hash, new_wasm_hash));
+    }
+
+    /// Rollback the contract to the previous WASM implementation — admin-only.
+    ///
+    /// This function restores the WASM implementation that was stored as the rollback
+    /// point during the last successful `upgrade()` call. If the new WASM introduced
+    /// a bug or storage layout mismatch, this allows the admin to recover without
+    /// losing access to contract funds.
+    ///
+    /// # Panics
+    /// * If the caller is not the admin.
+    /// * If no previous WASM hash is stored (no prior upgrade was performed).
+    ///
+    /// # Returns
+    /// The restored WASM hash.
+    pub fn rollback_upgrade(env: Env) -> soroban_sdk::BytesN<32> {
+        let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+        let restored_hash = admin_upgrade_mechanism::rollback_upgrade(&env);
+
+        env.events()
+            .publish(("crowdfund", "rollback"), (admin, restored_hash.clone()));
+
+        restored_hash
     }
 
     /// Update campaign metadata — only callable by the creator while the
@@ -917,6 +1022,7 @@ impl CrowdfundContract {
         description: Option<String>,
         socials: Option<String>,
     ) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         // Check campaign is active.
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
@@ -1003,6 +1109,7 @@ impl CrowdfundContract {
     }
 
     pub fn add_roadmap_item(env: Env, date: u64, description: String) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
 
@@ -1046,6 +1153,7 @@ impl CrowdfundContract {
     }
 
     pub fn roadmap(env: Env) -> Vec<RoadmapItem> {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::Roadmap)
@@ -1056,7 +1164,23 @@ impl CrowdfundContract {
     ///
     /// Only the creator can add stretch goals. The milestone must be greater
     /// than the primary goal.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// Stretch goals are **purely informational** — they serve as progress
+    /// indicators for UI consumers and do **not** trigger any on-chain
+    /// enforcement (no extra minting, no fee adjustment, no fund-release
+    /// changes). When a contribution pushes `total_raised` past a stretch-goal
+    /// milestone, a `stretch_goal_reached` event is emitted exactly once per
+    /// milestone during `contribute()`.
+    ///
+    /// Downstream indexers and front-ends can listen for this event to
+    /// display stretch-goal progress. If future protocol upgrades require
+    /// on-chain enforcement at stretch-goal boundaries, new storage flags or
+    /// contract logic should be added without altering the existing
+    /// informational semantics for backward compatibility.
     pub fn add_stretch_goal(env: Env, milestone: i128) -> Result<(), ContractError> {
+        extend_instance_ttl(&env);
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
 
@@ -1088,7 +1212,15 @@ impl CrowdfundContract {
     /// Returns the next unmet stretch goal milestone.
     ///
     /// Returns 0 if there are no stretch goals or all have been met.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// This is a **read-only informational getter** for UI/indexer consumption.
+    /// Finding a next milestone here does **not** change any contract behavior
+    /// (no fee adjustment, no fund-release changes, no extra minting). See
+    /// [`add_stretch_goal`](#method.add_stretch_goal) for the full design rationale.
     pub fn current_milestone(env: Env) -> i128 {
+        extend_instance_ttl(&env);
         let total_raised: i128 = env
             .storage()
             .instance()
@@ -1268,6 +1400,7 @@ impl CrowdfundContract {
     }
 
     pub fn total_raised(env: Env) -> i128 {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::TotalRaised)
@@ -1275,21 +1408,40 @@ impl CrowdfundContract {
     }
 
     pub fn goal(env: Env) -> i128 {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::Goal).unwrap()
     }
 
     /// Returns the optional bonus-goal threshold.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// The bonus goal is a **purely informational** milestone. When
+    /// `total_raised` crosses the bonus-goal threshold, a
+    /// `bonus_goal_reached` event is emitted exactly once (see
+    /// [`contribute`](#method.contribute)), but no on-chain enforcement
+    /// (extra minting, fee changes, or fund-release schedule) is triggered.
+    /// Downstream consumers should treat this as a progress indicator.
     pub fn bonus_goal(env: Env) -> Option<i128> {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::BonusGoal)
     }
 
     /// Returns the optional bonus-goal description.
     pub fn bonus_goal_description(env: Env) -> Option<String> {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::BonusGoalDescription)
     }
 
     /// Returns true if the optional bonus goal has been reached.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// This is a **read-only informational getter**. Crossing the bonus-goal
+    /// threshold does **not** alter contract behavior — see
+    /// [`bonus_goal`](#method.bonus_goal) for the full design rationale.
     pub fn bonus_goal_reached(env: Env) -> bool {
+        extend_instance_ttl(&env);
         let total_raised: i128 = env
             .storage()
             .instance()
@@ -1305,6 +1457,7 @@ impl CrowdfundContract {
 
     /// Returns bonus-goal progress in basis points (capped at 10,000).
     pub fn bonus_goal_progress_bps(env: Env) -> u32 {
+        extend_instance_ttl(&env);
         let total_raised: i128 = env
             .storage()
             .instance()
@@ -1329,10 +1482,12 @@ impl CrowdfundContract {
 
     /// Returns the campaign deadline.
     pub fn deadline(env: Env) -> u64 {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::Deadline).unwrap()
     }
 
     pub fn contribution(env: Env, contributor: Address) -> i128 {
+        extend_instance_ttl(&env);
         env.storage()
             .persistent()
             .get(&DataKey::Contribution(contributor))
@@ -1340,6 +1495,7 @@ impl CrowdfundContract {
     }
 
     pub fn min_contribution(env: Env) -> i128 {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::MinContribution)
@@ -1348,6 +1504,7 @@ impl CrowdfundContract {
 
     /// Returns comprehensive campaign statistics.
     pub fn get_stats(env: Env) -> CampaignStats {
+        extend_instance_ttl(&env);
         let total_raised: i128 = env
             .storage()
             .instance()
@@ -1401,6 +1558,7 @@ impl CrowdfundContract {
     }
 
     pub fn title(env: Env) -> String {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::Title)
@@ -1408,6 +1566,7 @@ impl CrowdfundContract {
     }
 
     pub fn description(env: Env) -> String {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::Description)
@@ -1415,6 +1574,7 @@ impl CrowdfundContract {
     }
 
     pub fn socials(env: Env) -> String {
+        extend_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::SocialLinks)
@@ -1427,11 +1587,51 @@ impl CrowdfundContract {
 
     /// Returns the token contract address used for contributions.
     pub fn token(env: Env) -> Address {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::Token).unwrap()
     }
 
     /// Returns the configured NFT contract address, if any.
     pub fn nft_contract(env: Env) -> Option<Address> {
+        extend_instance_ttl(&env);
         env.storage().instance().get(&DataKey::NFTContract)
+    }
+
+    /// Permissionless rent-extension heartbeat.
+    ///
+    /// Anyone may call `keep_alive` to bump the TTL of both the instance-storage
+    /// bucket and the two global persistent lists (`Contributors`, `Pledgers`) so
+    /// that a long-dormant Active campaign cannot be silently archived by the
+    /// Soroban network before its deadline arrives.
+    ///
+    /// # Why this is safe
+    /// * No authentication required — extending rent harms no one.
+    /// * No state mutation beyond TTL bumps — storage contents are unchanged.
+    /// * The function is a no-op on already-healthy entries (the protocol only
+    ///   extends when the current TTL is *below* `LEDGER_THRESHOLD`).
+    ///
+    /// # Errors
+    /// Always returns `Ok(())`.
+    pub fn keep_alive(env: Env) -> Result<(), ContractError> {
+        // Bump instance storage (covers all instance-storage keys in one call).
+        extend_instance_ttl(&env);
+
+        // Bump the Contributors persistent list if it exists.
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Contributors)
+        {
+            bump_persistent(&env, &DataKey::Contributors);
+        }
+
+        // Bump the Pledgers persistent list if it exists.
+        if env.storage().persistent().has(&DataKey::Pledgers) {
+            bump_persistent(&env, &DataKey::Pledgers);
+        }
+
+        env.events().publish(("crowdfund", "keep_alive"), ());
+
+        Ok(())
     }
 }

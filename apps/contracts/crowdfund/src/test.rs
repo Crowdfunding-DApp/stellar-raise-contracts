@@ -1,9 +1,6 @@
 #![cfg(test)]
 
-use crate::{
-    ContractError, CrowdfundContract, CrowdfundContractClient, MilestoneInput, MilestoneStatus,
-    Status,
-};
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -106,6 +103,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
     admin
 }
@@ -125,6 +123,7 @@ fn test_initialize() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Verify initialization was successful
@@ -149,6 +148,7 @@ fn test_contribute() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -179,6 +179,7 @@ fn test_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -213,6 +214,7 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let result = client.try_initialize(
@@ -225,9 +227,32 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_token_decimals() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    // Provide mismatched expected decimals (actual token defaults to 7)
+    let result = client.try_initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+        &6,
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidParameter);
 }
 
 #[test]
@@ -255,6 +280,7 @@ fn test_lifecycle_successful_campaign_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -289,6 +315,7 @@ fn test_lifecycle_underfunded_refunds() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -321,6 +348,7 @@ fn test_lifecycle_multiple_backers_refund() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contrib1 = Address::generate(&env);
@@ -374,6 +402,7 @@ fn test_contribution_after_deadline_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     env.ledger().set_timestamp(deadline + 1);
@@ -403,6 +432,7 @@ fn test_contribution_below_minimum_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -429,6 +459,7 @@ fn test_contribution_zero_amount_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -455,6 +486,7 @@ fn test_status_transition_to_successful() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -485,6 +517,7 @@ fn test_multiple_contributions_same_backer() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -505,259 +538,44 @@ fn test_multiple_contributions_same_backer() {
     assert_eq!(client.total_raised(), 450_000);
 }
 
-// ── Milestone-gated partial release ──────────────────────────────────────────
+// ── Audit #31 regression: fee_bps == 10_000 (100%) full-drain config ──────────
 
-/// Full happy path: propose two milestones, both approved by a majority
-/// vote, both released, campaign completes.
+/// A `fee_bps` of exactly 10_000 (100%) must be rejected at `initialize()`.
+///
+/// Before the fix, `validate_platform_fee` accepted `fee_bps ==
+/// MAX_PLATFORM_FEE_BPS`, so this platform config would pass validation and
+/// leave `creator_payout = total - fee == 0` in `withdraw()` — a full drain
+/// to the platform address.
 #[test]
-fn test_lifecycle_milestone_happy_path_full_release() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+fn test_initialize_rejects_full_drain_platform_fee() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
     let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
 
-    client.initialize(
+    let result = client.try_initialize(
         &platform_admin,
         &creator,
         &token_address,
-        &goal,
+        &1_000_000,
         &deadline,
         &1_000,
-        &None,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 10_000,
+        }),
         &None,
         &None,
     );
 
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-
-    let schedule = soroban_sdk::vec![
-        &env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 1"),
-            amount: 600_000,
-        },
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 2"),
-            amount: 400_000,
-        },
-    ];
-    client.propose_milestones(&creator, &schedule);
-    assert_eq!(client.milestones().len(), 2);
-
-    client.vote_milestone(&contributor, &0, &true);
-    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Approved);
-
-    client.release_milestone(&creator, &0);
-    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Released);
-    assert_eq!(client.total_raised(), 400_000);
-    assert_eq!(client.status(), Status::Active);
-
-    client.vote_milestone(&contributor, &1, &true);
-    client.release_milestone(&creator, &1);
-
-    assert_eq!(client.milestone(&1).unwrap().status, MilestoneStatus::Released);
-    assert_eq!(client.total_raised(), 0);
-    assert_eq!(client.status(), Status::Successful);
-}
-
-/// A rejected milestone's funds go to pro-rata refund, not the creator; the
-/// campaign still completes once every milestone is settled.
-#[test]
-fn test_lifecycle_milestone_rejected_then_refunded() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-
-    let schedule = soroban_sdk::vec![
-        &env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 1"),
-            amount: 700_000,
-        },
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 2"),
-            amount: 300_000,
-        },
-    ];
-    client.propose_milestones(&creator, &schedule);
-
-    client.vote_milestone(&contributor, &0, &false);
-    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Rejected);
-    assert_eq!(client.status(), Status::Active);
-
-    client.claim_milestone_refund(&contributor, &0);
-    assert!(client.has_claimed_milestone_refund(&0, &contributor));
-    assert_eq!(client.total_raised(), 300_000);
-
-    client.vote_milestone(&contributor, &1, &true);
-    client.release_milestone(&creator, &1);
-
-    assert_eq!(client.total_raised(), 0);
-    assert_eq!(client.status(), Status::Successful);
-}
-
-/// A milestone whose voting window closes without crossing either threshold
-/// (an exact 50/50 split here) resolves to Rejected, not Approved.
-#[test]
-fn test_lifecycle_milestone_voting_timeout_defaults_to_rejected() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let c1 = Address::generate(&env);
-    let c2 = Address::generate(&env);
-    token_client.mint(&c1, &500_000);
-    token_client.mint(&c2, &500_000);
-    client.contribute(&c1, &500_000);
-    client.contribute(&c2, &500_000);
-
-    env.ledger().set_timestamp(deadline + 1);
-
-    let schedule = soroban_sdk::vec![
-        &env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "only phase"),
-            amount: 1_000_000,
-        },
-    ];
-    client.propose_milestones(&creator, &schedule);
-
-    // Exactly half the basis votes yes -> stays Pending (must strictly exceed half).
-    client.vote_milestone(&c1, &0, &true);
-    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Pending);
-
-    let voting_deadline = client.milestone(&0).unwrap().voting_deadline;
-    env.ledger().set_timestamp(voting_deadline + 1);
-
-    client.finalize_milestone_vote(&0);
-    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Rejected);
-    assert_eq!(client.status(), Status::Successful);
-
-    client.claim_milestone_refund(&c1, &0);
-    client.claim_milestone_refund(&c2, &0);
-    assert_eq!(client.total_raised(), 0);
-}
-
-fn propose_single_milestone_for_full_goal(
-    env: &Env,
-    client: &CrowdfundContractClient,
-    creator: &Address,
-    amount: i128,
-) {
-    let schedule = soroban_sdk::vec![
-        env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(env, "only phase"),
-            amount,
-        },
-    ];
-    client.propose_milestones(creator, &schedule);
-}
-
-#[test]
-fn test_milestone_double_vote_rejected() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let c1 = Address::generate(&env);
-    let c2 = Address::generate(&env);
-    token_client.mint(&c1, &500_000);
-    token_client.mint(&c2, &500_000);
-    client.contribute(&c1, &500_000);
-    client.contribute(&c2, &500_000);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    // c1's vote alone doesn't cross either threshold, so the milestone stays
-    // Pending and a second vote from c1 hits AlreadyVoted (not MilestoneNotPending).
-    client.vote_milestone(&c1, &0, &true);
-    let result = client.try_vote_milestone(&c1, &0, &true);
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), ContractError::AlreadyVoted);
-}
-
-#[test]
-fn test_milestone_release_before_approval_rejected() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    let result = client.try_release_milestone(&creator, &0);
-    assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().unwrap(),
-        ContractError::MilestoneNotApproved
+        ContractError::InvalidPlatformFee
     );
 }
 
+/// The new maximum valid fee (`MAX_PLATFORM_FEE_BPS - 1` = 9_999 bps) must
+/// still leave the creator with a strictly positive payout after `withdraw()`.
 #[test]
-fn test_milestone_propose_sum_mismatch_rejected() {
+fn test_withdraw_with_max_valid_fee_leaves_nonzero_creator_payout() {
     let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
     let deadline = env.ledger().timestamp() + 3600;
     let goal = 1_000_000;
@@ -769,50 +587,10 @@ fn test_milestone_propose_sum_mismatch_rejected() {
         &goal,
         &deadline,
         &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-
-    let schedule = soroban_sdk::vec![
-        &env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 1"),
-            amount: 500_000,
-        },
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "phase 2"),
-            amount: 400_000,
-        },
-    ];
-    let result = client.try_propose_milestones(&creator, &schedule);
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::InvalidMilestoneSchedule
-    );
-}
-
-#[test]
-fn test_milestone_propose_twice_rejected() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 9_999,
+        }),
         &None,
         &None,
     );
@@ -822,152 +600,11 @@ fn test_milestone_propose_twice_rejected() {
     client.contribute(&contributor, &goal);
 
     env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+    client.withdraw();
 
-    let schedule = soroban_sdk::vec![
-        &env,
-        MilestoneInput {
-            description: soroban_sdk::String::from_str(&env, "second attempt"),
-            amount: goal,
-        },
-    ];
-    let result = client.try_propose_milestones(&creator, &schedule);
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::MilestonesAlreadyProposed
-    );
-}
-
-#[test]
-fn test_milestone_vote_zero_weight_rejected() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    let stranger = Address::generate(&env);
-    let result = client.try_vote_milestone(&stranger, &0, &true);
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::NoContributionWeight
-    );
-}
-
-#[test]
-fn test_withdraw_blocked_once_milestones_active() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    let result = client.try_withdraw();
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::MilestoneModeActive
-    );
-}
-
-#[test]
-fn test_cancel_blocked_once_milestones_active() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    let result = client.try_cancel();
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::MilestoneModeActive
-    );
-}
-
-#[test]
-fn test_collect_pledges_blocked_once_milestones_active() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-    let goal = 1_000_000;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &goal,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &goal);
-    client.contribute(&contributor, &goal);
-
-    env.ledger().set_timestamp(deadline + 1);
-    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
-
-    let result = client.try_collect_pledges();
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        ContractError::MilestoneModeActive
+    let token = token::Client::new(&env, &token_address);
+    assert!(
+        token.balance(&creator) > 0,
+        "creator payout must be strictly positive, even at the maximum valid fee"
     );
 }
