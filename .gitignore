@@ -55,5 +55,5 @@ yarn-error.log*
 *.bak
 *.tmp
 
-# Issues / tracking
+# Audit / Issue tracking
 somzilla.md

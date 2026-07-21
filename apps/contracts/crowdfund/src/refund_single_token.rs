@@ -28,7 +28,7 @@
 
 use soroban_sdk::{token, Address, Env};
 
-use crate::{withdraw_event_emission::emit_refunded, ContractError, DataKey, Status};
+use crate::{withdraw_event_emission::emit_refunded, ContractError, DataKey, Status, LEDGER_BUMP_AMOUNT, LEDGER_THRESHOLD};
 
 // ── Transfer primitive ────────────────────────────────────────────────────────
 
@@ -131,7 +131,7 @@ pub fn execute_refund_single(env: &Env, contributor: &Address) -> Result<i128, C
     env.storage().persistent().set(&contribution_key, &0i128);
     env.storage()
         .persistent()
-        .extend_ttl(&contribution_key, 100, 100);
+        .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP_AMOUNT);
 
     let total: i128 = env
         .storage()
