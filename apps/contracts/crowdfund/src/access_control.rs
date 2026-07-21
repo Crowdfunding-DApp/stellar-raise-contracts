@@ -20,6 +20,7 @@
 
 use soroban_sdk::{Address, Env, Symbol};
 
+use crate::campaign_goal_minimum::validate_platform_fee;
 use crate::{ContractError, DataKey, PlatformConfig};
 
 // ── Role helpers ─────────────────────────────────────────────────────────────
@@ -134,10 +135,14 @@ pub fn is_paused(env: &Env) -> bool {
 ///
 /// # Arguments
 /// * `caller` – Must match the stored `GovernanceAddress`.
-/// * `config` – New fee config; `fee_bps` must be <= 10_000 (100%).
+/// * `config` – New fee config; `fee_bps` must be < 10_000 (100%).
 ///
 /// # Errors
-/// * [`ContractError::InvalidPlatformFee`] if `fee_bps > 10_000`.
+/// * [`ContractError::InvalidPlatformFee`] if `fee_bps >= 10_000`. Delegates to
+///   [`validate_platform_fee`] rather than re-checking the threshold inline so
+///   this path can never drift from the initialization-time check (audit #31
+///   found the two had already diverged: this function used to accept exactly
+///   100%, permitting a full-drain config via a governance update).
 ///
 /// # Security
 /// - `caller.require_auth()` ensures the governance multisig signed the tx.
@@ -154,9 +159,7 @@ pub fn set_platform_fee(
         panic!("only GovernanceAddress can set platform fee");
     }
 
-    if config.fee_bps > 10_000 {
-        return Err(ContractError::InvalidPlatformFee);
-    }
+    validate_platform_fee(config.fee_bps).map_err(|_| ContractError::InvalidPlatformFee)?;
 
     env.storage()
         .instance()
