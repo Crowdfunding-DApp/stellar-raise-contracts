@@ -19,6 +19,7 @@ pub mod cargo_toml_rust;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
+pub mod kyc_gate;
 pub mod milestone_release;
 pub mod proptest_generator_boundary;
 pub mod refund_single_token;
@@ -37,6 +38,8 @@ use refund_single_token::{
 // --- Tests ---
 #[cfg(test)]
 mod auth_tests;
+#[cfg(test)]
+mod kyc_gate_test;
 #[cfg(test)]
 mod refund_single_token_security_tests;
 #[cfg(test)]
@@ -145,6 +148,35 @@ pub struct PlatformConfig {
     pub fee_bps: u32,
 }
 
+/// Pluggable KYC/AML gate configuration for this campaign. Absent (`None`,
+/// the default — see [`DataKey::KycGate`]) means the gate is fully off and
+/// `contribute`/`pledge` behave exactly as if the feature didn't exist.
+///
+/// See [`crate::kyc_gate`] for the enforcement logic and the rationale for
+/// why this is admin-configured rather than creator-configured.
+#[derive(Clone)]
+#[contracttype]
+pub struct KycGateConfig {
+    /// Address of an external attestation contract implementing
+    /// [`KycVerifier`]. It is populated off-chain by a KYC provider after
+    /// they verify an address; this contract never stores personal data.
+    pub verifier: Address,
+    /// Once an address's cumulative committed amount (contributions +
+    /// pledges) on this campaign reaches this value, further
+    /// contributions/pledges from that address require `verifier` to report
+    /// them as verified. Set per legal/compliance guidance, not derived
+    /// on-chain.
+    pub threshold: i128,
+    /// Quick on/off switch that preserves `verifier`/`threshold`/`jurisdiction`
+    /// across toggles, so re-enabling doesn't require resupplying them.
+    pub enabled: bool,
+    /// Free-form jurisdiction tag (e.g. an ISO 3166-1 alpha-2 code) recording
+    /// *why* this gate is configured, for audit/legal traceability. Purely
+    /// informational — never interpreted on-chain; enforcement is driven
+    /// only by `threshold` and `enabled`.
+    pub jurisdiction: Symbol,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct CampaignStats {
@@ -187,6 +219,8 @@ pub enum DataKey {
     MilestoneBasis,
     MilestoneVote(MilestoneVoteKey),
     MilestoneRefundClaimed(MilestoneRefundKey),
+    /// Optional [`KycGateConfig`] for this campaign. Absent by default.
+    KycGate,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -241,11 +275,27 @@ pub enum ContractError {
     MilestoneModeActive = 26,
     /// `claim_milestone_refund` called on a milestone that isn't `Rejected`.
     MilestoneNotRejected = 27,
+    /// `contribute`/`pledge` blocked: the address's cumulative committed
+    /// amount reached the configured KYC threshold and the configured
+    /// `KycVerifier` does not report the address as verified.
+    KycRequired = 28,
+    /// `set_kyc_gate_enabled` called before `configure_kyc_gate` has ever
+    /// been called for this campaign.
+    KycGateNotConfigured = 29,
 }
 
 #[contractclient(name = "NftContractClient")]
 pub trait NftContract {
     fn mint(env: Env, to: Address) -> u128;
+}
+
+/// External KYC/AML attestation contract interface. The configured verifier
+/// is expected to have already performed its own off-chain identity
+/// verification and simply exposes the resulting status on-chain — this
+/// contract never receives or stores personal data itself.
+#[contractclient(name = "KycVerifierClient")]
+pub trait KycVerifier {
+    fn is_verified(env: Env, who: Address) -> bool;
 }
 
 #[contract]
@@ -346,6 +396,11 @@ impl CrowdfundContract {
         {
             return Err(ContractError::InvalidParameter);
         }
+
+        // KYC gate: no-op unless a gate has been configured for this
+        // campaign (see `kyc_gate` module) and this contribution pushes the
+        // contributor's cumulative committed amount to/past the threshold.
+        kyc_gate::enforce_kyc_gate(&env, &contributor, amount)?;
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
@@ -483,6 +538,9 @@ impl CrowdfundContract {
         if is_new_pledger && !contract_state_size::validate_pledger_capacity(pledgers.len()) {
             return Err(ContractError::InvalidParameter);
         }
+
+        // KYC gate: same guard as `contribute` — no-op unless configured.
+        kyc_gate::enforce_kyc_gate(&env, &pledger, amount)?;
 
         // Update the pledger's running total.
         let pledge_key = DataKey::Pledge(pledger.clone());
@@ -1102,6 +1160,56 @@ impl CrowdfundContract {
         milestone_id: u32,
     ) -> Result<(), ContractError> {
         execute_claim_milestone_refund(&env, contributor, milestone_id)
+    }
+
+    // ── KYC / AML gate (pluggable, off by default) ────────────────────────────
+
+    /// Configures (or reconfigures) this campaign's KYC/AML gate — admin-only.
+    ///
+    /// Deliberately gated on `Admin`, not `Creator`: the party motivated to
+    /// accept large, unverified pledges is the campaign creator, so the
+    /// ability to enable, disable, or loosen this gate is kept out of their
+    /// hands. The admin (the same role that can upgrade the contract) is
+    /// expected to set `threshold`/`jurisdiction` per legal/compliance
+    /// guidance — this contract only *enforces* the resulting threshold, it
+    /// doesn't decide it.
+    ///
+    /// A campaign with no configured gate (the default) behaves exactly as
+    /// it did before this feature existed.
+    pub fn configure_kyc_gate(
+        env: Env,
+        admin: Address,
+        verifier: Address,
+        threshold: i128,
+        jurisdiction: Symbol,
+    ) -> Result<(), ContractError> {
+        kyc_gate::execute_configure_kyc_gate(&env, admin, verifier, threshold, jurisdiction)
+    }
+
+    /// Toggles the KYC gate on/off without discarding its configured
+    /// `verifier`/`threshold`/`jurisdiction` — admin-only. Fails with
+    /// [`ContractError::KycGateNotConfigured`] if `configure_kyc_gate` has
+    /// never been called for this campaign.
+    pub fn set_kyc_gate_enabled(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+    ) -> Result<(), ContractError> {
+        kyc_gate::execute_set_kyc_gate_enabled(&env, admin, enabled)
+    }
+
+    /// Returns this campaign's KYC gate configuration, if one has been set.
+    pub fn kyc_gate_config(env: Env) -> Option<KycGateConfig> {
+        kyc_gate::kyc_gate_config(&env)
+    }
+
+    /// Read-only preflight: would a `contribute`/`pledge` of `amount` by
+    /// `who` be allowed right now? Lets a frontend prompt for KYC
+    /// verification *before* submitting a transaction that would otherwise
+    /// fail on-chain with [`ContractError::KycRequired`], so the gate never
+    /// surprises a backer as a failed transaction.
+    pub fn kyc_gate_preview(env: Env, who: Address, amount: i128) -> bool {
+        kyc_gate::would_pass_kyc_gate(&env, &who, amount)
     }
 
     /// Returns the full milestone schedule for this campaign (empty if none

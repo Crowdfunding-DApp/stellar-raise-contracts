@@ -2,7 +2,7 @@
 
 use soroban_sdk::{Address, Env, Vec};
 
-use crate::{ContractError, DataKey, NftContractClient, MAX_NFT_MINT_BATCH};
+use crate::{ContractError, DataKey, KycGateConfig, NftContractClient, MAX_NFT_MINT_BATCH};
 
 // ── contributed ───────────────────────────────────────────────────────────────
 
@@ -160,6 +160,26 @@ pub fn emit_milestone_schedule_completed(
         ("crowdfund", "milestone_schedule_completed"),
         (total_released, total_refunded),
     );
+}
+
+// ── kyc_gate_configured ───────────────────────────────────────────────────────
+
+pub fn emit_kyc_gate_configured(env: &Env, config: &KycGateConfig) {
+    env.events().publish(
+        ("crowdfund", "kyc_gate_configured"),
+        (
+            config.verifier.clone(),
+            config.threshold,
+            config.jurisdiction.clone(),
+        ),
+    );
+}
+
+// ── kyc_gate_toggled ──────────────────────────────────────────────────────────
+
+pub fn emit_kyc_gate_toggled(env: &Env, enabled: bool) {
+    env.events()
+        .publish(("crowdfund", "kyc_gate_toggled"), enabled);
 }
 
 // ── NFT batch minting ─────────────────────────────────────────────────────────
