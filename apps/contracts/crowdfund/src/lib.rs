@@ -15,7 +15,6 @@ use withdraw_event_emission::{
 // --- Modules ---
 pub mod admin_upgrade_mechanism;
 pub mod campaign_goal_minimum;
-pub mod cargo_toml_rust;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
@@ -38,8 +37,6 @@ mod refund_single_token_security_tests;
 mod test;
 #[cfg(test)]
 mod withdraw_event_emission_test;
-// #[cfg(test)]
-// mod cargo_toml_rust_test;
 // #[cfg(test)]
 // mod contract_state_size_test;
 // #[cfg(test)]
