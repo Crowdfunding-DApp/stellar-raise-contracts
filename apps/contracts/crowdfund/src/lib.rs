@@ -19,12 +19,17 @@ pub mod cargo_toml_rust;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
+pub mod milestone_release;
 pub mod proptest_generator_boundary;
 pub mod refund_single_token;
 pub mod soroban_sdk_minor;
 pub mod withdraw_event_emission;
 
 // --- Imports from Modules ---
+use milestone_release::{
+    execute_claim_milestone_refund, execute_finalize_milestone_vote,
+    execute_propose_milestones, execute_release_milestone, execute_vote_milestone,
+};
 use refund_single_token::{
     execute_refund_single, refund_single_transfer, validate_refund_preconditions,
 };
@@ -66,7 +71,7 @@ pub const MAX_NFT_MINT_BATCH: u32 = 50;
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
 pub enum Status {
     Active,
@@ -80,6 +85,57 @@ pub enum Status {
 pub struct RoadmapItem {
     pub date: u64,
     pub description: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub enum MilestoneStatus {
+    Pending,
+    Approved,
+    Rejected,
+    Released,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct Milestone {
+    pub id: u32,
+    pub description: String,
+    pub amount: i128,
+    pub status: MilestoneStatus,
+    pub yes_weight: i128,
+    pub no_weight: i128,
+    pub voting_deadline: u64,
+}
+
+/// Caller-supplied input for one row of a proposed milestone schedule.
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneInput {
+    pub description: String,
+    pub amount: i128,
+}
+
+/// Composite storage key for a single voter's vote on a single milestone.
+///
+/// `#[contracttype]` only supports tuple-variant enum fields with at most
+/// one element, so this pair is wrapped in a named struct instead of e.g.
+/// `DataKey::MilestoneVote(u32, Address)`.
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneVoteKey {
+    pub milestone_id: u32,
+    pub voter: Address,
+}
+
+/// Composite storage key for a single contributor's claimed-refund flag on
+/// a single (rejected) milestone. Same one-field-tuple-variant constraint
+/// as [`MilestoneVoteKey`].
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneRefundKey {
+    pub milestone_id: u32,
+    pub contributor: Address,
 }
 
 #[derive(Clone)]
@@ -127,6 +183,10 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
+    Milestones,
+    MilestoneBasis,
+    MilestoneVote(MilestoneVoteKey),
+    MilestoneRefundClaimed(MilestoneRefundKey),
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -161,6 +221,26 @@ pub enum ContractError {
     CampaignNotActive = 16,
     Unauthorized = 17,
     InvalidParameter = 18,
+    /// `propose_milestones` called after a schedule already exists.
+    MilestonesAlreadyProposed = 19,
+    /// Proposed schedule is empty, over capacity, has a non-positive amount
+    /// or oversized description, or its amounts don't sum to `total_raised`.
+    InvalidMilestoneSchedule = 20,
+    /// No milestone exists with the given id.
+    MilestoneNotFound = 21,
+    /// Milestone is not `Pending`, or its voting window has closed.
+    MilestoneNotPending = 22,
+    /// `release_milestone` called on a milestone that isn't `Approved`.
+    MilestoneNotApproved = 23,
+    /// Caller already voted on this milestone.
+    AlreadyVoted = 24,
+    /// Caller has no recorded contribution, so has zero voting/refund weight.
+    NoContributionWeight = 25,
+    /// `withdraw`/`cancel`/`collect_pledges` blocked because a milestone
+    /// schedule is active for this campaign.
+    MilestoneModeActive = 26,
+    /// `claim_milestone_refund` called on a milestone that isn't `Rejected`.
+    MilestoneNotRejected = 27,
 }
 
 #[contractclient(name = "NftContractClient")]
@@ -458,6 +538,15 @@ impl CrowdfundContract {
             return Err(ContractError::CampaignNotActive);
         }
 
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
+        }
+
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
         if env.ledger().timestamp() <= deadline {
             return Err(ContractError::CampaignStillActive);
@@ -522,6 +611,15 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -677,6 +775,15 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -944,6 +1051,114 @@ impl CrowdfundContract {
 
         0
     }
+
+    // ── Milestone-gated partial release ──────────────────────────────────────
+
+    /// Proposes a one-time milestone release schedule for the raised funds.
+    ///
+    /// Creator-only. Only callable once the deadline has passed and the goal
+    /// has been met (the same gate as [`Self::withdraw`]), and only if no
+    /// schedule has been proposed yet. The schedule's amounts must sum
+    /// exactly to `total_raised`.
+    pub fn propose_milestones(
+        env: Env,
+        creator: Address,
+        milestones: Vec<MilestoneInput>,
+    ) -> Result<(), ContractError> {
+        execute_propose_milestones(&env, creator, milestones)
+    }
+
+    /// Casts a weighted vote (by contribution amount) to approve or reject
+    /// a pending milestone.
+    pub fn vote_milestone(
+        env: Env,
+        voter: Address,
+        milestone_id: u32,
+        approve: bool,
+    ) -> Result<(), ContractError> {
+        execute_vote_milestone(&env, voter, milestone_id, approve)
+    }
+
+    /// Permissionlessly resolves a milestone whose voting window has closed
+    /// without crossing either threshold. Silence resolves to `Rejected`.
+    pub fn finalize_milestone_vote(env: Env, milestone_id: u32) -> Result<(), ContractError> {
+        execute_finalize_milestone_vote(&env, milestone_id)
+    }
+
+    /// Releases an `Approved` milestone's funds to the creator (minus any
+    /// platform fee), creator-only.
+    pub fn release_milestone(
+        env: Env,
+        creator: Address,
+        milestone_id: u32,
+    ) -> Result<(), ContractError> {
+        execute_release_milestone(&env, creator, milestone_id)
+    }
+
+    /// Claims a pro-rata refund of a `Rejected` milestone's funds.
+    pub fn claim_milestone_refund(
+        env: Env,
+        contributor: Address,
+        milestone_id: u32,
+    ) -> Result<(), ContractError> {
+        execute_claim_milestone_refund(&env, contributor, milestone_id)
+    }
+
+    /// Returns the full milestone schedule for this campaign (empty if none
+    /// has been proposed).
+    pub fn milestones(env: Env) -> Vec<Milestone> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Returns a single milestone by id, if it exists.
+    pub fn milestone(env: Env, milestone_id: u32) -> Option<Milestone> {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        milestones.iter().find(|m| m.id == milestone_id)
+    }
+
+    /// Returns the frozen `total_raised` snapshot the milestone schedule is
+    /// reconciled and voted against. `0` if no schedule has been proposed.
+    pub fn milestone_basis(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MilestoneBasis)
+            .unwrap_or(0)
+    }
+
+    /// Returns `true` if `voter` has already voted on the given milestone.
+    pub fn has_voted_milestone(env: Env, milestone_id: u32, voter: Address) -> bool {
+        env.storage()
+            .persistent()
+            .has(&DataKey::MilestoneVote(MilestoneVoteKey {
+                milestone_id,
+                voter,
+            }))
+    }
+
+    /// Returns `true` if `contributor` has already claimed their pro-rata
+    /// refund for the given (rejected) milestone.
+    pub fn has_claimed_milestone_refund(env: Env, milestone_id: u32, contributor: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneRefundClaimed(MilestoneRefundKey {
+                milestone_id,
+                contributor,
+            }))
+            .unwrap_or(false)
+    }
+
+    /// Returns the campaign's current status.
+    pub fn status(env: Env) -> Status {
+        env.storage().instance().get(&DataKey::Status).unwrap()
+    }
+
     pub fn total_raised(env: Env) -> i128 {
         env.storage()
             .instance()

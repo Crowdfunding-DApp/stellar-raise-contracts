@@ -1,6 +1,9 @@
 #![cfg(test)]
 
-use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
+use crate::{
+    ContractError, CrowdfundContract, CrowdfundContractClient, MilestoneInput, MilestoneStatus,
+    Status,
+};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -500,4 +503,471 @@ fn test_multiple_contributions_same_backer() {
     client.contribute(&contributor, &150_000);
     assert_eq!(client.contribution(&contributor), 450_000);
     assert_eq!(client.total_raised(), 450_000);
+}
+
+// ── Milestone-gated partial release ──────────────────────────────────────────
+
+/// Full happy path: propose two milestones, both approved by a majority
+/// vote, both released, campaign completes.
+#[test]
+fn test_lifecycle_milestone_happy_path_full_release() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let schedule = soroban_sdk::vec![
+        &env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 1"),
+            amount: 600_000,
+        },
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 2"),
+            amount: 400_000,
+        },
+    ];
+    client.propose_milestones(&creator, &schedule);
+    assert_eq!(client.milestones().len(), 2);
+
+    client.vote_milestone(&contributor, &0, &true);
+    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Approved);
+
+    client.release_milestone(&creator, &0);
+    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Released);
+    assert_eq!(client.total_raised(), 400_000);
+    assert_eq!(client.status(), Status::Active);
+
+    client.vote_milestone(&contributor, &1, &true);
+    client.release_milestone(&creator, &1);
+
+    assert_eq!(client.milestone(&1).unwrap().status, MilestoneStatus::Released);
+    assert_eq!(client.total_raised(), 0);
+    assert_eq!(client.status(), Status::Successful);
+}
+
+/// A rejected milestone's funds go to pro-rata refund, not the creator; the
+/// campaign still completes once every milestone is settled.
+#[test]
+fn test_lifecycle_milestone_rejected_then_refunded() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let schedule = soroban_sdk::vec![
+        &env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 1"),
+            amount: 700_000,
+        },
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 2"),
+            amount: 300_000,
+        },
+    ];
+    client.propose_milestones(&creator, &schedule);
+
+    client.vote_milestone(&contributor, &0, &false);
+    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Rejected);
+    assert_eq!(client.status(), Status::Active);
+
+    client.claim_milestone_refund(&contributor, &0);
+    assert!(client.has_claimed_milestone_refund(&0, &contributor));
+    assert_eq!(client.total_raised(), 300_000);
+
+    client.vote_milestone(&contributor, &1, &true);
+    client.release_milestone(&creator, &1);
+
+    assert_eq!(client.total_raised(), 0);
+    assert_eq!(client.status(), Status::Successful);
+}
+
+/// A milestone whose voting window closes without crossing either threshold
+/// (an exact 50/50 split here) resolves to Rejected, not Approved.
+#[test]
+fn test_lifecycle_milestone_voting_timeout_defaults_to_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    token_client.mint(&c1, &500_000);
+    token_client.mint(&c2, &500_000);
+    client.contribute(&c1, &500_000);
+    client.contribute(&c2, &500_000);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let schedule = soroban_sdk::vec![
+        &env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "only phase"),
+            amount: 1_000_000,
+        },
+    ];
+    client.propose_milestones(&creator, &schedule);
+
+    // Exactly half the basis votes yes -> stays Pending (must strictly exceed half).
+    client.vote_milestone(&c1, &0, &true);
+    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Pending);
+
+    let voting_deadline = client.milestone(&0).unwrap().voting_deadline;
+    env.ledger().set_timestamp(voting_deadline + 1);
+
+    client.finalize_milestone_vote(&0);
+    assert_eq!(client.milestone(&0).unwrap().status, MilestoneStatus::Rejected);
+    assert_eq!(client.status(), Status::Successful);
+
+    client.claim_milestone_refund(&c1, &0);
+    client.claim_milestone_refund(&c2, &0);
+    assert_eq!(client.total_raised(), 0);
+}
+
+fn propose_single_milestone_for_full_goal(
+    env: &Env,
+    client: &CrowdfundContractClient,
+    creator: &Address,
+    amount: i128,
+) {
+    let schedule = soroban_sdk::vec![
+        env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(env, "only phase"),
+            amount,
+        },
+    ];
+    client.propose_milestones(creator, &schedule);
+}
+
+#[test]
+fn test_milestone_double_vote_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    token_client.mint(&c1, &500_000);
+    token_client.mint(&c2, &500_000);
+    client.contribute(&c1, &500_000);
+    client.contribute(&c2, &500_000);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    // c1's vote alone doesn't cross either threshold, so the milestone stays
+    // Pending and a second vote from c1 hits AlreadyVoted (not MilestoneNotPending).
+    client.vote_milestone(&c1, &0, &true);
+    let result = client.try_vote_milestone(&c1, &0, &true);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::AlreadyVoted);
+}
+
+#[test]
+fn test_milestone_release_before_approval_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let result = client.try_release_milestone(&creator, &0);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneNotApproved
+    );
+}
+
+#[test]
+fn test_milestone_propose_sum_mismatch_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    let schedule = soroban_sdk::vec![
+        &env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 1"),
+            amount: 500_000,
+        },
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "phase 2"),
+            amount: 400_000,
+        },
+    ];
+    let result = client.try_propose_milestones(&creator, &schedule);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidMilestoneSchedule
+    );
+}
+
+#[test]
+fn test_milestone_propose_twice_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let schedule = soroban_sdk::vec![
+        &env,
+        MilestoneInput {
+            description: soroban_sdk::String::from_str(&env, "second attempt"),
+            amount: goal,
+        },
+    ];
+    let result = client.try_propose_milestones(&creator, &schedule);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestonesAlreadyProposed
+    );
+}
+
+#[test]
+fn test_milestone_vote_zero_weight_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let stranger = Address::generate(&env);
+    let result = client.try_vote_milestone(&stranger, &0, &true);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::NoContributionWeight
+    );
+}
+
+#[test]
+fn test_withdraw_blocked_once_milestones_active() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let result = client.try_withdraw();
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneModeActive
+    );
+}
+
+#[test]
+fn test_cancel_blocked_once_milestones_active() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let result = client.try_cancel();
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneModeActive
+    );
+}
+
+#[test]
+fn test_collect_pledges_blocked_once_milestones_active() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    propose_single_milestone_for_full_goal(&env, &client, &creator, goal);
+
+    let result = client.try_collect_pledges();
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneModeActive
+    );
 }
