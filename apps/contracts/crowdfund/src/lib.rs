@@ -18,12 +18,18 @@ pub mod campaign_goal_minimum;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
+pub mod kyc_gate;
+pub mod milestone_release;
 pub mod proptest_generator_boundary;
 pub mod refund_single_token;
 pub mod soroban_sdk_minor;
 pub mod withdraw_event_emission;
 
 // --- Imports from Modules ---
+use milestone_release::{
+    execute_claim_milestone_refund, execute_finalize_milestone_vote,
+    execute_propose_milestones, execute_release_milestone, execute_vote_milestone,
+};
 use refund_single_token::{
     execute_refund_single, refund_single_transfer, validate_refund_preconditions,
 };
@@ -31,6 +37,8 @@ use refund_single_token::{
 // --- Tests ---
 #[cfg(test)]
 mod auth_tests;
+#[cfg(test)]
+mod kyc_gate_test;
 #[cfg(test)]
 mod refund_single_token_security_tests;
 #[cfg(test)]
@@ -95,7 +103,7 @@ pub fn extend_instance_ttl(env: &Env) {
 
 // ── Data Types ──────────────────────────────────────────────────────────────
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
 pub enum Status {
     Active,
@@ -111,11 +119,91 @@ pub struct RoadmapItem {
     pub description: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub enum MilestoneStatus {
+    Pending,
+    Approved,
+    Rejected,
+    Released,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct Milestone {
+    pub id: u32,
+    pub description: String,
+    pub amount: i128,
+    pub status: MilestoneStatus,
+    pub yes_weight: i128,
+    pub no_weight: i128,
+    pub voting_deadline: u64,
+}
+
+/// Caller-supplied input for one row of a proposed milestone schedule.
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneInput {
+    pub description: String,
+    pub amount: i128,
+}
+
+/// Composite storage key for a single voter's vote on a single milestone.
+///
+/// `#[contracttype]` only supports tuple-variant enum fields with at most
+/// one element, so this pair is wrapped in a named struct instead of e.g.
+/// `DataKey::MilestoneVote(u32, Address)`.
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneVoteKey {
+    pub milestone_id: u32,
+    pub voter: Address,
+}
+
+/// Composite storage key for a single contributor's claimed-refund flag on
+/// a single (rejected) milestone. Same one-field-tuple-variant constraint
+/// as [`MilestoneVoteKey`].
+#[derive(Clone)]
+#[contracttype]
+pub struct MilestoneRefundKey {
+    pub milestone_id: u32,
+    pub contributor: Address,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct PlatformConfig {
     pub address: Address,
     pub fee_bps: u32,
+}
+
+/// Pluggable KYC/AML gate configuration for this campaign. Absent (`None`,
+/// the default — see [`DataKey::KycGate`]) means the gate is fully off and
+/// `contribute`/`pledge` behave exactly as if the feature didn't exist.
+///
+/// See [`crate::kyc_gate`] for the enforcement logic and the rationale for
+/// why this is admin-configured rather than creator-configured.
+#[derive(Clone)]
+#[contracttype]
+pub struct KycGateConfig {
+    /// Address of an external attestation contract implementing
+    /// [`KycVerifier`]. It is populated off-chain by a KYC provider after
+    /// they verify an address; this contract never stores personal data.
+    pub verifier: Address,
+    /// Once an address's cumulative committed amount (contributions +
+    /// pledges) on this campaign reaches this value, further
+    /// contributions/pledges from that address require `verifier` to report
+    /// them as verified. Set per legal/compliance guidance, not derived
+    /// on-chain.
+    pub threshold: i128,
+    /// Quick on/off switch that preserves `verifier`/`threshold`/`jurisdiction`
+    /// across toggles, so re-enabling doesn't require resupplying them.
+    pub enabled: bool,
+    /// Free-form jurisdiction tag (e.g. an ISO 3166-1 alpha-2 code) recording
+    /// *why* this gate is configured, for audit/legal traceability. Purely
+    /// informational — never interpreted on-chain; enforcement is driven
+    /// only by `threshold` and `enabled`.
+    pub jurisdiction: Symbol,
 }
 
 #[derive(Clone)]
@@ -205,11 +293,47 @@ pub enum ContractError {
     CampaignNotActive = 16,
     Unauthorized = 17,
     InvalidParameter = 18,
+    /// `propose_milestones` called after a schedule already exists.
+    MilestonesAlreadyProposed = 19,
+    /// Proposed schedule is empty, over capacity, has a non-positive amount
+    /// or oversized description, or its amounts don't sum to `total_raised`.
+    InvalidMilestoneSchedule = 20,
+    /// No milestone exists with the given id.
+    MilestoneNotFound = 21,
+    /// Milestone is not `Pending`, or its voting window has closed.
+    MilestoneNotPending = 22,
+    /// `release_milestone` called on a milestone that isn't `Approved`.
+    MilestoneNotApproved = 23,
+    /// Caller already voted on this milestone.
+    AlreadyVoted = 24,
+    /// Caller has no recorded contribution, so has zero voting/refund weight.
+    NoContributionWeight = 25,
+    /// `withdraw`/`cancel`/`collect_pledges` blocked because a milestone
+    /// schedule is active for this campaign.
+    MilestoneModeActive = 26,
+    /// `claim_milestone_refund` called on a milestone that isn't `Rejected`.
+    MilestoneNotRejected = 27,
+    /// `contribute`/`pledge` blocked: the address's cumulative committed
+    /// amount reached the configured KYC threshold and the configured
+    /// `KycVerifier` does not report the address as verified.
+    KycRequired = 28,
+    /// `set_kyc_gate_enabled` called before `configure_kyc_gate` has ever
+    /// been called for this campaign.
+    KycGateNotConfigured = 29,
 }
 
 #[contractclient(name = "NftContractClient")]
 pub trait NftContract {
     fn mint(env: Env, to: Address) -> u128;
+}
+
+/// External KYC/AML attestation contract interface. The configured verifier
+/// is expected to have already performed its own off-chain identity
+/// verification and simply exposes the resulting status on-chain — this
+/// contract never receives or stores personal data itself.
+#[contractclient(name = "KycVerifierClient")]
+pub trait KycVerifier {
+    fn is_verified(env: Env, who: Address) -> bool;
 }
 
 #[contract]
@@ -315,6 +439,11 @@ impl CrowdfundContract {
         {
             return Err(ContractError::InvalidParameter);
         }
+
+        // KYC gate: no-op unless a gate has been configured for this
+        // campaign (see `kyc_gate` module) and this contribution pushes the
+        // contributor's cumulative committed amount to/past the threshold.
+        kyc_gate::enforce_kyc_gate(&env, &contributor, amount)?;
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
@@ -477,6 +606,9 @@ impl CrowdfundContract {
             return Err(ContractError::InvalidParameter);
         }
 
+        // KYC gate: same guard as `contribute` — no-op unless configured.
+        kyc_gate::enforce_kyc_gate(&env, &pledger, amount)?;
+
         // Update the pledger's running total.
         let pledge_key = DataKey::Pledge(pledger.clone());
         let prev: i128 = env.storage().persistent().get(&pledge_key).unwrap_or(0);
@@ -528,6 +660,15 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
         }
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
@@ -595,6 +736,15 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -751,6 +901,15 @@ impl CrowdfundContract {
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
         if status != Status::Active {
             return Err(ContractError::CampaignNotActive);
+        }
+
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
         }
 
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
@@ -1082,6 +1241,164 @@ impl CrowdfundContract {
 
         0
     }
+
+    // ── Milestone-gated partial release ──────────────────────────────────────
+
+    /// Proposes a one-time milestone release schedule for the raised funds.
+    ///
+    /// Creator-only. Only callable once the deadline has passed and the goal
+    /// has been met (the same gate as [`Self::withdraw`]), and only if no
+    /// schedule has been proposed yet. The schedule's amounts must sum
+    /// exactly to `total_raised`.
+    pub fn propose_milestones(
+        env: Env,
+        creator: Address,
+        milestones: Vec<MilestoneInput>,
+    ) -> Result<(), ContractError> {
+        execute_propose_milestones(&env, creator, milestones)
+    }
+
+    /// Casts a weighted vote (by contribution amount) to approve or reject
+    /// a pending milestone.
+    pub fn vote_milestone(
+        env: Env,
+        voter: Address,
+        milestone_id: u32,
+        approve: bool,
+    ) -> Result<(), ContractError> {
+        execute_vote_milestone(&env, voter, milestone_id, approve)
+    }
+
+    /// Permissionlessly resolves a milestone whose voting window has closed
+    /// without crossing either threshold. Silence resolves to `Rejected`.
+    pub fn finalize_milestone_vote(env: Env, milestone_id: u32) -> Result<(), ContractError> {
+        execute_finalize_milestone_vote(&env, milestone_id)
+    }
+
+    /// Releases an `Approved` milestone's funds to the creator (minus any
+    /// platform fee), creator-only.
+    pub fn release_milestone(
+        env: Env,
+        creator: Address,
+        milestone_id: u32,
+    ) -> Result<(), ContractError> {
+        execute_release_milestone(&env, creator, milestone_id)
+    }
+
+    /// Claims a pro-rata refund of a `Rejected` milestone's funds.
+    pub fn claim_milestone_refund(
+        env: Env,
+        contributor: Address,
+        milestone_id: u32,
+    ) -> Result<(), ContractError> {
+        execute_claim_milestone_refund(&env, contributor, milestone_id)
+    }
+
+    // ── KYC / AML gate (pluggable, off by default) ────────────────────────────
+
+    /// Configures (or reconfigures) this campaign's KYC/AML gate — admin-only.
+    ///
+    /// Deliberately gated on `Admin`, not `Creator`: the party motivated to
+    /// accept large, unverified pledges is the campaign creator, so the
+    /// ability to enable, disable, or loosen this gate is kept out of their
+    /// hands. The admin (the same role that can upgrade the contract) is
+    /// expected to set `threshold`/`jurisdiction` per legal/compliance
+    /// guidance — this contract only *enforces* the resulting threshold, it
+    /// doesn't decide it.
+    ///
+    /// A campaign with no configured gate (the default) behaves exactly as
+    /// it did before this feature existed.
+    pub fn configure_kyc_gate(
+        env: Env,
+        admin: Address,
+        verifier: Address,
+        threshold: i128,
+        jurisdiction: Symbol,
+    ) -> Result<(), ContractError> {
+        kyc_gate::execute_configure_kyc_gate(&env, admin, verifier, threshold, jurisdiction)
+    }
+
+    /// Toggles the KYC gate on/off without discarding its configured
+    /// `verifier`/`threshold`/`jurisdiction` — admin-only. Fails with
+    /// [`ContractError::KycGateNotConfigured`] if `configure_kyc_gate` has
+    /// never been called for this campaign.
+    pub fn set_kyc_gate_enabled(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+    ) -> Result<(), ContractError> {
+        kyc_gate::execute_set_kyc_gate_enabled(&env, admin, enabled)
+    }
+
+    /// Returns this campaign's KYC gate configuration, if one has been set.
+    pub fn kyc_gate_config(env: Env) -> Option<KycGateConfig> {
+        kyc_gate::kyc_gate_config(&env)
+    }
+
+    /// Read-only preflight: would a `contribute`/`pledge` of `amount` by
+    /// `who` be allowed right now? Lets a frontend prompt for KYC
+    /// verification *before* submitting a transaction that would otherwise
+    /// fail on-chain with [`ContractError::KycRequired`], so the gate never
+    /// surprises a backer as a failed transaction.
+    pub fn kyc_gate_preview(env: Env, who: Address, amount: i128) -> bool {
+        kyc_gate::would_pass_kyc_gate(&env, &who, amount)
+    }
+
+    /// Returns the full milestone schedule for this campaign (empty if none
+    /// has been proposed).
+    pub fn milestones(env: Env) -> Vec<Milestone> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Returns a single milestone by id, if it exists.
+    pub fn milestone(env: Env, milestone_id: u32) -> Option<Milestone> {
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        milestones.iter().find(|m| m.id == milestone_id)
+    }
+
+    /// Returns the frozen `total_raised` snapshot the milestone schedule is
+    /// reconciled and voted against. `0` if no schedule has been proposed.
+    pub fn milestone_basis(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MilestoneBasis)
+            .unwrap_or(0)
+    }
+
+    /// Returns `true` if `voter` has already voted on the given milestone.
+    pub fn has_voted_milestone(env: Env, milestone_id: u32, voter: Address) -> bool {
+        env.storage()
+            .persistent()
+            .has(&DataKey::MilestoneVote(MilestoneVoteKey {
+                milestone_id,
+                voter,
+            }))
+    }
+
+    /// Returns `true` if `contributor` has already claimed their pro-rata
+    /// refund for the given (rejected) milestone.
+    pub fn has_claimed_milestone_refund(env: Env, milestone_id: u32, contributor: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneRefundClaimed(MilestoneRefundKey {
+                milestone_id,
+                contributor,
+            }))
+            .unwrap_or(false)
+    }
+
+    /// Returns the campaign's current status.
+    pub fn status(env: Env) -> Status {
+        env.storage().instance().get(&DataKey::Status).unwrap()
+    }
+
     pub fn total_raised(env: Env) -> i128 {
         extend_instance_ttl(&env);
         env.storage()
