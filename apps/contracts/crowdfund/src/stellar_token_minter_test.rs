@@ -230,6 +230,7 @@ fn init_campaign(
         &None::<i128>,
         &None,
         &None,
+        &7,
     );
 }
 
@@ -505,6 +506,7 @@ fn test_bonus_goal_event_emitted_exactly_once() {
         &None,
         &Some(TEST_BONUS_GOAL),
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
@@ -914,6 +916,7 @@ fn test_bonus_goal_event_emitted_exactly_once() {
         &None,
         &Some(TEST_BONUS_GOAL),
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
@@ -1040,6 +1043,7 @@ fn test_bonus_goal_progress_bps_capped_at_100_percent() {
         &Some(2_000_000i128),
         &None,
         &None,
+        &7,
     );
     let _ = token_admin;
 }

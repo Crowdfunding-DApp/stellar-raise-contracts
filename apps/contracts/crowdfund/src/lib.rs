@@ -127,6 +127,7 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
+    TokenDecimals,
 }
 
 // ── Contract Error ──────────────────────────────────────────────────────────
@@ -199,6 +200,7 @@ impl CrowdfundContract {
         platform_config: Option<PlatformConfig>,
         bonus_goal: Option<i128>,
         bonus_goal_description: Option<String>,
+        expected_token_decimals: u32,
     ) -> Result<(), ContractError> {
         use crowdfund_initialize_function::{execute_initialize, InitParams};
         execute_initialize(
@@ -207,6 +209,7 @@ impl CrowdfundContract {
                 admin,
                 creator,
                 token,
+                expected_token_decimals,
                 goal,
                 deadline,
                 min_contribution,
@@ -270,6 +273,10 @@ impl CrowdfundContract {
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
+        let stored_decimals: u32 = env.storage().instance().get(&DataKey::TokenDecimals).unwrap();
+        if token_client.decimals() != stored_decimals {
+            return Err(ContractError::InvalidParameter);
+        }
 
         // Transfer tokens from the contributor to this contract.
         token_client.transfer(&contributor, env.current_contract_address(), &amount);
