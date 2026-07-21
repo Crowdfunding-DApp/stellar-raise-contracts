@@ -753,6 +753,7 @@ fn initialize_campaign(
         &None,
         &None,
         &None,
+        &7,
     );
 }
 
@@ -1602,6 +1603,7 @@ fn test_initialize_already_initialized() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(
@@ -1687,6 +1689,7 @@ fn test_initialize_zero_goal() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.goal(), 0);
@@ -1708,6 +1711,7 @@ fn test_initialize_zero_min_contribution() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.min_contribution(), 0);
@@ -2618,6 +2622,7 @@ fn test_bonus_goal_progress_with_pledges() {
         &None,
         &Some(2_000_000i128), // Bonus goal
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -2649,6 +2654,7 @@ fn test_bonus_goal_progress_capped_at_100_percent() {
         &None,
         &Some(2_000_000i128),
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -2806,6 +2812,7 @@ fn test_get_stats_empty() {
         &None,
         &Some(2_000_000i128), // Bonus goal
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -2837,6 +2844,7 @@ fn test_bonus_goal_progress_capped_at_100_percent() {
         &None,
         &Some(2_000_000i128),
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);

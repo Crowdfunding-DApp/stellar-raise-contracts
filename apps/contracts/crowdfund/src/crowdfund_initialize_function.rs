@@ -34,13 +34,17 @@ pub struct InitParams {
     pub creator: Address,
     /// SEP-41 token contract address used for contributions.
     pub token: Address,
+    /// The expected number of decimals for the configured token.
+    pub expected_token_decimals: u32,
     /// Funding goal in token's smallest unit. Must be >= 1.
     pub goal: i128,
     /// Campaign deadline as a Unix ledger timestamp. Must be >= now + 60s.
     pub deadline: u64,
     /// Minimum single contribution. Must be >= 1.
     pub min_contribution: i128,
-    /// Optional platform fee configuration. `fee_bps` must be <= 10_000.
+    /// Optional platform fee configuration. `fee_bps` must be < 10_000 (100%
+    /// is rejected — see audit #31, a fee of exactly 100% leaves the creator
+    /// with a zero payout).
     pub platform_config: Option<PlatformConfig>,
     /// Optional bonus goal. When provided, must be > `goal`.
     pub bonus_goal: Option<i128>,
@@ -96,12 +100,20 @@ pub fn execute_initialize(env: &Env, params: InitParams) -> Result<(), ContractE
     // 3. Validate — no writes if any check fails.
     validate_init_params(env, &params)?;
 
+    let token_client = soroban_sdk::token::Client::new(env, &params.token);
+    if token_client.decimals() != params.expected_token_decimals {
+        return Err(ContractError::InvalidParameter);
+    }
+
     // 4. Write required fields.
     env.storage().instance().set(&DataKey::Admin, &params.admin);
     env.storage()
         .instance()
         .set(&DataKey::Creator, &params.creator);
     env.storage().instance().set(&DataKey::Token, &params.token);
+    env.storage()
+        .instance()
+        .set(&DataKey::TokenDecimals, &params.expected_token_decimals);
     env.storage().instance().set(&DataKey::Goal, &params.goal);
     env.storage()
         .instance()
@@ -147,6 +159,7 @@ pub fn execute_initialize(env: &Env, params: InitParams) -> Result<(), ContractE
         env,
         &params.creator,
         &params.token,
+        params.expected_token_decimals,
         params.goal,
         params.deadline,
         params.min_contribution,
@@ -164,6 +177,7 @@ pub fn log_initialize(
     env: &Env,
     creator: &Address,
     token: &Address,
+    expected_token_decimals: u32,
     goal: i128,
     deadline: u64,
     min_contribution: i128,
@@ -176,6 +190,7 @@ pub fn log_initialize(
         (
             creator.clone(),
             token.clone(),
+            expected_token_decimals,
             goal,
             deadline,
             min_contribution,
@@ -193,7 +208,7 @@ pub fn describe_init_error(code: u32) -> &'static str {
         8 => "Campaign goal must be at least 1",
         9 => "Minimum contribution must be at least 1",
         10 => "Deadline must be at least 60 seconds in the future",
-        11 => "Platform fee cannot exceed 100% (10,000 bps)",
+        11 => "Platform fee must be below 100% (10,000 bps)",
         12 => "Bonus goal must be strictly greater than the primary goal",
         _ => "Unknown initialization error",
     }
