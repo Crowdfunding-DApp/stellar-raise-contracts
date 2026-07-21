@@ -18,7 +18,7 @@ use soroban_sdk::{Address, Env, String, Symbol, Vec};
 use crate::campaign_goal_minimum::{
     validate_deadline, validate_goal, validate_min_contribution, validate_platform_fee,
 };
-use crate::{ContractError, DataKey, PlatformConfig, RoadmapItem, Status};
+use crate::{extend_instance_ttl, ContractError, DataKey, PlatformConfig, RoadmapItem, Status};
 
 // ── InitParams ────────────────────────────────────────────────────────────────
 
@@ -149,10 +149,20 @@ pub fn execute_initialize(env: &Env, params: InitParams) -> Result<(), ContractE
     env.storage()
         .persistent()
         .set(&DataKey::Contributors, &empty_contributors);
+    // Bump persistent TTL for the Contributors list seeded at initialization.
+    env.storage().persistent().extend_ttl(
+        &DataKey::Contributors,
+        crate::LEDGER_THRESHOLD,
+        crate::LEDGER_BUMP_AMOUNT,
+    );
     let empty_roadmap: Vec<RoadmapItem> = Vec::new(env);
     env.storage()
         .instance()
         .set(&DataKey::Roadmap, &empty_roadmap);
+
+    // Bump instance TTL after all keys have been written so the contract
+    // stays alive from the very first ledger.
+    extend_instance_ttl(env);
 
     // 5. Emit bounded event (scalar fields only).
     log_initialize(
