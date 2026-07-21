@@ -13,6 +13,7 @@ use soroban_sdk::{
 use crate::{
     crowdfund_initialize_function::{
         describe_init_error, is_init_error_retryable, validate_bonus_goal,
+        validate_token_address,
     },
     ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig,
 };
@@ -86,6 +87,118 @@ fn test_initialize_total_raised_zero() {
     let (env, client, creator, token, _) = setup();
     default_init(&client, &creator, &token, env.ledger().timestamp() + 3600);
     assert_eq!(client.total_raised(), 0);
+}
+
+// ── Token address validation ──────────────────────────────────────────────────
+
+#[test]
+fn test_initialize_rejects_random_address_as_token() {
+    let (env, client, creator, _, _) = setup();
+    let fake_token = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3600;
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &fake_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+}
+
+#[test]
+fn test_initialize_accepts_valid_token() {
+    let (env, client, creator, token, _) = setup();
+    let deadline = env.ledger().timestamp() + 3600;
+    default_init(&client, &creator, &token, deadline);
+    // No error means the token was accepted.
+    assert_eq!(client.token(), token);
+}
+
+#[test]
+fn test_initialize_rejects_empty_address_as_token() {
+    let (env, client, creator, token, _) = setup();
+    let deadline = env.ledger().timestamp() + 3600;
+    // A non-existent contract address (not registered) should fail validation.
+    let nonexistent = Address::generate(&env);
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &nonexistent,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+    let _ = token;
+}
+
+#[test]
+fn test_initialize_rejects_contract_without_sep41() {
+    // Register a contract that does NOT implement SEP-41 (register CrowdfundContract itself)
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
+    // Use the crowdfund contract's own address as the "token" — it doesn't implement SEP-41.
+    let non_token = contract_id.address();
+    let deadline = env.ledger().timestamp() + 3600;
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &non_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+}
+
+#[test]
+fn test_initialize_token_address_validated_before_storage_writes() {
+    // Ensure that even if the token address is invalid, no storage is written.
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
+    let fake_token = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3600;
+    let _ = client.try_initialize(
+        &creator,
+        &creator,
+        &fake_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    // The contract should NOT have stored anything.
+    assert_eq!(client.version(), 3); // default version — not overwritten
 }
 
 #[test]
@@ -565,6 +678,38 @@ fn test_validate_bonus_goal_zero_when_goal_is_one_returns_error() {
     );
 }
 
+// ── validate_token_address unit tests ──────────────────────────────────────────
+
+#[test]
+fn test_validate_token_address_valid_token() {
+    let env = Env::default();
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_id.address();
+    assert!(validate_token_address(&env, &token_address).is_ok());
+}
+
+#[test]
+fn test_validate_token_address_random_address() {
+    let env = Env::default();
+    let fake = Address::generate(&env);
+    assert_eq!(
+        validate_token_address(&env, &fake),
+        Err(ContractError::InvalidTokenAddress)
+    );
+}
+
+#[test]
+fn test_validate_token_address_non_token_contract() {
+    let env = Env::default();
+    let contract_id = env.register(CrowdfundContract, ());
+    let non_token = contract_id.address();
+    assert_eq!(
+        validate_token_address(&env, &non_token),
+        Err(ContractError::InvalidTokenAddress)
+    );
+}
+
 // ── describe_init_error ───────────────────────────────────────────────────────
 
 #[test]
@@ -598,6 +743,12 @@ fn test_describe_init_error_invalid_bonus_goal() {
 }
 
 #[test]
+fn test_describe_init_error_invalid_token_address() {
+    assert!(describe_init_error(19).contains("Token"));
+    assert!(describe_init_error(19).contains("SEP-41"));
+}
+
+#[test]
 fn test_describe_init_error_unknown_code() {
     let msg = describe_init_error(99);
     assert!(!msg.is_empty());
@@ -620,6 +771,11 @@ fn test_is_retryable_input_errors_are_true() {
             code
         );
     }
+}
+
+#[test]
+fn test_is_retryable_invalid_token_address_is_true() {
+    assert!(is_init_error_retryable(19));
 }
 
 #[test]

@@ -10,10 +10,11 @@
 //!   ├─► validate_deadline           → DeadlineTooSoon
 //!   ├─► validate_platform_fee       → InvalidPlatformFee
 //!   ├─► validate_bonus_goal         → InvalidBonusGoal
+//!   ├─► validate_token_address      → InvalidTokenAddress
 //!   └─► [all passed] write storage → emit event → Ok(())
 //! ```
 
-use soroban_sdk::{Address, Env, String, Symbol, Vec};
+use soroban_sdk::{token, Address, Env, String, Symbol, Vec};
 
 use crate::campaign_goal_minimum::{
     validate_deadline, validate_goal, validate_min_contribution, validate_platform_fee,
@@ -65,6 +66,27 @@ pub fn validate_bonus_goal(bonus_goal: Option<i128>, goal: i128) -> Result<(), C
     Ok(())
 }
 
+/// Validates that `token_address` points to a real SEP-41 token contract
+/// by making a cheap read-only call (`name()`).
+///
+/// Fail-fast: catches a non-token (or invalid) address during initialization
+/// rather than surfacing the issue only on the first `contribute()` call.
+#[inline]
+pub fn validate_token_address(env: &Env, token_address: &Address) -> Result<(), ContractError> {
+    let client = token::Client::new(env, token_address);
+    // A cheap read-only call that will fail (panic) if the address
+    // does not implement the SEP-41 token interface. We catch the
+    // panic by converting to a Result via try_call / env.try().
+    let result = env.try(|e| {
+        let c = token::Client::new(e, token_address);
+        c.name();
+    });
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) => Err(ContractError::InvalidTokenAddress),
+    }
+}
+
 fn validate_init_params(env: &Env, params: &InitParams) -> Result<(), ContractError> {
     validate_goal(params.goal).map_err(|_| ContractError::InvalidGoal)?;
     validate_min_contribution(params.min_contribution)
@@ -75,6 +97,7 @@ fn validate_init_params(env: &Env, params: &InitParams) -> Result<(), ContractEr
         validate_platform_fee(config.fee_bps).map_err(|_| ContractError::InvalidPlatformFee)?;
     }
     validate_bonus_goal(params.bonus_goal, params.goal)?;
+    validate_token_address(env, &params.token)?;
     Ok(())
 }
 
@@ -220,14 +243,15 @@ pub fn describe_init_error(code: u32) -> &'static str {
         10 => "Deadline must be at least 60 seconds in the future",
         11 => "Platform fee must be below 100% (10,000 bps)",
         12 => "Bonus goal must be strictly greater than the primary goal",
+        19 => "Token address does not implement SEP-41 interface",
         _ => "Unknown initialization error",
     }
 }
 
 /// Returns `true` if the error is a correctable input error that can be retried.
 ///
-/// `AlreadyInitialized` (1) is permanent; all validation errors (8–12) are retryable.
+/// `AlreadyInitialized` (1) is permanent; all validation errors (8–12, 19) are retryable.
 #[inline]
 pub fn is_init_error_retryable(code: u32) -> bool {
-    matches!(code, 8..=12)
+    matches!(code, 8..=12 | 19)
 }
