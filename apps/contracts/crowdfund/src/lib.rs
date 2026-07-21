@@ -15,7 +15,6 @@ use withdraw_event_emission::{
 // --- Modules ---
 pub mod admin_upgrade_mechanism;
 pub mod campaign_goal_minimum;
-pub mod cargo_toml_rust;
 pub mod contract_state_size;
 pub mod contribute_error_handling;
 pub mod crowdfund_initialize_function;
@@ -38,8 +37,6 @@ mod refund_single_token_security_tests;
 mod test;
 #[cfg(test)]
 mod withdraw_event_emission_test;
-// #[cfg(test)]
-// mod cargo_toml_rust_test;
 // #[cfg(test)]
 // mod contract_state_size_test;
 // #[cfg(test)]
@@ -159,6 +156,7 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
+    TokenDecimals,
 }
 
 /// Extend the TTL for a single **persistent** storage key.
@@ -193,7 +191,7 @@ pub enum ContractError {
     InvalidMinContribution = 9,
     /// deadline must be at least MIN_DEADLINE_OFFSET seconds in the future
     DeadlineTooSoon = 10,
-    /// platform fee_bps must be <= 10_000
+    /// platform fee_bps must be < 10_000 (100% is rejected, audit #31)
     InvalidPlatformFee = 11,
     /// bonus_goal must be strictly greater than goal
     InvalidBonusGoal = 12,
@@ -228,7 +226,8 @@ impl CrowdfundContract {
     ///
     /// # Panics
     /// * If already initialized.
-    /// * If platform fee exceeds 10,000 (100%).
+    /// * If platform fee is >= 10,000 (100%) — a fee of exactly 100% would
+    ///   leave the creator with a zero payout (audit #31).
     /// * If bonus goal is not greater than the primary goal.
     pub fn initialize(
         env: Env,
@@ -241,6 +240,7 @@ impl CrowdfundContract {
         platform_config: Option<PlatformConfig>,
         bonus_goal: Option<i128>,
         bonus_goal_description: Option<String>,
+        expected_token_decimals: u32,
     ) -> Result<(), ContractError> {
         use crowdfund_initialize_function::{execute_initialize, InitParams};
         execute_initialize(
@@ -249,6 +249,7 @@ impl CrowdfundContract {
                 admin,
                 creator,
                 token,
+                expected_token_decimals,
                 goal,
                 deadline,
                 min_contribution,
@@ -314,6 +315,10 @@ impl CrowdfundContract {
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
+        let stored_decimals: u32 = env.storage().instance().get(&DataKey::TokenDecimals).unwrap();
+        if token_client.decimals() != stored_decimals {
+            return Err(ContractError::InvalidParameter);
+        }
 
         // Transfer tokens from the contributor to this contract.
         token_client.transfer(&contributor, env.current_contract_address(), &amount);
@@ -769,17 +774,53 @@ impl CrowdfundContract {
     /// provided and the caller must be authorized as the admin.
     ///
     /// # Arguments
-    /// * `new_wasm_hash` – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `new_wasm_hash`     – The SHA-256 hash of the new WASM binary to deploy.
+    /// * `current_wasm_hash` – The SHA-256 hash of the currently deployed WASM binary.
+    ///                         This is stored as the rollback point before the upgrade
+    ///                         is applied. If the new WASM is broken, call
+    ///                         `rollback_upgrade` to restore this hash.
     ///
     /// # Panics
     /// * If the caller is not the admin.
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        extend_instance_ttl(&env);
+    /// * If `new_wasm_hash` is all zeros.
+    pub fn upgrade(
+        env: Env,
+        new_wasm_hash: soroban_sdk::BytesN<32>,
+        current_wasm_hash: soroban_sdk::BytesN<32>,
+    ) {
         let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+
+        // Store the current WASM hash as the rollback point before applying the upgrade.
+        // This ensures we can always restore the previous working implementation.
+        admin_upgrade_mechanism::store_current_wasm_hash(&env, &current_wasm_hash);
+
         admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
 
         env.events()
-            .publish(("crowdfund", "upgrade"), (admin, new_wasm_hash));
+            .publish(("crowdfund", "upgrade"), (admin, current_wasm_hash, new_wasm_hash));
+    }
+
+    /// Rollback the contract to the previous WASM implementation — admin-only.
+    ///
+    /// This function restores the WASM implementation that was stored as the rollback
+    /// point during the last successful `upgrade()` call. If the new WASM introduced
+    /// a bug or storage layout mismatch, this allows the admin to recover without
+    /// losing access to contract funds.
+    ///
+    /// # Panics
+    /// * If the caller is not the admin.
+    /// * If no previous WASM hash is stored (no prior upgrade was performed).
+    ///
+    /// # Returns
+    /// The restored WASM hash.
+    pub fn rollback_upgrade(env: Env) -> soroban_sdk::BytesN<32> {
+        let admin = admin_upgrade_mechanism::validate_admin_upgrade(&env);
+        let restored_hash = admin_upgrade_mechanism::rollback_upgrade(&env);
+
+        env.events()
+            .publish(("crowdfund", "rollback"), (admin, restored_hash.clone()));
+
+        restored_hash
     }
 
     /// Update campaign metadata — only callable by the creator while the

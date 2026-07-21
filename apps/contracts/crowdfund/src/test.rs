@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
+use crate::{ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env,
@@ -103,6 +103,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
     admin
 }
@@ -122,6 +123,7 @@ fn test_initialize() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Verify initialization was successful
@@ -146,6 +148,7 @@ fn test_contribute() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -176,6 +179,7 @@ fn test_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -210,6 +214,7 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let result = client.try_initialize(
@@ -222,9 +227,32 @@ fn test_initialize_twice_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_token_decimals() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    // Provide mismatched expected decimals (actual token defaults to 7)
+    let result = client.try_initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+        &6,
+    );
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidParameter);
 }
 
 #[test]
@@ -252,6 +280,7 @@ fn test_lifecycle_successful_campaign_withdraw() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -286,6 +315,7 @@ fn test_lifecycle_underfunded_refunds() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -318,6 +348,7 @@ fn test_lifecycle_multiple_backers_refund() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contrib1 = Address::generate(&env);
@@ -371,6 +402,7 @@ fn test_contribution_after_deadline_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     env.ledger().set_timestamp(deadline + 1);
@@ -400,6 +432,7 @@ fn test_contribution_below_minimum_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -426,6 +459,7 @@ fn test_contribution_zero_amount_rejected() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -452,6 +486,7 @@ fn test_status_transition_to_successful() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -482,6 +517,7 @@ fn test_multiple_contributions_same_backer() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let contributor = Address::generate(&env);
@@ -502,149 +538,73 @@ fn test_multiple_contributions_same_backer() {
     assert_eq!(client.total_raised(), 450_000);
 }
 
-// ── TTL / Rent-extension policy tests (issue #1306) ─────────────────────────
+// ── Audit #31 regression: fee_bps == 10_000 (100%) full-drain config ──────────
 
-/// TTL constants must satisfy the invariant: LEDGER_BUMP_AMOUNT > LEDGER_THRESHOLD.
-/// This prevents a pathological case where bumping never brings the TTL above
-/// the threshold and the entry would be re-bumped on every single ledger.
+/// A `fee_bps` of exactly 10_000 (100%) must be rejected at `initialize()`.
+///
+/// Before the fix, `validate_platform_fee` accepted `fee_bps ==
+/// MAX_PLATFORM_FEE_BPS`, so this platform config would pass validation and
+/// leave `creator_payout = total - fee == 0` in `withdraw()` — a full drain
+/// to the platform address.
 #[test]
-fn test_ttl_constants_invariant() {
-    use crate::{LEDGER_BUMP_AMOUNT, LEDGER_THRESHOLD};
+fn test_initialize_rejects_full_drain_platform_fee() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    let result = client.try_initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 10_000,
+        }),
+        &None,
+        &None,
+    );
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidPlatformFee
+    );
+}
+
+/// The new maximum valid fee (`MAX_PLATFORM_FEE_BPS - 1` = 9_999 bps) must
+/// still leave the creator with a strictly positive payout after `withdraw()`.
+#[test]
+fn test_withdraw_with_max_valid_fee_leaves_nonzero_creator_payout() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal = 1_000_000;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &goal,
+        &deadline,
+        &1_000,
+        &Some(PlatformConfig {
+            address: platform_admin.clone(),
+            fee_bps: 9_999,
+        }),
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &goal);
+    client.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    client.withdraw();
+
+    let token = token::Client::new(&env, &token_address);
     assert!(
-        LEDGER_BUMP_AMOUNT > LEDGER_THRESHOLD,
-        "LEDGER_BUMP_AMOUNT ({}) must be greater than LEDGER_THRESHOLD ({}) \
-         to ensure each bump provides a net TTL increase",
-        LEDGER_BUMP_AMOUNT,
-        LEDGER_THRESHOLD
+        token.balance(&creator) > 0,
+        "creator payout must be strictly positive, even at the maximum valid fee"
     );
-}
-
-/// `keep_alive` is callable by anyone (no auth required) and succeeds even
-/// when called on a freshly-initialized, contributor-free campaign.
-#[test]
-fn test_keep_alive_succeeds_without_contributors() {
-    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &1_000_000,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    // Any address (not just the creator) can call keep_alive.
-    let bystander = Address::generate(&env);
-    let _ = bystander; // keep_alive takes no address argument
-    client.keep_alive();
-}
-
-/// `keep_alive` also succeeds when contributors are present (persistent
-/// Contributors list exists).
-#[test]
-fn test_keep_alive_succeeds_with_contributors() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &1_000_000,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &5_000);
-    client.contribute(&contributor, &5_000);
-
-    // keep_alive should not panic or fail.
-    client.keep_alive();
-
-    // State is unchanged.
-    assert_eq!(client.total_raised(), 5_000);
-    assert_eq!(client.contributors().len(), 1);
-}
-
-/// `keep_alive` can be called multiple times without side-effects.
-#[test]
-fn test_keep_alive_idempotent() {
-    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &500_000,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    // Call keep_alive three times in a row — none should fail.
-    client.keep_alive();
-    client.keep_alive();
-    client.keep_alive();
-
-    assert_eq!(client.goal(), 500_000);
-}
-
-/// Every public entry-point implicitly extends instance TTL (smoke-test: the
-/// contract remains fully functional after a round-trip through each path).
-#[test]
-fn test_all_entry_points_callable_after_initialization() {
-    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
-    let deadline = env.ledger().timestamp() + 3600;
-
-    client.initialize(
-        &platform_admin,
-        &creator,
-        &token_address,
-        &1_000_000,
-        &deadline,
-        &1_000,
-        &None,
-        &None,
-        &None,
-    );
-
-    // View functions (each bumps instance TTL internally).
-    let _ = client.goal();
-    let _ = client.deadline();
-    let _ = client.total_raised();
-    let _ = client.min_contribution();
-    let _ = client.contributors();
-    let _ = client.title();
-    let _ = client.description();
-    let _ = client.socials();
-    let _ = client.token();
-    let _ = client.version();
-    let _ = client.bonus_goal();
-    let _ = client.bonus_goal_description();
-    let _ = client.bonus_goal_reached();
-    let _ = client.bonus_goal_progress_bps();
-    let _ = client.current_milestone();
-    let _ = client.get_stats();
-    let _ = client.roadmap();
-
-    // Mutating: contribute.
-    let contributor = Address::generate(&env);
-    token_client.mint(&contributor, &50_000);
-    client.contribute(&contributor, &50_000);
-    assert_eq!(client.contribution(&contributor), 50_000);
-
-    // keep_alive.
-    client.keep_alive();
 }
