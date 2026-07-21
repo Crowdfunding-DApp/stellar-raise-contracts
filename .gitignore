@@ -54,3 +54,6 @@ yarn-error.log*
 # Misc
 *.bak
 *.tmp
+
+# Issues / tracking
+somzilla.md

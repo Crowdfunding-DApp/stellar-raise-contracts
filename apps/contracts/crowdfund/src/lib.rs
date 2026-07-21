@@ -161,6 +161,8 @@ pub enum ContractError {
     CampaignNotActive = 16,
     Unauthorized = 17,
     InvalidParameter = 18,
+    /// token address does not point to a valid SEP-41 token contract
+    InvalidTokenAddress = 19,
 }
 
 #[contractclient(name = "NftContractClient")]
