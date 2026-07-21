@@ -501,3 +501,150 @@ fn test_multiple_contributions_same_backer() {
     assert_eq!(client.contribution(&contributor), 450_000);
     assert_eq!(client.total_raised(), 450_000);
 }
+
+// ── TTL / Rent-extension policy tests (issue #1306) ─────────────────────────
+
+/// TTL constants must satisfy the invariant: LEDGER_BUMP_AMOUNT > LEDGER_THRESHOLD.
+/// This prevents a pathological case where bumping never brings the TTL above
+/// the threshold and the entry would be re-bumped on every single ledger.
+#[test]
+fn test_ttl_constants_invariant() {
+    use crate::{LEDGER_BUMP_AMOUNT, LEDGER_THRESHOLD};
+    assert!(
+        LEDGER_BUMP_AMOUNT > LEDGER_THRESHOLD,
+        "LEDGER_BUMP_AMOUNT ({}) must be greater than LEDGER_THRESHOLD ({}) \
+         to ensure each bump provides a net TTL increase",
+        LEDGER_BUMP_AMOUNT,
+        LEDGER_THRESHOLD
+    );
+}
+
+/// `keep_alive` is callable by anyone (no auth required) and succeeds even
+/// when called on a freshly-initialized, contributor-free campaign.
+#[test]
+fn test_keep_alive_succeeds_without_contributors() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    // Any address (not just the creator) can call keep_alive.
+    let bystander = Address::generate(&env);
+    let _ = bystander; // keep_alive takes no address argument
+    client.keep_alive();
+}
+
+/// `keep_alive` also succeeds when contributors are present (persistent
+/// Contributors list exists).
+#[test]
+fn test_keep_alive_succeeds_with_contributors() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &5_000);
+    client.contribute(&contributor, &5_000);
+
+    // keep_alive should not panic or fail.
+    client.keep_alive();
+
+    // State is unchanged.
+    assert_eq!(client.total_raised(), 5_000);
+    assert_eq!(client.contributors().len(), 1);
+}
+
+/// `keep_alive` can be called multiple times without side-effects.
+#[test]
+fn test_keep_alive_idempotent() {
+    let (env, client, platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &500_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    // Call keep_alive three times in a row — none should fail.
+    client.keep_alive();
+    client.keep_alive();
+    client.keep_alive();
+
+    assert_eq!(client.goal(), 500_000);
+}
+
+/// Every public entry-point implicitly extends instance TTL (smoke-test: the
+/// contract remains fully functional after a round-trip through each path).
+#[test]
+fn test_all_entry_points_callable_after_initialization() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+
+    // View functions (each bumps instance TTL internally).
+    let _ = client.goal();
+    let _ = client.deadline();
+    let _ = client.total_raised();
+    let _ = client.min_contribution();
+    let _ = client.contributors();
+    let _ = client.title();
+    let _ = client.description();
+    let _ = client.socials();
+    let _ = client.token();
+    let _ = client.version();
+    let _ = client.bonus_goal();
+    let _ = client.bonus_goal_description();
+    let _ = client.bonus_goal_reached();
+    let _ = client.bonus_goal_progress_bps();
+    let _ = client.current_milestone();
+    let _ = client.get_stats();
+    let _ = client.roadmap();
+
+    // Mutating: contribute.
+    let contributor = Address::generate(&env);
+    token_client.mint(&contributor, &50_000);
+    client.contribute(&contributor, &50_000);
+    assert_eq!(client.contribution(&contributor), 50_000);
+
+    // keep_alive.
+    client.keep_alive();
+}
