@@ -9,7 +9,7 @@ use soroban_sdk::{
 
 use withdraw_event_emission::{
     emit_cancelled, emit_contributed, emit_fee_transferred, emit_goal_reached, emit_refunded,
-    emit_withdrawn, mint_nfts_in_batch,
+    emit_stretch_goal_reached, emit_withdrawn, mint_nfts_in_batch,
 };
 
 // --- Modules ---
@@ -115,6 +115,9 @@ pub enum DataKey {
     Pledge(Address),
     TotalPledged,
     StretchGoals,
+    /// Tracks which stretch-goal milestones have already emitted their
+    /// `stretch_goal_reached` event (purely informational, no on-chain enforcement).
+    StretchGoalReachedEmitted,
     BonusGoal,
     BonusGoalDescription,
     BonusGoalReachedEmitted,
@@ -329,6 +332,28 @@ impl CrowdfundContract {
                     .set(&DataKey::BonusGoalReachedEmitted, &true);
             }
         }
+
+        // Emit stretch_goal_reached for each newly-reached stretch-goal milestone.
+        // Stretch goals are purely informational — see `add_stretch_goal` docs.
+        let stretch_goals: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StretchGoals)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut already_reached: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StretchGoalReachedEmitted)
+            .unwrap_or_else(|| Vec::new(&env));
+        for milestone in stretch_goals.iter() {
+            if new_total >= milestone && !already_reached.contains(&milestone) {
+                emit_stretch_goal_reached(&env, milestone, new_total);
+                already_reached.push_back(milestone);
+            }
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::StretchGoalReachedEmitted, &already_reached);
 
         let mut contributors: Vec<Address> = env
             .storage()
@@ -891,6 +916,21 @@ impl CrowdfundContract {
     ///
     /// Only the creator can add stretch goals. The milestone must be greater
     /// than the primary goal.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// Stretch goals are **purely informational** — they serve as progress
+    /// indicators for UI consumers and do **not** trigger any on-chain
+    /// enforcement (no extra minting, no fee adjustment, no fund-release
+    /// changes). When a contribution pushes `total_raised` past a stretch-goal
+    /// milestone, a `stretch_goal_reached` event is emitted exactly once per
+    /// milestone during `contribute()`.
+    ///
+    /// Downstream indexers and front-ends can listen for this event to
+    /// display stretch-goal progress. If future protocol upgrades require
+    /// on-chain enforcement at stretch-goal boundaries, new storage flags or
+    /// contract logic should be added without altering the existing
+    /// informational semantics for backward compatibility.
     pub fn add_stretch_goal(env: Env, milestone: i128) -> Result<(), ContractError> {
         let creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
         creator.require_auth();
@@ -923,6 +963,13 @@ impl CrowdfundContract {
     /// Returns the next unmet stretch goal milestone.
     ///
     /// Returns 0 if there are no stretch goals or all have been met.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// This is a **read-only informational getter** for UI/indexer consumption.
+    /// Finding a next milestone here does **not** change any contract behavior
+    /// (no fee adjustment, no fund-release changes, no extra minting). See
+    /// [`add_stretch_goal`](#method.add_stretch_goal) for the full design rationale.
     pub fn current_milestone(env: Env) -> i128 {
         let total_raised: i128 = env
             .storage()
@@ -956,6 +1003,15 @@ impl CrowdfundContract {
     }
 
     /// Returns the optional bonus-goal threshold.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// The bonus goal is a **purely informational** milestone. When
+    /// `total_raised` crosses the bonus-goal threshold, a
+    /// `bonus_goal_reached` event is emitted exactly once (see
+    /// [`contribute`](#method.contribute)), but no on-chain enforcement
+    /// (extra minting, fee changes, or fund-release schedule) is triggered.
+    /// Downstream consumers should treat this as a progress indicator.
     pub fn bonus_goal(env: Env) -> Option<i128> {
         env.storage().instance().get(&DataKey::BonusGoal)
     }
@@ -966,6 +1022,12 @@ impl CrowdfundContract {
     }
 
     /// Returns true if the optional bonus goal has been reached.
+    ///
+    /// # Design intent (purely informational)
+    ///
+    /// This is a **read-only informational getter**. Crossing the bonus-goal
+    /// threshold does **not** alter contract behavior — see
+    /// [`bonus_goal`](#method.bonus_goal) for the full design rationale.
     pub fn bonus_goal_reached(env: Env) -> bool {
         let total_raised: i128 = env
             .storage()
