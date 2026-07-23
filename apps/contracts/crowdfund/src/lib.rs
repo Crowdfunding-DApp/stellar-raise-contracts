@@ -248,11 +248,9 @@ pub enum DataKey {
     PlatformConfig,
     NFTContract,
     TokenDecimals,
-    Milestones,
-    MilestoneBasis,
-    MilestoneVote(MilestoneVoteKey),
-    MilestoneRefundClaimed(MilestoneRefundKey),
-    KycGate,
+    /// Stored before each `upgrade()` so an admin can roll back to it via
+    /// `rollback_upgrade()`. Instance-storage so it is automatically covered
+    /// by `extend_instance_ttl()` along with the rest of the campaign state.
     PreviousWasmHash,
 }
 
