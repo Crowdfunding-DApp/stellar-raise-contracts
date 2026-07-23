@@ -193,6 +193,7 @@ fn default_init(
         &None,
         &None,
         &None,
+        &7,
     );
 }
 
@@ -428,6 +429,7 @@ fn initialize_accepts_bonus_goal_description_at_exact_limit() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     assert_eq!(client.bonus_goal_description(), Some(description));
@@ -453,6 +455,7 @@ fn initialize_rejects_oversized_bonus_goal_description() {
         &None,
         &None,
         &None,
+        &7,
     );
 }
 

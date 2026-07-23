@@ -2,6 +2,7 @@ use soroban_sdk::{Env, String};
 
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_CONTRIBUTORS: u32 = 1_000;
+pub const MAX_MILESTONES: u32 = 20;
 
 pub fn validate_title(s: &String) -> bool {
     s.len() <= MAX_STRING_LEN
@@ -32,6 +33,12 @@ pub fn validate_roadmap_capacity(len: u32) -> bool {
 }
 pub fn validate_stretch_goal_capacity(len: u32) -> bool {
     len < 10
+}
+pub fn validate_milestone_capacity(len: u32) -> bool {
+    len < MAX_MILESTONES
+}
+pub fn validate_milestone_description(s: &String) -> bool {
+    !s.is_empty() && s.len() <= MAX_STRING_LEN
 }
 
 // Additional functions expected by lib.rs

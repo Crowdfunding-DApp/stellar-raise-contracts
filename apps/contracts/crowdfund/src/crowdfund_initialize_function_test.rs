@@ -13,6 +13,7 @@ use soroban_sdk::{
 use crate::{
     crowdfund_initialize_function::{
         describe_init_error, is_init_error_retryable, validate_bonus_goal,
+        validate_token_address,
     },
     ContractError, CrowdfundContract, CrowdfundContractClient, PlatformConfig,
 };
@@ -47,6 +48,7 @@ fn default_init(
     client.initialize(
         creator, // admin = creator for simplicity
         creator, token, &1_000_000, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
 }
 
@@ -87,6 +89,118 @@ fn test_initialize_total_raised_zero() {
     assert_eq!(client.total_raised(), 0);
 }
 
+// ── Token address validation ──────────────────────────────────────────────────
+
+#[test]
+fn test_initialize_rejects_random_address_as_token() {
+    let (env, client, creator, _, _) = setup();
+    let fake_token = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3600;
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &fake_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+}
+
+#[test]
+fn test_initialize_accepts_valid_token() {
+    let (env, client, creator, token, _) = setup();
+    let deadline = env.ledger().timestamp() + 3600;
+    default_init(&client, &creator, &token, deadline);
+    // No error means the token was accepted.
+    assert_eq!(client.token(), token);
+}
+
+#[test]
+fn test_initialize_rejects_empty_address_as_token() {
+    let (env, client, creator, token, _) = setup();
+    let deadline = env.ledger().timestamp() + 3600;
+    // A non-existent contract address (not registered) should fail validation.
+    let nonexistent = Address::generate(&env);
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &nonexistent,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+    let _ = token;
+}
+
+#[test]
+fn test_initialize_rejects_contract_without_sep41() {
+    // Register a contract that does NOT implement SEP-41 (register CrowdfundContract itself)
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
+    // Use the crowdfund contract's own address as the "token" — it doesn't implement SEP-41.
+    let non_token = contract_id.address();
+    let deadline = env.ledger().timestamp() + 3600;
+    let result = client.try_initialize(
+        &creator,
+        &creator,
+        &non_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidTokenAddress
+    );
+}
+
+#[test]
+fn test_initialize_token_address_validated_before_storage_writes() {
+    // Ensure that even if the token address is invalid, no storage is written.
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
+    let fake_token = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3600;
+    let _ = client.try_initialize(
+        &creator,
+        &creator,
+        &fake_token,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+    );
+    // The contract should NOT have stored anything.
+    assert_eq!(client.version(), 3); // default version — not overwritten
+}
+
 #[test]
 fn test_initialize_emits_event() {
     let (env, client, creator, token, _) = setup();
@@ -113,6 +227,7 @@ fn test_initialize_platform_fee_exact_max_accepted() {
         &Some(config),
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -134,6 +249,7 @@ fn test_initialize_platform_fee_zero_accepted() {
         &Some(config),
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -155,6 +271,7 @@ fn test_initialize_platform_fee_over_max_returns_error() {
         &Some(config),
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -179,6 +296,7 @@ fn test_initialize_platform_fee_u32_max_returns_error() {
         &Some(config),
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -222,6 +340,7 @@ fn test_initialize_bonus_goal_equal_to_goal_returns_error() {
         &None,
         &Some(1_000_000i128),
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -242,6 +361,7 @@ fn test_initialize_bonus_goal_less_than_goal_returns_error() {
         &None,
         &Some(500_000i128),
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -262,6 +382,7 @@ fn test_initialize_bonus_goal_one_above_goal_accepted() {
         &None,
         &Some(1_000_001i128),
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.bonus_goal(), Some(1_000_001));
@@ -280,6 +401,7 @@ fn test_initialize_bonus_goal_without_description() {
         &None,
         &Some(2_000_000i128),
         &None,
+        &7,
     );
     assert_eq!(client.bonus_goal(), Some(2_000_000));
     assert_eq!(client.bonus_goal_description(), None);
@@ -295,6 +417,7 @@ fn test_initialize_twice_returns_already_initialized() {
 
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -318,6 +441,7 @@ fn test_initialize_twice_original_values_unchanged() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(client.goal(), 1_000_000);
 }
@@ -337,6 +461,7 @@ fn test_initialize_goal_minimum_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.goal(), 1);
@@ -355,6 +480,7 @@ fn test_initialize_goal_zero_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -372,6 +498,7 @@ fn test_initialize_goal_negative_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -389,6 +516,7 @@ fn test_initialize_goal_i128_min_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidGoal);
 }
@@ -408,6 +536,7 @@ fn test_initialize_min_contribution_minimum_accepted() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.min_contribution(), 1);
@@ -426,6 +555,7 @@ fn test_initialize_min_contribution_zero_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -446,6 +576,7 @@ fn test_initialize_min_contribution_negative_returns_error() {
         &None,
         &None,
         &None,
+        &7,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -461,6 +592,7 @@ fn test_initialize_deadline_exactly_min_offset_accepted() {
     let deadline = env.ledger().timestamp() + 60;
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
     assert!(result.is_ok());
 }
@@ -471,6 +603,7 @@ fn test_initialize_deadline_59s_returns_error() {
     let deadline = env.ledger().timestamp() + 59;
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -481,6 +614,7 @@ fn test_initialize_deadline_equal_to_now_returns_error() {
     let now = env.ledger().timestamp();
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &now, &1_000, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -491,6 +625,7 @@ fn test_initialize_deadline_in_past_returns_error() {
     env.ledger().set_timestamp(10_000);
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &5_000, &1_000, &None, &None, &None,
+        &7,
     );
     assert_eq!(result.unwrap_err().unwrap(), ContractError::DeadlineTooSoon);
 }
@@ -501,6 +636,7 @@ fn test_initialize_deadline_far_future_accepted() {
     let deadline = env.ledger().timestamp() + 365 * 24 * 3600;
     let result = client.try_initialize(
         &creator, &creator, &token, &1_000_000, &deadline, &1_000, &None, &None, &None,
+        &7,
     );
     assert!(result.is_ok());
     assert_eq!(client.deadline(), deadline);
@@ -542,6 +678,38 @@ fn test_validate_bonus_goal_zero_when_goal_is_one_returns_error() {
     );
 }
 
+// ── validate_token_address unit tests ──────────────────────────────────────────
+
+#[test]
+fn test_validate_token_address_valid_token() {
+    let env = Env::default();
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_address = token_id.address();
+    assert!(validate_token_address(&env, &token_address).is_ok());
+}
+
+#[test]
+fn test_validate_token_address_random_address() {
+    let env = Env::default();
+    let fake = Address::generate(&env);
+    assert_eq!(
+        validate_token_address(&env, &fake),
+        Err(ContractError::InvalidTokenAddress)
+    );
+}
+
+#[test]
+fn test_validate_token_address_non_token_contract() {
+    let env = Env::default();
+    let contract_id = env.register(CrowdfundContract, ());
+    let non_token = contract_id.address();
+    assert_eq!(
+        validate_token_address(&env, &non_token),
+        Err(ContractError::InvalidTokenAddress)
+    );
+}
+
 // ── describe_init_error ───────────────────────────────────────────────────────
 
 #[test]
@@ -575,6 +743,12 @@ fn test_describe_init_error_invalid_bonus_goal() {
 }
 
 #[test]
+fn test_describe_init_error_invalid_token_address() {
+    assert!(describe_init_error(19).contains("Token"));
+    assert!(describe_init_error(19).contains("SEP-41"));
+}
+
+#[test]
 fn test_describe_init_error_unknown_code() {
     let msg = describe_init_error(99);
     assert!(!msg.is_empty());
@@ -597,6 +771,11 @@ fn test_is_retryable_input_errors_are_true() {
             code
         );
     }
+}
+
+#[test]
+fn test_is_retryable_invalid_token_address_is_true() {
+    assert!(is_init_error_retryable(19));
 }
 
 #[test]
@@ -631,6 +810,7 @@ fn test_log_initialize_not_emitted_on_validation_failure() {
         &None,
         &None,
         &None,
+        &7,
     );
     // No events should be emitted on failure.
     assert!(env.events().all().events().is_empty());

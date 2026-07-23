@@ -95,6 +95,7 @@ fn setup() -> (
         &None,
         &None,
         &None,
+        &7,
     );
 
     (env, contract_id, client, admin, creator)
