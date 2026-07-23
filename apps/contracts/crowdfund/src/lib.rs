@@ -161,6 +161,12 @@ pub enum ContractError {
     CampaignNotActive = 16,
     Unauthorized = 17,
     InvalidParameter = 18,
+    /// fee = total * fee_bps overflowed i128
+    FeeOverflow = 19,
+    /// fee / 10_000 produced None (should never happen, but guarded)
+    FeeDivisionByZero = 20,
+    /// total - fee underflowed (fee exceeds total raised)
+    CreatorPayoutUnderflow = 21,
 }
 
 #[contractclient(name = "NftContractClient")]
@@ -547,14 +553,14 @@ impl CrowdfundContract {
         let (creator_payout, platform_fee) = if let Some(config) = platform_config {
             let fee = total
                 .checked_mul(config.fee_bps as i128)
-                .expect("fee calculation overflow")
+                .ok_or(ContractError::FeeOverflow)?
                 .checked_div(10_000)
-                .expect("fee division by zero");
+                .ok_or(ContractError::FeeDivisionByZero)?;
 
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
             emit_fee_transferred(&env, &config.address, fee);
             (
-                total.checked_sub(fee).expect("creator payout underflow"),
+                total.checked_sub(fee).ok_or(ContractError::CreatorPayoutUnderflow)?,
                 fee,
             )
         } else {
