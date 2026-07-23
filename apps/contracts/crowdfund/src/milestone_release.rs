@@ -73,7 +73,9 @@ pub fn validate_milestone_schedule(
         if !contract_state_size::validate_milestone_description(&item.description) {
             return Err(ContractError::InvalidMilestoneSchedule);
         }
-        sum = sum.checked_add(item.amount).ok_or(ContractError::Overflow)?;
+        sum = sum
+            .checked_add(item.amount)
+            .ok_or(ContractError::Overflow)?;
     }
 
     if sum != total_raised {
@@ -90,7 +92,11 @@ pub fn validate_milestone_schedule(
 /// the outcome is still undecided. Uses `weight * 2` vs. `basis` (rather than
 /// `weight` vs. `basis / 2`) to avoid integer-division truncation on odd
 /// totals.
-pub fn resolve_vote_status(yes_weight: i128, no_weight: i128, basis: i128) -> Option<MilestoneStatus> {
+pub fn resolve_vote_status(
+    yes_weight: i128,
+    no_weight: i128,
+    basis: i128,
+) -> Option<MilestoneStatus> {
     if yes_weight.checked_mul(2)? > basis {
         Some(MilestoneStatus::Approved)
     } else if no_weight.checked_mul(2)? >= basis {
@@ -101,12 +107,7 @@ pub fn resolve_vote_status(yes_weight: i128, no_weight: i128, basis: i128) -> Op
 }
 
 fn find_milestone_index(milestones: &Vec<Milestone>, milestone_id: u32) -> Option<u32> {
-    for i in 0..milestones.len() {
-        if milestones.get(i).unwrap().id == milestone_id {
-            return Some(i);
-        }
-    }
-    None
+    (0..milestones.len()).find(|&i| milestones.get(i).unwrap().id == milestone_id)
 }
 
 // ── propose_milestones ────────────────────────────────────────────────────────
@@ -156,8 +157,7 @@ pub fn execute_propose_milestones(
         .ok_or(ContractError::Overflow)?;
 
     let mut milestones: Vec<Milestone> = Vec::new(env);
-    let mut id: u32 = 0;
-    for item in milestones_input.iter() {
+    for (id, item) in (0_u32..).zip(milestones_input.iter()) {
         milestones.push_back(Milestone {
             id,
             description: item.description.clone(),
@@ -167,7 +167,6 @@ pub fn execute_propose_milestones(
             no_weight: 0,
             voting_deadline,
         });
-        id += 1;
     }
 
     let count = milestones.len();
@@ -266,7 +265,13 @@ pub fn execute_vote_milestone(
 
     if let Some(new_status) = resolved {
         let approved = new_status == MilestoneStatus::Approved;
-        emit_milestone_resolved(env, milestone_id, approved, milestone.yes_weight, milestone.no_weight);
+        emit_milestone_resolved(
+            env,
+            milestone_id,
+            approved,
+            milestone.yes_weight,
+            milestone.no_weight,
+        );
         if !approved {
             maybe_complete_milestone_schedule(env);
         }
@@ -300,8 +305,8 @@ pub fn execute_finalize_milestone_vote(env: &Env, milestone_id: u32) -> Result<(
         .get(&DataKey::MilestoneBasis)
         .unwrap();
     // Silence defaults to Rejected, not Approved — consistent with backer protection.
-    let new_status =
-        resolve_vote_status(milestone.yes_weight, milestone.no_weight, basis).unwrap_or(MilestoneStatus::Rejected);
+    let new_status = resolve_vote_status(milestone.yes_weight, milestone.no_weight, basis)
+        .unwrap_or(MilestoneStatus::Rejected);
     milestone.status = new_status.clone();
 
     milestones.set(idx, milestone.clone());
@@ -310,7 +315,13 @@ pub fn execute_finalize_milestone_vote(env: &Env, milestone_id: u32) -> Result<(
         .set(&DataKey::Milestones, &milestones);
 
     let approved = new_status == MilestoneStatus::Approved;
-    emit_milestone_resolved(env, milestone_id, approved, milestone.yes_weight, milestone.no_weight);
+    emit_milestone_resolved(
+        env,
+        milestone_id,
+        approved,
+        milestone.yes_weight,
+        milestone.no_weight,
+    );
 
     if !approved {
         maybe_complete_milestone_schedule(env);
@@ -658,7 +669,11 @@ mod unit_tests {
         let amount: i128 = 10;
         let weight: i128 = 3;
         let basis: i128 = 100;
-        let share = amount.checked_mul(weight).unwrap().checked_div(basis).unwrap();
+        let share = amount
+            .checked_mul(weight)
+            .unwrap()
+            .checked_div(basis)
+            .unwrap();
         assert_eq!(share, 0);
     }
 }

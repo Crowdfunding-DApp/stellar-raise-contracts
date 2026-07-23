@@ -7,11 +7,7 @@
 //! crossed, verified vs. unverified, admin-only configuration, and the
 //! on/off toggle).
 
-use soroban_sdk::{
-    contract, contractimpl,
-    testutils::{Address as _, Ledger},
-    token, Address, Env, Symbol,
-};
+use soroban_sdk::{contract, contractimpl, testutils::Address as _, token, Address, Env, Symbol};
 
 use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
 
@@ -158,8 +154,7 @@ fn contribute_succeeds_when_over_threshold_and_verified() {
     let amount = 50_000;
     token_client.mint(&contributor, &amount);
 
-    MockKycVerifierClient::new(&env, &verifier)
-        .set_verified(&contributor, &true);
+    MockKycVerifierClient::new(&env, &verifier).set_verified(&contributor, &true);
 
     client.contribute(&contributor, &amount);
 
@@ -199,8 +194,7 @@ fn cumulative_across_contribute_and_pledge_triggers_gate() {
     let result = client.try_pledge(&backer, &6_000);
     assert_eq!(result.unwrap_err().unwrap(), ContractError::KycRequired);
 
-    MockKycVerifierClient::new(&env, &verifier)
-        .set_verified(&backer, &true);
+    MockKycVerifierClient::new(&env, &verifier).set_verified(&backer, &true);
 
     client.pledge(&backer, &6_000);
 }
@@ -221,7 +215,7 @@ fn disabling_gate_removes_requirement() {
     client.contribute(&contributor, &amount);
 
     assert_eq!(client.total_raised(), amount);
-    assert_eq!(client.kyc_gate_config().unwrap().enabled, false);
+    assert!(!client.kyc_gate_config().unwrap().enabled);
 }
 
 #[test]
