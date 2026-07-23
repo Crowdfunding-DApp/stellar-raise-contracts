@@ -25,11 +25,14 @@ pub mod soroban_sdk_minor;
 pub mod withdraw_event_emission;
 
 // --- Imports from Modules ---
+use campaign_goal_minimum::compute_progress_bps;
 use refund_single_token::{
     execute_refund_single, refund_single_transfer, validate_refund_preconditions,
 };
 
 // --- Tests ---
+#[cfg(test)]
+mod audit_29_equivalence_tests;
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]
@@ -989,16 +992,7 @@ impl CrowdfundContract {
             .unwrap_or(0);
 
         if let Some(bg) = env.storage().instance().get::<_, i128>(&DataKey::BonusGoal) {
-            if bg > 0 {
-                let raw = (total_raised * 10_000) / bg;
-                if raw > 10_000 {
-                    10_000
-                } else {
-                    raw as u32
-                }
-            } else {
-                0
-            }
+            compute_progress_bps(total_raised, bg)
         } else {
             0
         }
@@ -1037,16 +1031,7 @@ impl CrowdfundContract {
             .get(&DataKey::Contributors)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let progress_bps = if goal > 0 {
-            let raw = (total_raised * 10_000) / goal;
-            if raw > 10_000 {
-                10_000
-            } else {
-                raw as u32
-            }
-        } else {
-            0
-        };
+        let progress_bps = compute_progress_bps(total_raised, goal);
 
         let contributor_count = contributors.len();
         let (average_contribution, largest_contribution) = if contributor_count == 0 {
