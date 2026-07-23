@@ -88,6 +88,7 @@ fn setup_with_nft(
         &None,
         &None,
         &None,
+        &7,
     );
     client.set_nft_contract(&creator, &nft_id);
 
@@ -130,6 +131,7 @@ fn setup_no_nft(
         &None,
         &None,
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
@@ -206,6 +208,7 @@ fn contributed_event_is_emitted_on_contribution() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let backer = Address::generate(&env);
@@ -234,6 +237,7 @@ fn contributed_event_data_has_backer_amount_total_raised() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let backer = Address::generate(&env);
@@ -267,6 +271,7 @@ fn contributed_event_total_raised_accumulates() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let b1 = Address::generate(&env);
@@ -311,6 +316,7 @@ fn goal_reached_event_emitted_exactly_once_when_goal_met() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let b1 = Address::generate(&env);
@@ -352,6 +358,7 @@ fn goal_reached_not_emitted_when_goal_not_met() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let backer = Address::generate(&env);
@@ -380,6 +387,7 @@ fn goal_reached_not_emitted_twice_when_exceeded() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     // Events are scoped to the last invocation: check per-call.
@@ -451,6 +459,7 @@ fn withdrawn_event_reflects_platform_fee_deduction() {
         }),
         &None,
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
@@ -493,6 +502,7 @@ fn fee_transferred_event_emitted_when_platform_configured() {
         }),
         &None,
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
@@ -592,6 +602,7 @@ fn refunded_event_emitted_by_refund_single() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let backer = Address::generate(&env);
@@ -632,6 +643,7 @@ fn refunded_event_emitted_per_backer_in_batch_refund() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let mut backers: std::vec::Vec<Address> = std::vec::Vec::new();
@@ -671,6 +683,7 @@ fn cancelled_event_emitted_on_cancel() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     let b = Address::generate(&env);
@@ -702,6 +715,7 @@ fn cancel_emits_refunded_for_each_contributor() {
         &None,
         &None,
         &None,
+        &7,
     );
 
     for _ in 0..3 {
