@@ -71,8 +71,10 @@ pub fn emit_transfer_skipped(env: &Env, participant: &Address, amount: i128, con
 /// added alongside this one — the existing event must keep its informational semantics
 /// for backward compatibility.
 pub fn emit_stretch_goal_reached(env: &Env, milestone: i128, total_raised: i128) {
-    env.events()
-        .publish(("crowdfund", "stretch_goal_reached"), (milestone, total_raised));
+    env.events().publish(
+        ("crowdfund", "stretch_goal_reached"),
+        (milestone, total_raised),
+    );
 }
 
 // ── fee_transferred ──────────────────────────────────────────────────────────
@@ -181,11 +183,7 @@ pub fn emit_milestone_refund_claimed(
 
 // ── milestone_schedule_completed ──────────────────────────────────────────────
 
-pub fn emit_milestone_schedule_completed(
-    env: &Env,
-    total_released: i128,
-    total_refunded: i128,
-) {
+pub fn emit_milestone_schedule_completed(env: &Env, total_released: i128, total_refunded: i128) {
     env.events().publish(
         ("crowdfund", "milestone_schedule_completed"),
         (total_released, total_refunded),

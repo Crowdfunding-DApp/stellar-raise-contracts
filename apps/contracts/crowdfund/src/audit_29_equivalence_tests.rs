@@ -30,9 +30,7 @@
 
 #![cfg(test)]
 
-use crate::campaign_goal_minimum::{
-    compute_progress_bps, MAX_PROGRESS_BPS, PROGRESS_BPS_SCALE,
-};
+use crate::campaign_goal_minimum::{compute_progress_bps, MAX_PROGRESS_BPS, PROGRESS_BPS_SCALE};
 
 // ── Reference implementations (mirrors of the pre-refactor inline code) ──────
 
@@ -73,9 +71,9 @@ fn inline_bonus_goal_progress(total_raised: i128, bg: i128) -> u32 {
 ///
 /// Only valid for inputs in the safe domain (no overflow).
 fn assert_all_equal(total_raised: i128, goal: i128) {
-    let safe   = compute_progress_bps(total_raised, goal);
-    let stats  = inline_get_stats_progress(total_raised, goal);
-    let bonus  = inline_bonus_goal_progress(total_raised, goal);
+    let safe = compute_progress_bps(total_raised, goal);
+    let stats = inline_get_stats_progress(total_raised, goal);
+    let bonus = inline_bonus_goal_progress(total_raised, goal);
     assert_eq!(
         safe, stats,
         "compute_progress_bps != inline_get_stats for ({total_raised}, {goal}): {safe} vs {stats}"
@@ -156,10 +154,10 @@ fn equivalence_minimum_goal_minimum_raised() {
 #[test]
 fn equivalence_two_x_goal_capped_at_max() {
     // 200 % must be capped at MAX_PROGRESS_BPS, not returned as 20 000.
-    let safe   = compute_progress_bps(2_000_000, 1_000_000);
-    let stats  = inline_get_stats_progress(2_000_000, 1_000_000);
-    let bonus  = inline_bonus_goal_progress(2_000_000, 1_000_000);
-    assert_eq!(safe,  MAX_PROGRESS_BPS);
+    let safe = compute_progress_bps(2_000_000, 1_000_000);
+    let stats = inline_get_stats_progress(2_000_000, 1_000_000);
+    let bonus = inline_bonus_goal_progress(2_000_000, 1_000_000);
+    assert_eq!(safe, MAX_PROGRESS_BPS);
     assert_eq!(stats, MAX_PROGRESS_BPS);
     assert_eq!(bonus, MAX_PROGRESS_BPS);
 }
@@ -216,7 +214,10 @@ fn inline_stats_does_not_guard_negative_total_raised() {
     // Use -1_000_000 (> goal of 1) so raw = -10^10 / 1 = -10^10 != 0.
     let safe_result = compute_progress_bps(-1_000_000, 1);
     let inline_result = inline_get_stats_progress(-1_000_000, 1);
-    assert_eq!(safe_result, 0, "safe helper must return 0 for negative total_raised");
+    assert_eq!(
+        safe_result, 0,
+        "safe helper must return 0 for negative total_raised"
+    );
     // The inline variant will cast a large negative i128 to u32 (wrapping),
     // producing a non-zero garbage value — demonstrating the safety bug.
     assert_ne!(
@@ -229,7 +230,10 @@ fn inline_stats_does_not_guard_negative_total_raised() {
 fn inline_bonus_does_not_guard_negative_total_raised() {
     let safe_result = compute_progress_bps(-1_000_000, 1);
     let inline_result = inline_bonus_goal_progress(-1_000_000, 1);
-    assert_eq!(safe_result, 0, "safe helper must return 0 for negative total_raised");
+    assert_eq!(
+        safe_result, 0,
+        "safe helper must return 0 for negative total_raised"
+    );
     assert_ne!(
         inline_result, 0,
         "inline_bonus should produce garbage (non-zero) for large negative total_raised"

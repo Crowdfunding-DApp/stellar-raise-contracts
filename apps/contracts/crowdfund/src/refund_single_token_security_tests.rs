@@ -50,8 +50,7 @@ fn init_campaign(
     deadline: u64,
 ) {
     client.initialize(
-        creator, creator, token, &goal, &deadline, &1_000, &None, &None, &None,
-        &7,
+        creator, creator, token, &goal, &deadline, &1_000, &None, &None, &None, &7,
     );
 }
 

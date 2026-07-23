@@ -26,9 +26,10 @@ pub mod soroban_sdk_minor;
 pub mod withdraw_event_emission;
 
 // --- Imports from Modules ---
+use campaign_goal_minimum::compute_progress_bps;
 use milestone_release::{
-    execute_claim_milestone_refund, execute_finalize_milestone_vote,
-    execute_propose_milestones, execute_release_milestone, execute_vote_milestone,
+    execute_claim_milestone_refund, execute_finalize_milestone_vote, execute_propose_milestones,
+    execute_release_milestone, execute_vote_milestone,
 };
 use refund_single_token::{execute_refund_single, validate_refund_preconditions};
 
@@ -57,8 +58,8 @@ mod withdraw_event_emission_test;
 // mod campaign_goal_minimum_test;
 // #[cfg(test)]
 // mod contribute_error_handling_tests;
-// #[cfg(test)]
-// mod proptest_generator_boundary_tests;
+#[cfg(test)]
+mod proptest_generator_boundary_tests;
 
 // #[cfg(test)]
 // #[path = "admin_upgrade_mechanism.test.rs"]
@@ -249,6 +250,20 @@ pub enum DataKey {
     SocialLinks,
     PlatformConfig,
     NFTContract,
+    /// The proposed milestone schedule for this campaign, if any. Absent
+    /// (empty) means the campaign uses the all-or-nothing `withdraw` flow.
+    Milestones,
+    /// `total_raised` frozen at `propose_milestones` time; the vote-threshold
+    /// and pro-rata-refund denominator for every milestone in the schedule.
+    MilestoneBasis,
+    /// Per-(milestone, voter) flag recording that `voter` has already voted
+    /// on `milestone_id`, so `vote_milestone` can reject double-votes.
+    MilestoneVote(MilestoneVoteKey),
+    /// Per-(milestone, contributor) flag recording that `contributor` has
+    /// already claimed their pro-rata refund on a rejected milestone.
+    MilestoneRefundClaimed(MilestoneRefundKey),
+    /// Optional [`KycGateConfig`] for this campaign. Absent by default.
+    KycGate,
     TokenDecimals,
     /// Stored before each `upgrade()` so an admin can roll back to it via
     /// `rollback_upgrade()`. Instance-storage so it is automatically covered
@@ -329,6 +344,13 @@ pub enum ContractError {
     /// `initialize` called with a `token` address that doesn't implement
     /// the SEP-41 token interface (fail-fast check via `validate_token_address`).
     InvalidTokenAddress = 30,
+    /// `total * fee_bps` overflows `i128` while computing the platform fee.
+    FeeOverflow = 31,
+    /// Fee division by 10_000 returned `None` (unreachable in practice, kept
+    /// as a typed error instead of a panic).
+    FeeDivisionByZero = 32,
+    /// `total - fee` underflows while computing the creator's payout.
+    CreatorPayoutUnderflow = 33,
 }
 
 #[contractclient(name = "NftContractClient")]
@@ -456,7 +478,11 @@ impl CrowdfundContract {
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
-        let stored_decimals: u32 = env.storage().instance().get(&DataKey::TokenDecimals).unwrap();
+        let stored_decimals: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenDecimals)
+            .unwrap();
         if token_client.decimals() != stored_decimals {
             return Err(ContractError::InvalidParameter);
         }
@@ -532,7 +558,7 @@ impl CrowdfundContract {
             .get(&DataKey::StretchGoalReachedEmitted)
             .unwrap_or_else(|| Vec::new(&env));
         for milestone in stretch_goals.iter() {
-            if new_total >= milestone && !already_reached.contains(&milestone) {
+            if new_total >= milestone && !already_reached.contains(milestone) {
                 emit_stretch_goal_reached(&env, milestone, new_total);
                 already_reached.push_back(milestone);
             }
@@ -720,8 +746,7 @@ impl CrowdfundContract {
                 // reentrant call sees nothing owed.
                 env.storage().persistent().set(&pledge_key, &0i128);
 
-                match token_client.try_transfer(&pledger, env.current_contract_address(), &amount)
-                {
+                match token_client.try_transfer(&pledger, env.current_contract_address(), &amount) {
                     Ok(Ok(())) => {
                         bump_persistent(&env, &pledge_key);
                         collected_total = collected_total
@@ -749,10 +774,9 @@ impl CrowdfundContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalRaised, &(total_raised + collected_total));
-        env.storage().instance().set(
-            &DataKey::TotalPledged,
-            &(total_pledged - collected_total),
-        );
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalPledged, &(total_pledged - collected_total));
 
         env.events()
             .publish(("crowdfund", "pledges_collected"), collected_total);
@@ -811,7 +835,9 @@ impl CrowdfundContract {
             token_client.transfer(&env.current_contract_address(), &config.address, &fee);
             emit_fee_transferred(&env, &config.address, fee);
             (
-                total.checked_sub(fee).ok_or(ContractError::CreatorPayoutUnderflow)?,
+                total
+                    .checked_sub(fee)
+                    .ok_or(ContractError::CreatorPayoutUnderflow)?,
                 fee,
             )
         } else {
@@ -907,7 +933,12 @@ impl CrowdfundContract {
                         env.storage().persistent().set(&contribution_key, &amount);
                         bump_persistent(&env, &contribution_key);
                         skipped_count += 1;
-                        emit_transfer_skipped(&env, &contributor, amount, Symbol::new(&env, "refund"));
+                        emit_transfer_skipped(
+                            &env,
+                            &contributor,
+                            amount,
+                            Symbol::new(&env, "refund"),
+                        );
                     }
                 }
             }
@@ -916,7 +947,9 @@ impl CrowdfundContract {
         let new_total = total
             .checked_sub(refunded_total)
             .expect("total_raised underflow");
-        env.storage().instance().set(&DataKey::TotalRaised, &new_total);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalRaised, &new_total);
         // Only mark the campaign fully Refunded once every contributor has
         // actually been paid out; otherwise leave it Active so `refund` can
         // be retried later (or stragglers can self-serve via `refund_single`).
@@ -1022,7 +1055,12 @@ impl CrowdfundContract {
                         env.storage().persistent().set(&contribution_key, &amount);
                         bump_persistent(&env, &contribution_key);
                         skipped_count += 1;
-                        emit_transfer_skipped(&env, &contributor, amount, Symbol::new(&env, "cancel"));
+                        emit_transfer_skipped(
+                            &env,
+                            &contributor,
+                            amount,
+                            Symbol::new(&env, "cancel"),
+                        );
                     }
                 }
             }
@@ -1031,7 +1069,9 @@ impl CrowdfundContract {
         let new_total = total
             .checked_sub(refunded_total)
             .expect("total_raised underflow");
-        env.storage().instance().set(&DataKey::TotalRaised, &new_total);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalRaised, &new_total);
         // Only mark the campaign fully Cancelled once every contributor has
         // actually been paid out; otherwise leave it Active so `cancel` can
         // be retried later (or stragglers can self-serve via `refund_single`
@@ -1074,8 +1114,10 @@ impl CrowdfundContract {
 
         admin_upgrade_mechanism::perform_upgrade(&env, new_wasm_hash.clone());
 
-        env.events()
-            .publish(("crowdfund", "upgrade"), (admin, current_wasm_hash, new_wasm_hash));
+        env.events().publish(
+            ("crowdfund", "upgrade"),
+            (admin, current_wasm_hash, new_wasm_hash),
+        );
     }
 
     /// Rollback the contract to the previous WASM implementation — admin-only.
@@ -1693,11 +1735,7 @@ impl CrowdfundContract {
         extend_instance_ttl(&env);
 
         // Bump the Contributors persistent list if it exists.
-        if env
-            .storage()
-            .persistent()
-            .has(&DataKey::Contributors)
-        {
+        if env.storage().persistent().has(&DataKey::Contributors) {
             bump_persistent(&env, &DataKey::Contributors);
         }
 
