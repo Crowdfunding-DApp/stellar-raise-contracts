@@ -83,8 +83,12 @@ jobs:
         # ("reference-types not enabled: zero byte expected") even though the
         # feature itself is unused. Round-tripping through wasm-opt re-emits
         # the binary with canonical (minimal) LEB128 encoding.
+        #
+        # --enable-bulk-memory-opt is required because rustc emits
+        # memory.copy/memory.fill for wasm32-unknown-unknown by default;
+        # newer binaryen releases no longer assume that feature is on.
         run: |
-          wasm-opt -O0 --enable-sign-ext \
+          wasm-opt -O0 --enable-sign-ext --enable-bulk-memory-opt \
             target/wasm32-unknown-unknown/release/crowdfund.wasm \
             -o target/wasm32-unknown-unknown/release/crowdfund.wasm
 
@@ -124,7 +128,7 @@ jobs:
 
       - name: Optimize WASM with wasm-opt
         run: |
-          wasm-opt -Oz --enable-sign-ext \
+          wasm-opt -Oz --enable-sign-ext --enable-bulk-memory-opt \
             target/wasm32-unknown-unknown/release/crowdfund.wasm \
             -o target/wasm32-unknown-unknown/release/crowdfund.opt.wasm
 
