@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, Symbol, Vec,
+    contract, contractimpl, contracttype, token, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 #[cfg(test)]
@@ -57,6 +57,12 @@ impl FactoryContract {
         let no_platform_config: Option<soroban_sdk::Val> = None;
         let no_bonus_goal: Option<i128> = None;
         let no_bonus_description: Option<soroban_sdk::String> = None;
+        // initialize() fail-fast-checks the token address against a caller-supplied
+        // decimals value (audit: validate campaign amounts against token decimals).
+        // The factory has no independent expectation of its own, so it simply
+        // reads the token's own decimals and passes it straight through — the
+        // check then only ever fails if `token` doesn't implement SEP-41 at all.
+        let expected_token_decimals: u32 = token::Client::new(&env, &token).decimals();
         let _: () = env.invoke_contract(
             &deployed_address,
             &Symbol::new(&env, "initialize"),
@@ -70,7 +76,8 @@ impl FactoryContract {
                 min_contribution.into_val(&env),
                 no_platform_config.into_val(&env),
                 no_bonus_goal.into_val(&env),
-                no_bonus_description.into_val(&env)
+                no_bonus_description.into_val(&env),
+                expected_token_decimals.into_val(&env)
             ],
         );
 

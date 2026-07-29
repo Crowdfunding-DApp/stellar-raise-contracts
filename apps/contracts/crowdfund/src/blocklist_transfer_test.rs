@@ -202,7 +202,10 @@ fn test_collect_pledges_skips_frozen_pledger() {
 
     // Alice and Carol were collected; Bob was skipped and left retryable.
     assert_eq!(read_i128(&env, &client.address, &DataKey::TotalRaised), 600);
-    assert_eq!(read_i128(&env, &client.address, &DataKey::TotalPledged), 300);
+    assert_eq!(
+        read_i128(&env, &client.address, &DataKey::TotalPledged),
+        300
+    );
     assert_eq!(
         read_persistent_i128(&env, &client.address, &DataKey::Pledge(alice.clone())),
         0
@@ -238,7 +241,10 @@ fn test_collect_pledges_retryable_after_unfreeze() {
     token.set_frozen(&bob, &true);
     env.ledger().set_timestamp(deadline + 1);
     client.collect_pledges();
-    assert_eq!(read_i128(&env, &client.address, &DataKey::TotalPledged), 300);
+    assert_eq!(
+        read_i128(&env, &client.address, &DataKey::TotalPledged),
+        300
+    );
 
     // Bob is unblocked; re-running the batch sweeps up the straggler.
     token.set_frozen(&bob, &false);

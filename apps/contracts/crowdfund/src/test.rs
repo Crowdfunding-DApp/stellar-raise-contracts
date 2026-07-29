@@ -252,7 +252,10 @@ fn test_invalid_token_decimals() {
         &6,
     );
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), ContractError::InvalidParameter);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidParameter
+    );
 }
 
 #[test]

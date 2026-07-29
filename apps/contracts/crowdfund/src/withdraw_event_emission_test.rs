@@ -831,6 +831,7 @@ fn withdraw_fee_overflow_returns_typed_error() {
         }),
         &None,
         &None,
+        &7,
     );
 
     // Mint i128::MAX tokens to a contributor and contribute.
@@ -888,6 +889,7 @@ fn withdraw_with_valid_fee_does_not_error() {
         }),
         &None,
         &None,
+        &7,
     );
 
     let c = Address::generate(&env);
