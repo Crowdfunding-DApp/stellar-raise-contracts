@@ -68,13 +68,28 @@ cargo clippy --all-targets -- -D warnings
 - Follow standard Rust formatting enforced by `cargo fmt`.
 - All public functions must have `///` doc comments.
 - All new features must include tests.
-- Commit messages must follow conventional commits format:
+- Commit messages must follow conventional commits format. Accepted types:
   - `feat:`
   - `fix:`
   - `docs:`
+  - `style:`
+  - `refactor:`
+  - `perf:`
   - `test:`
   - `ci:`
   - `chore:`
+  - `revert:`
+- Two additional rules apply, both enforced by `.commitlintrc.json`:
+  - The subject must not be written in all capitals.
+  - The full header (type, optional scope, and subject) must be 100 characters or fewer.
+- CI runs commitlint on every pull request and a violation fails the build. Only
+  the commits introduced by the PR are checked: history that predates this
+  enforcement is exempt, and merge commits are ignored.
+- To check your branch before opening a PR:
+
+```bash
+npx commitlint --config .commitlintrc.json --from origin/develop --to HEAD
+```
 
 ## Need Help?
 
