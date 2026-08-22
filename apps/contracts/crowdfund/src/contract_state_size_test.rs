@@ -107,7 +107,10 @@ fn validate_social_links_at_limit_is_true() {
 #[test]
 fn validate_social_links_over_limit_is_false() {
     let env = make_env();
-    assert!(!validate_social_links(&str_of_len(&env, MAX_STRING_LEN + 1)));
+    assert!(!validate_social_links(&str_of_len(
+        &env,
+        MAX_STRING_LEN + 1
+    )));
 }
 
 // ── validate_roadmap_description ──────────────────────────────────────────────
