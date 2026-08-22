@@ -48,8 +48,8 @@ mod refund_single_token_security_tests;
 mod test;
 #[cfg(test)]
 mod withdraw_event_emission_test;
-// #[cfg(test)]
-// mod contract_state_size_test;
+#[cfg(test)]
+mod contract_state_size_test;
 // #[cfg(test)]
 // mod refund_single_token_test;
 // #[cfg(test)]
