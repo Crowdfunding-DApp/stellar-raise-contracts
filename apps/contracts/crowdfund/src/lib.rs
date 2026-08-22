@@ -574,9 +574,6 @@ impl CrowdfundContract {
             .unwrap_or_else(|| Vec::new(&env));
 
         if !contributors.contains(&contributor) {
-            // Enforce contributor list size limit before appending.
-            contract_state_size::check_contributor_limit(&env)
-                .map_err(|_| ContractError::InvalidParameter)?;
             contributors.push_back(contributor.clone());
             env.storage()
                 .persistent()
@@ -669,9 +666,6 @@ impl CrowdfundContract {
             .get(&DataKey::Pledgers)
             .unwrap_or_else(|| Vec::new(&env));
         if !pledgers.contains(&pledger) {
-            // Enforce pledger list size limit before appending.
-            contract_state_size::check_pledger_limit(&env)
-                .map_err(|_| ContractError::InvalidParameter)?;
             pledgers.push_back(pledger.clone());
             env.storage()
                 .persistent()
@@ -1258,10 +1252,9 @@ impl CrowdfundContract {
         }
 
         // Enforce string length and roadmap list size limits.
-        contract_state_size::check_string_len(&description)
-            .map_err(|_| ContractError::InvalidParameter)?;
-        contract_state_size::check_roadmap_limit(&env)
-            .map_err(|_| ContractError::InvalidParameter)?;
+        if !contract_state_size::validate_roadmap_description(&description) {
+            return Err(ContractError::InvalidParameter);
+        }
 
         let mut roadmap: Vec<RoadmapItem> = env
             .storage()
@@ -1324,10 +1317,6 @@ impl CrowdfundContract {
         if milestone <= goal {
             return Err(ContractError::InvalidParameter);
         }
-
-        // Enforce stretch-goal list size limit.
-        contract_state_size::check_stretch_goal_limit(&env)
-            .map_err(|_| ContractError::InvalidParameter)?;
 
         let mut stretch_goals: Vec<i128> = env
             .storage()
