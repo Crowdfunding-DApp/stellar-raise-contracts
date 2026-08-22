@@ -1,4 +1,4 @@
-use soroban_sdk::{Env, String};
+use soroban_sdk::String;
 
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_CONTRIBUTORS: u32 = 1_000;
@@ -39,25 +39,4 @@ pub fn validate_milestone_capacity(len: u32) -> bool {
 }
 pub fn validate_milestone_description(s: &String) -> bool {
     !s.is_empty() && s.len() <= MAX_STRING_LEN
-}
-
-// Additional functions expected by lib.rs
-pub fn check_contributor_limit(_env: &Env) -> Result<(), &'static str> {
-    Ok(())
-}
-
-pub fn check_pledger_limit(_env: &Env) -> Result<(), &'static str> {
-    Ok(())
-}
-
-pub fn check_string_len(_s: &String) -> Result<(), &'static str> {
-    Ok(())
-}
-
-pub fn check_roadmap_limit(_env: &Env) -> Result<(), &'static str> {
-    Ok(())
-}
-
-pub fn check_stretch_goal_limit(_env: &Env) -> Result<(), &'static str> {
-    Ok(())
 }
