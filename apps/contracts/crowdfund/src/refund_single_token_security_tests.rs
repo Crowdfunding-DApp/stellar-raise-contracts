@@ -10,13 +10,15 @@
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env,
+    token, Address, Env, String as SorobanString, Vec,
 };
 
 extern crate std;
 
 use crate::refund_single_token::execute_refund_single;
-use crate::{ContractError, CrowdfundContract, CrowdfundContractClient};
+use crate::{
+    ContractError, CrowdfundContract, CrowdfundContractClient, MilestoneInput, MilestoneStatus,
+};
 
 // === Helpers
 
@@ -190,4 +192,101 @@ fn test_all_backers_refunded_leaves_zero_contract_balance() {
     let token_client = token::Client::new(&env, &token);
     assert_eq!(token_client.balance(&client.address), 0);
     assert_eq!(client.total_raised(), 0);
+}
+
+// === Milestone mode guard (double-spend prevention)
+//
+// Once a milestone schedule exists, execute_release_milestone pays out
+// slices of TotalRaised to the creator without ever flipping Status to a
+// terminal state. A refund path that only checks `total < goal` after the
+// deadline would treat that drop as "contributor is owed a refund" and pay
+// the same capital out a second time. Both refund_single and the deprecated
+// refund() must refuse to run at all once milestones are in play —
+// claim_milestone_refund is the only legal refund route from that point on.
+
+#[test]
+fn test_refund_single_rejected_once_milestone_mode_active() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    let goal = 1_000_000;
+    init_campaign(&client, &creator, &token, goal, deadline);
+
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &goal);
+    client.contribute(&alice, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Two milestones so releasing the first leaves the schedule (and
+    // Status::Active) unresolved — the second milestone is still Pending.
+    // TotalRaised drops from `goal` to 400_000, below `goal`, exactly the
+    // state validate_refund_preconditions's deadline-model checks would
+    // otherwise treat as "contributor is owed a refund".
+    let mut milestones: Vec<MilestoneInput> = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: SorobanString::from_str(&env, "first slice"),
+        amount: 600_000,
+    });
+    milestones.push_back(MilestoneInput {
+        description: SorobanString::from_str(&env, "second slice"),
+        amount: 400_000,
+    });
+    client.propose_milestones(&creator, &milestones);
+    client.vote_milestone(&alice, &0u32, &true);
+    assert_eq!(
+        client.milestone(&0u32).unwrap().status,
+        MilestoneStatus::Approved
+    );
+    client.release_milestone(&creator, &0u32);
+    assert_eq!(client.total_raised(), 400_000);
+
+    // Alice's Contribution record is untouched by milestone release, so a
+    // deadline-model refund would (incorrectly) still see her as owed
+    // `goal` on top of the milestone payout the creator already received.
+    let result = client.try_refund_single(&alice);
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneModeActive,
+        "refund_single must refuse once milestones exist, not pay out a second time"
+    );
+}
+
+#[test]
+fn test_refund_batch_rejected_once_milestone_mode_active() {
+    let (env, client, creator, token, token_admin_client) = setup();
+    let deadline = env.ledger().timestamp() + 3_600;
+    let goal = 1_000_000;
+    init_campaign(&client, &creator, &token, goal, deadline);
+
+    let alice = Address::generate(&env);
+    token_admin_client.mint(&alice, &goal);
+    client.contribute(&alice, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Two milestones so releasing the first leaves the schedule (and
+    // Status::Active) unresolved — see the sibling refund_single test above
+    // for why this matters.
+    let mut milestones: Vec<MilestoneInput> = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: SorobanString::from_str(&env, "first slice"),
+        amount: 600_000,
+    });
+    milestones.push_back(MilestoneInput {
+        description: SorobanString::from_str(&env, "second slice"),
+        amount: 400_000,
+    });
+    client.propose_milestones(&creator, &milestones);
+    client.vote_milestone(&alice, &0u32, &true);
+    client.release_milestone(&creator, &0u32);
+    assert_eq!(client.total_raised(), 400_000);
+
+    let result = client.try_refund();
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::MilestoneModeActive,
+        "deprecated refund() must refuse once milestones exist, not pay out a second time"
+    );
 }
