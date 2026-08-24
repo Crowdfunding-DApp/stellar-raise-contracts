@@ -147,7 +147,16 @@ fn setup_pledge_funded_campaign(
     let deadline = env.ledger().timestamp() + 3_600;
 
     client.initialize(
-        &admin, &creator, &token_addr, &goal, &deadline, &1_i128, &None, &None, &None, &7,
+        &admin,
+        &creator,
+        &token_addr,
+        &goal,
+        &deadline,
+        &1_i128,
+        &None,
+        &None,
+        &None,
+        &7,
     );
 
     let pledger = Address::generate(&env);
