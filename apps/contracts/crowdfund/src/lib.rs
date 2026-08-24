@@ -937,6 +937,15 @@ impl CrowdfundContract {
             return Err(ContractError::CampaignNotActive);
         }
 
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Milestones)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !milestones.is_empty() {
+            return Err(ContractError::MilestoneModeActive);
+        }
+
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
         if env.ledger().timestamp() <= deadline {
             return Err(ContractError::CampaignStillActive);

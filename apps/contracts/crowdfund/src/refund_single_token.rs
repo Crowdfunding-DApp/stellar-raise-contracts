@@ -26,11 +26,11 @@
 
 #![allow(missing_docs)]
 
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Vec};
 
 use crate::{
-    withdraw_event_emission::emit_refunded, ContractError, DataKey, Status, LEDGER_BUMP_AMOUNT,
-    LEDGER_THRESHOLD,
+    withdraw_event_emission::emit_refunded, ContractError, DataKey, Milestone, Status,
+    LEDGER_BUMP_AMOUNT, LEDGER_THRESHOLD,
 };
 
 // ── Transfer primitive ────────────────────────────────────────────────────────
@@ -65,6 +65,8 @@ pub fn refund_single_transfer(
 /// @return `Ok(amount)` when the refund is valid, `Err(ContractError)` otherwise.
 ///
 /// # Errors
+/// * `ContractError::MilestoneModeActive` — milestones exist; use
+///   `claim_milestone_refund` instead, which respects per-milestone payouts.
 /// * `ContractError::CampaignStillActive` — deadline has not yet passed.
 /// * `ContractError::GoalReached`         — goal was met; no refunds available.
 /// * `ContractError::NothingToRefund`     — contributor has no balance on record.
@@ -78,6 +80,20 @@ pub fn validate_refund_preconditions(
     let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
     if status == Status::Successful || status == Status::Cancelled {
         return Err(ContractError::CampaignNotActive);
+    }
+
+    // Once milestones exist, `TotalRaised` no longer implies solvency for a
+    // deadline-model refund: execute_release_milestone pays out slices to
+    // the creator (decrementing TotalRaised) without ever flipping Status to
+    // a terminal state. `claim_milestone_refund` is the only legal refund
+    // route once a schedule has been proposed.
+    let milestones: Vec<Milestone> = env
+        .storage()
+        .instance()
+        .get(&DataKey::Milestones)
+        .unwrap_or_else(|| Vec::new(env));
+    if !milestones.is_empty() {
+        return Err(ContractError::MilestoneModeActive);
     }
 
     let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
