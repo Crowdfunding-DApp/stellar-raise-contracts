@@ -1,9 +1,9 @@
 #![cfg(test)]
 #![allow(clippy::too_many_arguments)]
 
-use crate::{CampaignStatus, FactoryContract, FactoryContractClient};
+use crate::{CampaignStatus, FactoryContract, FactoryContractClient, PlatformConfig};
 use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
     token, Address, Env, IntoVal,
 };
 
@@ -42,6 +42,9 @@ fn setup_factory(mock_auths: bool) -> (Env, Address, Address, soroban_sdk::Bytes
     (env, factory_id, token_address, wasm_hash)
 }
 
+/// Deploys a campaign with the factory's former hardcoded defaults
+/// (min_contribution = 1_000, no platform fee, no stretch goal), for tests
+/// that don't care about those params.
 fn create_campaign(
     factory: &FactoryContractClient<'_>,
     creator: &Address,
@@ -50,7 +53,44 @@ fn create_campaign(
     goal: i128,
     deadline: u64,
 ) -> Address {
-    factory.create_campaign(creator, token_address, &goal, &deadline, wasm_hash)
+    create_campaign_with_params(
+        factory,
+        creator,
+        token_address,
+        wasm_hash,
+        goal,
+        deadline,
+        1_000,
+        None,
+        None,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn create_campaign_with_params(
+    factory: &FactoryContractClient<'_>,
+    creator: &Address,
+    token_address: &Address,
+    wasm_hash: &soroban_sdk::BytesN<32>,
+    goal: i128,
+    deadline: u64,
+    min_contribution: i128,
+    platform_config: Option<PlatformConfig>,
+    bonus_goal: Option<i128>,
+    bonus_goal_description: Option<soroban_sdk::String>,
+) -> Address {
+    factory.create_campaign(
+        creator,
+        token_address,
+        &goal,
+        &deadline,
+        wasm_hash,
+        &min_contribution,
+        &platform_config,
+        &bonus_goal,
+        &bonus_goal_description,
+    )
 }
 
 #[test]
@@ -170,8 +210,22 @@ fn test_create_campaign_rejects_missing_creator_auth() {
     let factory = FactoryContractClient::new(&env, &factory_id);
     let creator = Address::generate(&env);
 
-    let result =
-        factory.try_create_campaign(&creator, &token_address, &1000i128, &100u64, &wasm_hash);
+    let min_contribution = 1_000i128;
+    let no_platform_config: Option<PlatformConfig> = None;
+    let no_bonus_goal: Option<i128> = None;
+    let no_bonus_description: Option<soroban_sdk::String> = None;
+
+    let result = factory.try_create_campaign(
+        &creator,
+        &token_address,
+        &1000i128,
+        &100u64,
+        &wasm_hash,
+        &min_contribution,
+        &no_platform_config,
+        &no_bonus_goal,
+        &no_bonus_description,
+    );
 
     assert!(result.is_err());
     assert_eq!(factory.campaign_count(), 0);
@@ -185,6 +239,10 @@ fn test_create_campaign_rejects_non_creator_auth() {
     let attacker = Address::generate(&env);
     let goal = 1000i128;
     let deadline = 100u64;
+    let min_contribution = 1_000i128;
+    let no_platform_config: Option<PlatformConfig> = None;
+    let no_bonus_goal: Option<i128> = None;
+    let no_bonus_description: Option<soroban_sdk::String> = None;
 
     let result = factory
         .mock_auths(&[MockAuth {
@@ -199,18 +257,38 @@ fn test_create_campaign_rejects_non_creator_auth() {
                     goal.into_val(&env),
                     deadline.into_val(&env),
                     wasm_hash.clone().into_val(&env),
+                    min_contribution.into_val(&env),
+                    no_platform_config.into_val(&env),
+                    no_bonus_goal.into_val(&env),
+                    no_bonus_description.into_val(&env),
                 ],
                 sub_invokes: &[],
             },
         }])
-        .try_create_campaign(&creator, &token_address, &goal, &deadline, &wasm_hash);
+        .try_create_campaign(
+            &creator,
+            &token_address,
+            &goal,
+            &deadline,
+            &wasm_hash,
+            &min_contribution,
+            &no_platform_config,
+            &no_bonus_goal,
+            &no_bonus_description,
+        );
 
     assert!(result.is_err());
     assert_eq!(factory.campaign_count(), 0);
 }
 
 #[test]
-fn test_duplicate_creator_salt_collision_is_rejected_without_registry_mutation() {
+fn test_repeat_creator_can_launch_multiple_campaigns_with_distinct_addresses() {
+    // Regression coverage: create_campaign used to derive its deployment
+    // salt from a constant, so a creator's second call (even after their
+    // first campaign completed or was cancelled) would collide with the
+    // address already deployed for (creator, salt) and revert. The salt is
+    // now derived per-creator from a deployment counter, so repeat launches
+    // succeed and land at distinct addresses.
     let (env, factory_id, token_address, wasm_hash) = setup_factory(true);
     let factory = FactoryContractClient::new(&env, &factory_id);
     let creator = Address::generate(&env);
@@ -218,13 +296,28 @@ fn test_duplicate_creator_salt_collision_is_rejected_without_registry_mutation()
     let first_campaign = create_campaign(&factory, &creator, &token_address, &wasm_hash, 1000, 100);
     assert_eq!(factory.campaign_count(), 1);
 
-    let result =
-        factory.try_create_campaign(&creator, &token_address, &2000i128, &200u64, &wasm_hash);
+    let second_campaign = factory.try_create_campaign(
+        &creator,
+        &token_address,
+        &2000i128,
+        &200u64,
+        &wasm_hash,
+        &1_000i128,
+        &None,
+        &None,
+        &None,
+    );
 
-    assert!(result.is_err());
+    let second_campaign = second_campaign
+        .expect("create_campaign call should not error")
+        .expect("returned Address should decode cleanly");
+    assert_ne!(second_campaign, first_campaign);
+
     let campaigns = factory.campaigns();
-    assert_eq!(campaigns.len(), 1);
+    assert_eq!(campaigns.len(), 2);
     assert_eq!(campaigns.get(0).unwrap(), first_campaign);
+    assert_eq!(campaigns.get(1).unwrap(), second_campaign);
+    assert_eq!(factory.campaign_count(), 2);
 }
 
 #[test]
@@ -428,4 +521,70 @@ fn test_active_campaigns_page_pagination_over_filtered_results() {
     let page = factory.active_campaigns_page(&1, &1);
     assert_eq!(page.len(), 1);
     assert_eq!(page.get(0).unwrap(), deployed[2]);
+}
+
+// ── Caller-supplied init params ─────────────────────────────────────────────
+
+#[test]
+fn test_create_campaign_applies_custom_min_contribution() {
+    let (env, factory_id, token_address, wasm_hash) = setup_factory(true);
+    let factory = FactoryContractClient::new(&env, &factory_id);
+    let creator = Address::generate(&env);
+
+    let campaign_addr = create_campaign_with_params(
+        &factory,
+        &creator,
+        &token_address,
+        &wasm_hash,
+        1000,
+        100,
+        50, // non-default min_contribution
+        None,
+        None,
+        None,
+    );
+
+    let campaign = crowdfund_wasm::Client::new(&env, &campaign_addr);
+    assert_eq!(campaign.min_contribution(), 50);
+}
+
+#[test]
+fn test_create_campaign_applies_custom_platform_config() {
+    let (env, factory_id, token_address, wasm_hash) = setup_factory(true);
+    let factory = FactoryContractClient::new(&env, &factory_id);
+    let creator = Address::generate(&env);
+    let platform = Address::generate(&env);
+    let goal = 1000i128;
+    let deadline = env.ledger().timestamp() + 100;
+
+    let campaign_addr = create_campaign_with_params(
+        &factory,
+        &creator,
+        &token_address,
+        &wasm_hash,
+        goal,
+        deadline,
+        1_000,
+        Some(PlatformConfig {
+            address: platform.clone(),
+            fee_bps: 500, // 5%
+        }),
+        None,
+        None,
+    );
+
+    let campaign = crowdfund_wasm::Client::new(&env, &campaign_addr);
+    let token_client = token::Client::new(&env, &token_address);
+
+    let contributor = Address::generate(&env);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+    token_admin_client.mint(&contributor, &goal);
+    campaign.contribute(&contributor, &goal);
+
+    env.ledger().set_timestamp(deadline + 1);
+    campaign.withdraw();
+
+    // fee_bps = 500 (5%) of a 1000-unit goal is 50; the rest goes to the creator.
+    assert_eq!(token_client.balance(&platform), 50);
+    assert_eq!(token_client.balance(&creator), 950);
 }
