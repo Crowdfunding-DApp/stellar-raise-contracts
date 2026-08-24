@@ -611,10 +611,21 @@ impl CrowdfundContract {
     /// Pledge tokens to the campaign without transferring them immediately.
     ///
     /// The pledger must authorize the call. Pledges are recorded off-chain
-    /// and only collected if the goal is met after the deadline.
+    /// and only collected if the goal is met after the deadline. Rejected
+    /// once the campaign is no longer `Status::Active` (e.g. after `cancel()`),
+    /// the same lifecycle guard `contribute()` enforces.
     pub fn pledge(env: Env, pledger: Address, amount: i128) -> Result<(), ContractError> {
         pledger.require_auth();
         extend_instance_ttl(&env);
+
+        // Guard: campaign must be active. Mirrors contribute()'s first
+        // check — status can flip to Cancelled via cancel() independently
+        // of the deadline, so "before the deadline" alone doesn't mean the
+        // campaign is still accepting new commitments.
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            return Err(ContractError::CampaignNotActive);
+        }
 
         let min_contribution: i128 = env
             .storage()

@@ -613,3 +613,72 @@ fn test_withdraw_with_max_valid_fee_leaves_nonzero_creator_payout() {
         "creator payout must be strictly positive, even at the maximum valid fee"
     );
 }
+
+// ── pledge() status guard ──────────────────────────────────────────────────
+// pledge() only checked min_contribution and the deadline, never Status —
+// unlike contribute(), whose first guard rejects any call once the campaign
+// is no longer Active. cancel() can flip Status to Cancelled well before the
+// deadline, so a cancelled-but-not-yet-expired campaign could still accept
+// new pledge() commitments that can never be collected.
+
+/// A pledge on an Active campaign still succeeds (sanity check that the new
+/// guard doesn't regress the normal flow).
+#[test]
+fn test_pledge_on_active_campaign_succeeds() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+        &7,
+    );
+
+    let pledger = Address::generate(&env);
+    token_client.mint(&pledger, &10_000);
+
+    client.pledge(&pledger, &10_000);
+}
+
+/// pledge() on a cancelled campaign is rejected with CampaignNotActive,
+/// mirroring contribute()'s existing guard.
+#[test]
+fn test_pledge_after_cancel_rejected() {
+    let (env, client, platform_admin, creator, token_address, token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+
+    client.initialize(
+        &platform_admin,
+        &creator,
+        &token_address,
+        &1_000_000,
+        &deadline,
+        &1_000,
+        &None,
+        &None,
+        &None,
+        &7,
+    );
+
+    client.cancel();
+
+    let pledger = Address::generate(&env);
+    token_client.mint(&pledger, &10_000);
+
+    let result = client.try_pledge(&pledger, &10_000);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::CampaignNotActive
+    );
+
+    // No dead pledge record should have been written.
+    assert_eq!(client.total_raised(), 0);
+}
