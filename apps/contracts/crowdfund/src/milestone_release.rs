@@ -387,13 +387,15 @@ pub fn execute_release_milestone(
     let (creator_payout, platform_fee) = if let Some(config) = platform_config {
         let fee = amount
             .checked_mul(config.fee_bps as i128)
-            .expect("fee calculation overflow")
+            .ok_or(ContractError::FeeOverflow)?
             .checked_div(10_000)
-            .expect("fee division by zero");
+            .ok_or(ContractError::FeeDivisionByZero)?;
         token_client.transfer(&env.current_contract_address(), &config.address, &fee);
         emit_fee_transferred(env, &config.address, fee);
         (
-            amount.checked_sub(fee).expect("creator payout underflow"),
+            amount
+                .checked_sub(fee)
+                .ok_or(ContractError::CreatorPayoutUnderflow)?,
             fee,
         )
     } else {

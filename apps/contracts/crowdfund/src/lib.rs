@@ -45,6 +45,8 @@ mod contract_state_size_test;
 #[cfg(test)]
 mod kyc_gate_test;
 #[cfg(test)]
+mod milestone_release_test;
+#[cfg(test)]
 mod refund_single_token_security_tests;
 #[cfg(test)]
 mod test;
