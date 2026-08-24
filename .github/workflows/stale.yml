@@ -38,8 +38,8 @@ jobs:
             🔒 This pull request has been automatically closed due to
             inactivity. If you would like to continue this work, feel free
             to reopen it or open a new PR with updated changes.
-          exempt-issue-labels: "pinned,security,in-progress,blocked"
-          exempt-pr-labels: "pinned,security,in-progress,blocked"
+          exempt-issue-labels: "pinned,security,in-progress,blocked,severity: critical,severity: high"
+          exempt-pr-labels: "pinned,security,in-progress,blocked,severity: critical,severity: high"
           exempt-all-milestones: true
           remove-stale-when-updated: true
           operations-per-run: 100
