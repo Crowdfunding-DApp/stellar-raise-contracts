@@ -126,3 +126,87 @@ fn release_milestone_with_valid_fee_does_not_error() {
     );
     assert_eq!(client.total_raised(), 0);
 }
+
+// ── pledge-funded milestone governance ──────────────────────────────────────
+// collect_pledges() sweeps pledged capital into TotalRaised (and therefore
+// MilestoneBasis) exactly like contribute() does. Milestone voting/refund
+// weight is read from DataKey::Contribution, so collect_pledges() must fold
+// each collected amount into that record — otherwise a pledge-only backer
+// gets NoContributionWeight on both vote_milestone and claim_milestone_refund
+// despite having funded the campaign for real.
+
+fn setup_pledge_funded_campaign(
+    goal: i128,
+) -> (Env, CrowdfundContractClient<'static>, Address, Address) {
+    let (env, token_addr, sac) = make_env();
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + 3_600;
+
+    client.initialize(
+        &admin, &creator, &token_addr, &goal, &deadline, &1_i128, &None, &None, &None, &7,
+    );
+
+    let pledger = Address::generate(&env);
+    sac.mint(&pledger, &goal);
+    client.pledge(&pledger, &goal);
+
+    // `collect_pledges()` doesn't call `require_auth()` itself for the
+    // pledger being swept in — the token's own `transfer` does that several
+    // call-frames below this root invocation. Plain `mock_all_auths()` (set
+    // in `make_env()`) only auto-approves root-level auth, so it must be
+    // upgraded here (mirrors `blocklist_transfer_test.rs::setup`).
+    env.mock_all_auths_allowing_non_root_auth();
+
+    env.ledger().set_timestamp(deadline + 1);
+    client.collect_pledges();
+
+    let mut milestones: Vec<MilestoneInput> = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: SorobanString::from_str(&env, "full payout"),
+        amount: goal,
+    });
+    client.propose_milestones(&creator, &milestones);
+
+    (env, client, creator, pledger)
+}
+
+#[test]
+fn vote_milestone_succeeds_for_pledge_funded_backer() {
+    let goal: i128 = 10_000;
+    let (_env, client, _creator, pledger) = setup_pledge_funded_campaign(goal);
+
+    // Collected pledge must show up as a Contribution, exactly like a direct
+    // contribute() would have recorded it.
+    assert_eq!(client.total_raised(), goal);
+    assert_eq!(client.contribution(&pledger), goal);
+
+    // Previously: NoContributionWeight, because collect_pledges() never wrote
+    // a Contribution record for the pledger it swept in.
+    client.vote_milestone(&pledger, &0u32, &true);
+    let milestone = client.milestone(&0u32).unwrap();
+    assert_eq!(milestone.status, MilestoneStatus::Approved);
+    assert_eq!(milestone.yes_weight, goal);
+}
+
+#[test]
+fn claim_milestone_refund_succeeds_for_pledge_funded_backer() {
+    let goal: i128 = 10_000;
+    let (_env, client, _creator, pledger) = setup_pledge_funded_campaign(goal);
+
+    // Sole voter rejects: no_weight*2 >= basis is met immediately.
+    client.vote_milestone(&pledger, &0u32, &false);
+    assert_eq!(
+        client.milestone(&0u32).unwrap().status,
+        MilestoneStatus::Rejected
+    );
+
+    // Previously: NoContributionWeight here too, permanently stranding the
+    // pledger's share of the rejected milestone in the contract.
+    client.claim_milestone_refund(&pledger, &0u32);
+    assert!(client.has_claimed_milestone_refund(&0u32, &pledger));
+    assert_eq!(client.total_raised(), 0);
+}

@@ -686,6 +686,14 @@ impl CrowdfundContract {
     /// This function transfers tokens from all pledgers to the contract.
     /// Only callable after the deadline and when the combined total of
     /// contributions and pledges meets or exceeds the goal.
+    ///
+    /// Each successfully collected pledge is folded into the pledger's
+    /// `DataKey::Contribution` record (and the pledger is added to
+    /// `Contributors` if not already present). Milestone voting/refund
+    /// weight, `get_stats`, and NFT reward minting all key off
+    /// `DataKey::Contribution` — without this, capital collected here would
+    /// count toward `TotalRaised`/`MilestoneBasis` while its owner had no
+    /// way to vote on or reclaim it.
     pub fn collect_pledges(env: Env) -> Result<(), ContractError> {
         extend_instance_ttl(&env);
         let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
@@ -729,6 +737,13 @@ impl CrowdfundContract {
             .get(&DataKey::Pledgers)
             .unwrap_or_else(|| Vec::new(&env));
 
+        let mut contributors: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributors)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut contributors_changed = false;
+
         // Collect pledges from all pledgers. A pledger's transfer may fail
         // (e.g. a blocklisted address on a compliance-gated SEP-41 token) —
         // `try_transfer` catches that instead of reverting the whole batch,
@@ -748,6 +763,33 @@ impl CrowdfundContract {
                         collected_total = collected_total
                             .checked_add(amount)
                             .expect("pledge collection overflow");
+
+                        // Fold the collected pledge into the pledger's
+                        // Contribution record so milestone voting/refund
+                        // weight (and every other Contribution-based read)
+                        // treats it the same as directly-contributed capital.
+                        let contribution_key = DataKey::Contribution(pledger.clone());
+                        let previous_contribution: i128 = env
+                            .storage()
+                            .persistent()
+                            .get(&contribution_key)
+                            .unwrap_or(0);
+                        let new_contribution = previous_contribution
+                            .checked_add(amount)
+                            .expect("contribution fold overflow");
+                        env.storage()
+                            .persistent()
+                            .set(&contribution_key, &new_contribution);
+                        bump_persistent(&env, &contribution_key);
+
+                        if !contributors.contains(&pledger)
+                            && contract_state_size::validate_contributor_capacity(
+                                contributors.len(),
+                            )
+                        {
+                            contributors.push_back(pledger.clone());
+                            contributors_changed = true;
+                        }
                     }
                     _ => {
                         // Transfer failed — restore the pledge so it remains
@@ -763,6 +805,13 @@ impl CrowdfundContract {
                     }
                 }
             }
+        }
+
+        if contributors_changed {
+            env.storage()
+                .persistent()
+                .set(&DataKey::Contributors, &contributors);
+            bump_persistent(&env, &DataKey::Contributors);
         }
 
         // Update total raised/pledged to reflect only the pledges actually
