@@ -1,8 +1,9 @@
 #![no_std]
 #![allow(deprecated)]
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, BytesN, Env, IntoVal, Symbol, Vec,
+    contract, contractimpl, contracttype, token, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 #[cfg(test)]
@@ -23,6 +24,25 @@ pub enum DataKey {
     Admin,
     /// Per-campaign moderation status. Absent means `CampaignStatus::Active`.
     Status(Address),
+    /// Number of campaigns a given creator has deployed through this
+    /// factory. Feeds the deployment salt (see `create_campaign`) so the
+    /// same creator can deploy more than one campaign — Soroban's deployer
+    /// derives the deployed address from `(creator, salt)`, so a fixed salt
+    /// per creator would permanently consume that address after the first
+    /// deployment.
+    CreatorCampaignCount(Address),
+}
+
+/// Mirrors `crowdfund::PlatformConfig` field-for-field so it round-trips
+/// through the `initialize` cross-contract call without the factory crate
+/// depending on the crowdfund crate directly (`#[contracttype]` structs
+/// encode by field name, not by crate identity, so this only needs to match
+/// field names and types, not share a type definition).
+#[derive(Clone)]
+#[contracttype]
+pub struct PlatformConfig {
+    pub address: Address,
+    pub fee_bps: u32,
 }
 
 /// Moderation status of a registered campaign.
@@ -48,12 +68,22 @@ pub struct FactoryContract;
 impl FactoryContract {
     /// Deploy a new crowdfund campaign contract.
     ///
+    /// Permissionless and repeatable: a creator may call this any number of
+    /// times, including after an earlier campaign of theirs has completed,
+    /// been cancelled, or is still active. Each call deploys to a fresh
+    /// address, because the deployment salt is derived from a per-creator
+    /// campaign counter rather than a fixed constant.
+    ///
     /// # Arguments
-    /// * `creator`   – The campaign creator's address.
-    /// * `token`     – The token contract address used for contributions.
-    /// * `goal`      – The funding goal (in the token's smallest unit).
-    /// * `deadline`  – The campaign deadline as a ledger timestamp.
-    /// * `wasm_hash` – The hash of the crowdfund contract WASM to deploy.
+    /// * `creator`                 – The campaign creator's address.
+    /// * `token`                   – The token contract address used for contributions.
+    /// * `goal`                    – The funding goal (in the token's smallest unit).
+    /// * `deadline`                – The campaign deadline as a ledger timestamp.
+    /// * `wasm_hash`                – The hash of the crowdfund contract WASM to deploy.
+    /// * `min_contribution`        – Minimum single-contribution amount for the deployed campaign.
+    /// * `platform_config`         – Optional platform fee configuration for the deployed campaign.
+    /// * `bonus_goal`              – Optional stretch-goal amount for the deployed campaign.
+    /// * `bonus_goal_description`  – Optional description for `bonus_goal`.
     ///
     /// # Returns
     /// The address of the newly deployed campaign contract.
@@ -64,22 +94,40 @@ impl FactoryContract {
         goal: i128,
         deadline: u64,
         wasm_hash: BytesN<32>,
+        min_contribution: i128,
+        platform_config: Option<PlatformConfig>,
+        bonus_goal: Option<i128>,
+        bonus_goal_description: Option<String>,
     ) -> Address {
         creator.require_auth();
 
-        // Deploy the crowdfund contract from the WASM hash.
-        let salt = BytesN::from_array(&env, &[0; 32]);
+        // Derive a salt from how many campaigns this creator has already
+        // deployed through this factory. `env.deployer().with_address`
+        // derives the deployed address from `(creator, salt)`, so varying
+        // the salt per call (for a fixed creator) is what makes repeat
+        // deployments land at distinct addresses instead of colliding.
+        let campaign_count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CreatorCampaignCount(creator.clone()))
+            .unwrap_or(0);
+        let mut salt_bytes = [0u8; 32];
+        salt_bytes[28..32].copy_from_slice(&campaign_count.to_be_bytes());
+        let salt = BytesN::from_array(&env, &salt_bytes);
+
         let deployed_address = env
             .deployer()
             .with_address(creator.clone(), salt)
             .deploy_v2(wasm_hash, ());
 
-        // Initialize the deployed contract.
-        // Keep factory API stable: use default min contribution and no platform config.
-        let min_contribution: i128 = 1_000;
-        let no_platform_config: Option<soroban_sdk::Val> = None;
-        let no_bonus_goal: Option<i128> = None;
-        let no_bonus_description: Option<soroban_sdk::String> = None;
+        env.storage().instance().set(
+            &DataKey::CreatorCampaignCount(creator.clone()),
+            &campaign_count
+                .checked_add(1)
+                .expect("creator campaign count overflow"),
+        );
+
+        // Initialize the deployed contract with the caller-supplied parameters.
         // initialize() fail-fast-checks the token address against a caller-supplied
         // decimals value (audit: validate campaign amounts against token decimals).
         // The factory has no independent expectation of its own, so it simply
@@ -97,9 +145,9 @@ impl FactoryContract {
                 goal.into_val(&env),
                 deadline.into_val(&env),
                 min_contribution.into_val(&env),
-                no_platform_config.into_val(&env),
-                no_bonus_goal.into_val(&env),
-                no_bonus_description.into_val(&env),
+                platform_config.into_val(&env),
+                bonus_goal.into_val(&env),
+                bonus_goal_description.into_val(&env),
                 expected_token_decimals.into_val(&env)
             ],
         );
