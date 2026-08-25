@@ -47,11 +47,20 @@ pub struct PlatformConfig {
 
 /// Moderation status of a registered campaign.
 ///
-/// This lives in the factory's own storage, independent of whatever status
-/// the deployed campaign contract itself reports — it lets the platform
-/// moderator flag campaigns (cancelled, expired, or fraudulent) directly in
-/// the registry, without needing per-campaign cross-contract calls to build
-/// a filtered front-end list.
+/// This lives *only* in the factory's own storage, independent of whatever
+/// status the deployed campaign contract itself reports — it lets the
+/// platform moderator flag campaigns (cancelled, expired, or fraudulent)
+/// directly in the registry, without needing per-campaign cross-contract
+/// calls to build a filtered front-end list.
+///
+/// Setting any non-`Active` value here is a **display-only** signal: it is
+/// never pushed to the deployed campaign contract. The campaign's own
+/// `contribute`/`pledge` entry points are entirely unaffected and keep
+/// accepting funds from anyone who calls the contract address directly —
+/// including via the unfiltered `campaigns()`/`campaigns_page()`. In
+/// particular, `Flagged` (meant for campaigns identified as fraudulent)
+/// does not pause, block, or otherwise restrict the underlying contract; it
+/// only removes the campaign from `active_campaigns_page`'s listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub enum CampaignStatus {
@@ -208,6 +217,13 @@ impl FactoryContract {
     /// marked `Cancelled`, `Expired`, or `Flagged` via `set_campaign_status`
     /// are skipped.
     ///
+    /// This is a display-layer filter, not a control-layer one: it changes
+    /// what a front-end using this method sees, nothing more. A hidden
+    /// campaign's own contract is untouched and still accepts direct calls
+    /// (e.g. `contribute`) from anyone with its address, including from the
+    /// unfiltered `campaigns()`/`campaigns_page()`. See `CampaignStatus` for
+    /// details.
+    ///
     /// Unlike `campaigns_page`, `offset`/`limit` index into the *filtered*
     /// (active-only) result, so page boundaries stay stable as campaigns get
     /// flagged or unflagged over time. This scans the registry from the
@@ -292,6 +308,12 @@ impl FactoryContract {
     /// back to `Active`) without mutating the append-only `campaigns` log.
     /// Front-ends should prefer `active_campaigns_page` to avoid surfacing
     /// flagged campaigns.
+    ///
+    /// This is a registry-only, display-layer action: it never calls into
+    /// the deployed campaign contract, so it has no effect on that
+    /// contract's own behavior. A campaign's `contribute`/`pledge` entry
+    /// points keep working exactly as before for anyone who has (or looks
+    /// up) its address. See `CampaignStatus` for details.
     ///
     /// # Panics
     /// * If the factory has not been initialized.

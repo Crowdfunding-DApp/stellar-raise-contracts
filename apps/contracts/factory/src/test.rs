@@ -430,6 +430,38 @@ fn test_set_campaign_status_flags_a_campaign_and_hides_it_from_active_page() {
     assert_eq!(active.get(0).unwrap(), good);
 }
 
+/// `Flagged` is documented as a display-only signal (see `CampaignStatus`
+/// and `set_campaign_status`): the factory never reaches into the deployed
+/// campaign contract, so flagging it here must not change what that
+/// contract itself accepts. This pins down the current, intentional
+/// behavior — not a gap.
+#[test]
+fn test_flagging_a_campaign_does_not_stop_direct_contributions() {
+    let (env, factory_id, token_address, wasm_hash) = setup_factory(true);
+    let factory = FactoryContractClient::new(&env, &factory_id);
+    let admin = Address::generate(&env);
+    factory.initialize(&admin);
+
+    let creator = Address::generate(&env);
+    let goal = 1000i128;
+    let campaign_addr = create_campaign(&factory, &creator, &token_address, &wasm_hash, goal, 100);
+
+    factory.set_campaign_status(&admin, &campaign_addr, &CampaignStatus::Flagged);
+    assert_eq!(factory.campaign_status(&campaign_addr), CampaignStatus::Flagged);
+    assert_eq!(factory.active_campaigns_page(&0, &10).len(), 0);
+
+    // The underlying contract is untouched by the flag: a contributor who
+    // still has (or looks up via campaigns()) the address can fund it.
+    let campaign = crowdfund_wasm::Client::new(&env, &campaign_addr);
+    let contributor = Address::generate(&env);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+    token_admin_client.mint(&contributor, &goal);
+    campaign.contribute(&contributor, &goal);
+
+    let token_client = token::Client::new(&env, &token_address);
+    assert_eq!(token_client.balance(&campaign_addr), goal);
+}
+
 #[test]
 fn test_set_campaign_status_can_reinstate_a_campaign() {
     let (env, factory_id, token_address, wasm_hash) = setup_factory(true);
