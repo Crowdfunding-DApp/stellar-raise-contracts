@@ -682,3 +682,43 @@ fn test_pledge_after_cancel_rejected() {
     // No dead pledge record should have been written.
     assert_eq!(client.total_raised(), 0);
 }
+
+/// add_roadmap_item() must reject a description over MAX_STRING_LEN (256)
+/// instead of silently storing it. Regression test for the check_string_len
+/// no-op gap tracked by audit #23 / issue #1307.
+#[test]
+fn test_add_roadmap_item_rejects_oversized_description() {
+    let (env, client, _platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    default_init(&client, &creator, &token_address, deadline);
+
+    let item_date = env.ledger().timestamp() + 100;
+    let oversized_description =
+        soroban_sdk::String::from_str(&env, &std::string::String::from("a".repeat(257)));
+
+    let result = client.try_add_roadmap_item(&item_date, &oversized_description);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        ContractError::InvalidParameter
+    );
+
+    // No dead roadmap entry should have been written.
+    assert_eq!(client.roadmap().len(), 0);
+}
+
+/// A description at exactly MAX_STRING_LEN (256) is accepted and stored.
+#[test]
+fn test_add_roadmap_item_accepts_max_length_description() {
+    let (env, client, _platform_admin, creator, token_address, _token_client) = setup_env();
+    let deadline = env.ledger().timestamp() + 3600;
+    default_init(&client, &creator, &token_address, deadline);
+
+    let item_date = env.ledger().timestamp() + 100;
+    let max_len_description =
+        soroban_sdk::String::from_str(&env, &std::string::String::from("a".repeat(256)));
+
+    client.add_roadmap_item(&item_date, &max_len_description);
+
+    assert_eq!(client.roadmap().len(), 1);
+}
