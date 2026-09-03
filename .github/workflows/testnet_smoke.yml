@@ -29,7 +29,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install native build dependencies for Stellar CLI
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+        # libudev-dev: stellar-cli >= 28 pulls in hidapi (Ledger hardware-wallet
+        # support), whose build script probes for libudev via pkg-config.
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libudev-dev pkg-config
 
       - name: Install Stellar CLI
         run: cargo install stellar-cli
