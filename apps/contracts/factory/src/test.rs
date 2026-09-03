@@ -447,7 +447,10 @@ fn test_flagging_a_campaign_does_not_stop_direct_contributions() {
     let campaign_addr = create_campaign(&factory, &creator, &token_address, &wasm_hash, goal, 100);
 
     factory.set_campaign_status(&admin, &campaign_addr, &CampaignStatus::Flagged);
-    assert_eq!(factory.campaign_status(&campaign_addr), CampaignStatus::Flagged);
+    assert_eq!(
+        factory.campaign_status(&campaign_addr),
+        CampaignStatus::Flagged
+    );
     assert_eq!(factory.active_campaigns_page(&0, &10).len(), 0);
 
     // The underlying contract is untouched by the flag: a contributor who

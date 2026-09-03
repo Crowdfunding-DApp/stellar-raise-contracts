@@ -693,8 +693,7 @@ fn test_add_roadmap_item_rejects_oversized_description() {
     default_init(&client, &creator, &token_address, deadline);
 
     let item_date = env.ledger().timestamp() + 100;
-    let oversized_description =
-        soroban_sdk::String::from_str(&env, &std::string::String::from("a".repeat(257)));
+    let oversized_description = soroban_sdk::String::from_str(&env, &"a".repeat(257));
 
     let result = client.try_add_roadmap_item(&item_date, &oversized_description);
     assert!(result.is_err());
@@ -715,8 +714,7 @@ fn test_add_roadmap_item_accepts_max_length_description() {
     default_init(&client, &creator, &token_address, deadline);
 
     let item_date = env.ledger().timestamp() + 100;
-    let max_len_description =
-        soroban_sdk::String::from_str(&env, &std::string::String::from("a".repeat(256)));
+    let max_len_description = soroban_sdk::String::from_str(&env, &"a".repeat(256));
 
     client.add_roadmap_item(&item_date, &max_len_description);
 
